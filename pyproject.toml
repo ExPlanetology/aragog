@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "spider"
+version = "0.1.0"
+description = "A 1-D parameterised interior dynamics code for rocky or icy planets and moons with liquid and/or solid interiors"
+authors = ["Dan J Bower <djbower@users.noreply.github.com>"]
+license = "GPL-3.0-or-later"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = ">=3.10,<3.13"
+numpy = "^1.25.2"
+scipy = "^1.11.1"
+thermochem = "^0.8.2"
+
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
