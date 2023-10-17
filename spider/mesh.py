@@ -103,18 +103,25 @@ class Mesh:
 class SpiderMesh:
     """SPIDER uses a staggered mesh.
 
-    The 'basic mesh' is used for the flux calculations, and the staggered mesh is used for the
+    The 'basic mesh' is used for the flux calculations and the staggered mesh is used for the
     volume calculations.
+
+    Args:
+        basic_radii: Radii of the basic nodes.
+
+    Attributes:
+        basic: The basic mesh.
+        staggered: The staggered mesh.
     """
 
-    basic_coordinates: np.ndarray
+    basic_radii: np.ndarray
     basic: Mesh = field(init=False)
     staggered: Mesh = field(init=False)
 
     def __post_init__(self):
-        self.basic: Mesh = Mesh(self.basic_coordinates)
+        self.basic = Mesh(self.basic_radii)
         staggered_coordinates: np.ndarray = self.basic.radii[:-1] + 0.5 * self.basic.delta_radii
-        self.staggered: Mesh = Mesh(staggered_coordinates)
+        self.staggered = Mesh(staggered_coordinates)
 
     @property
     def inner_radius(self) -> float:
