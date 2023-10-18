@@ -151,6 +151,48 @@ class SpiderMesh:
 
         return cls(radii)
 
+    def d_dr_at_basic_nodes(self, staggered_quantity: np.ndarray) -> np.ndarray:
+        """Determines d/dr at the basic nodes of a quantity defined at the staggered nodes.
+
+        Args:
+            staggered_quantity: Some quantity defined at the staggered nodes.
+        """
+        assert np.size(staggered_quantity) == self.staggered.number
+        # TODO: Create transform matrix once and store to self.
+        transform: np.ndarray = np.zeros((self.basic.number, self.staggered.number))
+        transform[1:-1, :-1] += np.diag(-1 / self.staggered.delta_radii)  # k=0 diagonal.
+        transform[1:-1:, 1:] += np.diag(1 / self.staggered.delta_radii)  # k=1 diagonal.
+        # Backward difference at outer radius.
+        transform[0, :] = transform[1, :]
+        # Forward difference at inner radius.
+        transform[-1, :] = transform[-2, :]
+        logger.debug("transform = %s", transform)
+        d_dr_at_basic_nodes: np.ndarray = transform.dot(staggered_quantity)
+        logger.debug("d_dr_at_basic_nodes = %s", d_dr_at_basic_nodes)
+
+        return d_dr_at_basic_nodes
+
+    def quantity_at_basic_nodes(self, staggered_quantity: np.ndarray) -> np.ndarray:
+        """Determines a quantity at the basic nodes that is defined at the staggered nodes.
+
+        Args:
+            staggered_quantity: Some quantity defined at the staggered nodes.
+        """
+        # assert np.size(staggered_quantity) == self.staggered.number
+        # TODO: Create transform matrix once and store to self.
+        transform: np.ndarray = np.zeros((self.basic.number, self.staggered.number))
+        transform[1:-1, :-1] += np.diag(np.ones(self.basic.number - 2))  # k=0 diagonal.
+        transform[1:-1:, 1:] += np.diag(np.ones(self.basic.number - 2))  # k=1 diagonal.
+        # Backward difference at outer radius.
+        transform[0, :2] = np.array([3, -1])
+        # Forward difference at inner radius.
+        transform[-1, -2:] = np.array([-1, 3])
+        logger.debug("transform = %s", transform)
+        quantity_at_basic_nodes: np.ndarray = 0.5 * transform.dot(staggered_quantity)
+        logger.debug("quantity_at_basic_nodes = %s", quantity_at_basic_nodes)
+
+        return quantity_at_basic_nodes
+
 
 def main():
     """Testing mesh creation."""
