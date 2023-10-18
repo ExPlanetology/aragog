@@ -8,12 +8,15 @@ __version__: str = "0.1.0"
 import importlib.resources
 import logging
 
+from scipy import constants
 from thermochem import codata
 
 # Module constants.
 GAS_CONSTANT: float = codata.value("molar gas constant")  # J/K/mol.
 GRAVITATIONAL_CONSTANT: float = codata.value("Newtonian constant of gravitation")  # m^3/kg/s^2.
+STEFAN_BOLTZMANN_CONSTANT: float = codata.value("Stefan-Boltzmann constant")  # W/m2/K^4.
 OCEAN_MOLES: float = 7.68894973907177e22  # Moles of H2 (or H2O) in one present-day Earth ocean.
+YEAR_IN_SECONDS: float = constants.Julian_year
 
 DATA_ROOT_PATH = importlib.resources.files("%s.data" % __package__)
 
