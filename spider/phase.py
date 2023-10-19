@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
+from configparser import SectionProxy
 from dataclasses import dataclass
 from typing import Callable
 
@@ -20,11 +21,11 @@ def ensure_size_equal_to_temperature(func: Callable) -> Callable:
     """
 
     def wrapper(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        """Wrapper.
+        """Wrapper
 
         Args:
-            temperature: Temperature.
-            pressure: Pressure.
+            temperature: Temperature
+            pressure: Pressure
 
         Returns:
             The quantity as an array with the same length as the temperature array.
@@ -36,23 +37,68 @@ def ensure_size_equal_to_temperature(func: Callable) -> Callable:
     return wrapper
 
 
-@dataclass(kw_only=True)
-class PhaseABC(ABC):
-    """Base class for a phase with EOS and transport properties."""
+@dataclass(kw_only=True, frozen=True)
+class PropertyABC(ABC):
+    """A property whose value can be accessed with a get_value method.
 
-    gravitational_acceleration_value: float
+    Args:
+        name: Name of the property.
+
+    Attributes:
+        name: Name of the property.
+    """
+
+    name: str
 
     @abstractmethod
-    def density(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        """Density
+    def get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        """Computes the property value for given input arguments.
 
         Args:
             temperature: Temperature
             pressure: Pressure
 
         Returns:
-            Density
+            An evaluation based on the provided arguments.
         """
+
+    def __call__(self, *args, **kwargs):
+        return self.get_value(*args, **kwargs)
+
+
+@dataclass(kw_only=True, frozen=True)
+class ConstantProperty(PropertyABC):
+    """A property with a constant value
+
+    Args:
+        name: Name of the property.
+        value: The constant value
+
+    Attributes:
+        name: Name of the property.
+        value: The constant value
+    """
+
+    value: float
+
+    @ensure_size_equal_to_temperature
+    def get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> float:
+        """Returns the constant value. See base class."""
+        del temperature
+        del pressure
+        return self.value  # The decorator ensures return type is np.ndarray.
+
+
+@dataclass(kw_only=True, frozen=True)
+class Phase:
+    """Base class for a phase with EOS and transport properties."""
+
+    density: PropertyABC
+    gravitational_acceleration: PropertyABC
+    heat_capacity: PropertyABC
+    thermal_conductivity: PropertyABC
+    thermal_expansivity: PropertyABC
+    log10_viscosity: PropertyABC
 
     def dTdPs(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
         """dTdPs
@@ -71,6 +117,7 @@ class PhaseABC(ABC):
             / self.heat_capacity(temperature, pressure)
         )
         logger.debug("dTdPs = %s", dTdPs)
+
         return dTdPs
 
     def dTdrs(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
@@ -101,110 +148,34 @@ class PhaseABC(ABC):
         dTdzs: np.ndarray = (
             self.density(temperature, pressure)
             * self.dTdPs(temperature, pressure)
-            * self.gravitational_acceleration
+            * self.gravitational_acceleration(temperature, pressure)
         )
         logger.debug("dTdzs = %s", dTdzs)
 
         return dTdzs
 
-    @property
-    def gravitational_acceleration(self) -> float:
-        """Gravitational acceleration, which is alway positive by definition.
 
-        Returns:
-            Gravitational acceleration, which is always positive by definition.
-        """
-        return abs(self.gravitational_acceleration_value)
+def phase_factory(phase_section: SectionProxy) -> Phase:
+    """Instantiates a Phase object.
 
-    @abstractmethod
-    def heat_capacity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        """Heat capacity
+    Args:
+        phase_section: Configuration section with phase data
 
-        Args:
-            temperature: Temperature
-            pressure: Pressure
+    Returns:
+        A Phase object
+    """
+    init_dict: dict = {}
+    for key, value in phase_section.items():
+        try:
+            value = float(value)
+            logger.info("%s (%s) is a number = %f", key, phase_section.name, value)
+            init_dict[key] = ConstantProperty(name=key, value=value)
 
-        Returns:
-            Heat capacity
-        """
+        # TODO: Add other tries to identify 1-D or 2-D lookup data.
 
-    @abstractmethod
-    def thermal_conductivity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        """Thermal conductivity
+        except TypeError:
+            raise
 
-        Args:
-            temperature: Temperature
-            pressure: Pressure
+    phase: Phase = Phase(**init_dict)
 
-        Returns:
-            Thermal conductivity
-        """
-
-    @abstractmethod
-    def thermal_expansivity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        """Thermal expansivity
-
-        Args:
-            temperature: Temperature
-            pressure: Pressure
-
-        Returns:
-            Thermal expansivity
-        """
-
-    @abstractmethod
-    def log10_viscosity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        """log10 of viscosity
-
-        Args:
-            temperature: Temperature
-            pressure: Pressure
-
-        Returns:
-            Log10 of viscosity
-        """
-
-    # def phase_boundary(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-    #     ...
-
-
-@dataclass(kw_only=True)
-class ConstantPhase(PhaseABC):
-    """A phase with constant properties."""
-
-    density_value: float
-    heat_capacity_value: float
-    thermal_conductivity_value: float
-    thermal_expansivity_value: float
-    log10_viscosity_value: float
-    # _phase_boundary: float
-
-    @ensure_size_equal_to_temperature
-    def density(self, *args, **kwargs) -> float:
-        del args
-        del kwargs
-        return self.density_value
-
-    @ensure_size_equal_to_temperature
-    def heat_capacity(self, *args, **kwargs) -> float:
-        del args
-        del kwargs
-        return self.heat_capacity_value
-
-    @ensure_size_equal_to_temperature
-    def thermal_conductivity(self, *args, **kwargs) -> float:
-        del args
-        del kwargs
-        return self.thermal_conductivity_value
-
-    @ensure_size_equal_to_temperature
-    def thermal_expansivity(self, *args, **kwargs) -> float:
-        del args
-        del kwargs
-        return self.thermal_expansivity_value
-
-    @ensure_size_equal_to_temperature
-    def log10_viscosity(self, *args, **kwargs) -> float:
-        del args
-        del kwargs
-        return self.log10_viscosity_value
+    return phase

@@ -178,17 +178,18 @@ class SpiderMesh:
         Args:
             staggered_quantity: Some quantity defined at the staggered nodes.
         """
-        # assert np.size(staggered_quantity) == self.staggered.number
         # TODO: Create transform matrix once and store to self.
         transform: np.ndarray = np.zeros((self.basic.number, self.staggered.number))
-        transform[1:-1, :-1] += np.diag(np.ones(self.basic.number - 2))  # k=0 diagonal.
-        transform[1:-1:, 1:] += np.diag(np.ones(self.basic.number - 2))  # k=1 diagonal.
-        # Backward difference at outer radius.
-        transform[0, :2] = np.array([3, -1])
-        # Forward difference at inner radius.
-        transform[-1, -2:] = np.array([-1, 3])
+        mesh_ratio: np.ndarray = self.basic.delta_radii[:-1] / self.staggered.delta_radii
+        transform[1:-1, :-1] += np.diag(1 - 0.5 * mesh_ratio)  # k=0 diagonal.
+        transform[1:-1:, 1:] += np.diag(0.5 * mesh_ratio)  # k=1 diagonal.
+        # Backward difference at inner radius.
+        transform[0, :2] = np.array([1 + 0.5 * mesh_ratio[0], -0.5 * mesh_ratio[0]])
+        # Forward difference at outer radius.
+        mesh_ratio_outer: np.ndarray = self.basic.delta_radii[-1] / self.staggered.delta_radii[-1]
+        transform[-1, -2:] = np.array([-0.5 * mesh_ratio_outer, 1 + 0.5 * mesh_ratio_outer])
         logger.debug("transform = %s", transform)
-        quantity_at_basic_nodes: np.ndarray = 0.5 * transform.dot(staggered_quantity)
+        quantity_at_basic_nodes: np.ndarray = transform.dot(staggered_quantity)
         logger.debug("quantity_at_basic_nodes = %s", quantity_at_basic_nodes)
 
         return quantity_at_basic_nodes
@@ -790,7 +791,6 @@ if __name__ == "__main__":
 #         rad_s = mesh_o._calc_radius_staggered()
 #         num_staggered = mesh_o.num_points_staggered()
 #         num_basic = mesh_o.num_points_basic()
-
 #         # assemble coefficient matrix
 #         # remember: ( rows, columns )
 #         AA_a = np.zeros((num_basic, num_staggered))
