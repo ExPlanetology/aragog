@@ -29,7 +29,7 @@ def ensure_size_equal_to_temperature(func: Callable) -> Callable:
         Returns:
             The quantity as an array with the same length as the temperature array.
         """
-        result = func(self, temperature, pressure) * np.ones_like(temperature)
+        result: np.ndarray = func(self, temperature, pressure) * np.ones_like(temperature)
 
         return result
 
