@@ -1,6 +1,7 @@
-#!/usr/bin/env python
+"""Mesh
 
-"""Mesh."""
+See the LICENSE file for licensing information.
+"""
 
 from __future__ import annotations
 
@@ -12,44 +13,27 @@ import numpy as np
 logger: logging.Logger = logging.getLogger(__name__)
 
 
-def uniform_radii(
-    inner_radius: float, outer_radius: float, number_of_coordinates: int
-) -> np.ndarray:
-    """A mesh with uniform radii.
-
-    Args:
-        inner_radius: Inner radius.
-        outer_radius: Outer radius.
-        number_of_coordinates: Number of coordinates.
-
-    Returns:
-        Radii of the mesh.
-    """
-    radii: np.ndarray = np.linspace(inner_radius, outer_radius, number_of_coordinates)
-
-    return radii
-
-
 def is_monotonic_increasing(some_array: np.ndarray) -> np.bool_:
     """Returns True if an array is monotonically increasing, otherwise returns False."""
     return np.all(np.diff(some_array) > 0)
 
 
 @dataclass
-class Mesh:
-    """Mesh.
+class FixedGrid:
+    """A fixed grid
 
     Args:
-        radii: Radii of the mesh.
+        radii: Radii of the mesh
 
     Attributes:
-        inner_radius: Inner radius.
-        outer_radius: Outer radius.
-        delta_radii: Delta radii.
-        depth: Depth below the outer radius.
-        height: Height above the inner radius.
-        number: Number of radii.
-        area: Surface area.
+        radii: Radii of the mesh
+        inner_radius: Inner radius
+        outer_radius: Outer radius
+        delta_radii: Delta radii
+        depth: Depth below the outer radius
+        height: Height above the inner radius
+        number: Number of radii
+        area: Surface area
         volume: Volume of the spherical shells defined between neighbouring radii.
     """
 
@@ -75,53 +59,40 @@ class Mesh:
         self.depth = self.outer_radius - self.radii
         self.height = self.radii - self.inner_radius
         self.number = len(self.radii)
-        # NOTE: Including 4*pi factor unlike C-version of spider.
+        # Includes 4*pi factor unlike C-version of SPIDER.
         self.area = 4 * np.pi * np.square(self.radii)
         mesh_cubed: np.ndarray = np.power(self.radii, 3)
         self.volume = 4 / 3 * np.pi * (mesh_cubed[1:] - mesh_cubed[:-1])
 
-    @classmethod
-    def uniform_radii(
-        cls, inner_radius: float, outer_radius: float, number_of_coordinates: int
-    ) -> Mesh:
-        """Uniform mesh.
-
-        Args:
-            inner_radius: Inner radius.
-            outer_radius: Outer radius.
-            number_of_coordinates: Number of coordinates.
-
-        Returns:
-            The mesh.
-        """
-        radii: np.ndarray = uniform_radii(inner_radius, outer_radius, number_of_coordinates)
-
-        return cls(radii)
-
 
 @dataclass
-class SpiderMesh:
-    """SPIDER uses a staggered mesh.
+class StaggeredGrid:
+    """A staggered grid.
 
-    The 'basic mesh' is used for the flux calculations and the staggered mesh is used for the
+    The 'basic' grid is used for the flux calculations and the 'staggered' grid is used for the
     volume calculations.
 
     Args:
-        basic_radii: Radii of the basic nodes.
+        radii: Radii of the basic nodes.
 
     Attributes:
-        basic: The basic mesh.
-        staggered: The staggered mesh.
+        radii: Radii of the basic nodes
+        basic: The basic grid.
+        staggered: The staggered grid.
     """
 
-    basic_radii: np.ndarray
-    basic: Mesh = field(init=False)
-    staggered: Mesh = field(init=False)
+    radii: np.ndarray
+    basic: FixedGrid = field(init=False)
+    staggered: FixedGrid = field(init=False)
+    _d_dr_transform: np.ndarray = field(init=False)
+    _quantity_transform: np.ndarray = field(init=False)
 
     def __post_init__(self):
-        self.basic = Mesh(self.basic_radii)
+        self.basic = FixedGrid(self.radii)
         staggered_coordinates: np.ndarray = self.basic.radii[:-1] + 0.5 * self.basic.delta_radii
-        self.staggered = Mesh(staggered_coordinates)
+        self.staggered = FixedGrid(staggered_coordinates)
+        self._d_dr_transform = self.d_dr_transform_matrix()
+        self._quantity_transform = self.quantity_transform_matrix()
 
     @property
     def inner_radius(self) -> float:
@@ -136,29 +107,23 @@ class SpiderMesh:
     @classmethod
     def uniform_radii(
         cls, inner_radius: float, outer_radius: float, number_of_coordinates: int
-    ) -> SpiderMesh:
-        """Uniform mesh.
+    ) -> StaggeredGrid:
+        """Uniform mesh
 
         Args:
-            inner_radius: Inner radius of the basic mesh.
-            outer_radius: Outer radius of the basic mesh.
-            number_of_coordinates: Number of basic coordinates.
+            inner_radius: Inner radius of the basic mesh
+            outer_radius: Outer radius of the basic mesh
+            number_of_coordinates: Number of basic coordinates
 
         Returns:
-            The mesh.
+            The staggered grid
         """
-        radii: np.ndarray = uniform_radii(inner_radius, outer_radius, number_of_coordinates)
+        radii: np.ndarray = np.linspace(inner_radius, outer_radius, number_of_coordinates)
 
         return cls(radii)
 
-    def d_dr_at_basic_nodes(self, staggered_quantity: np.ndarray) -> np.ndarray:
-        """Determines d/dr at the basic nodes of a quantity defined at the staggered nodes.
-
-        Args:
-            staggered_quantity: Some quantity defined at the staggered nodes.
-        """
-        assert np.size(staggered_quantity) == self.staggered.number
-        # TODO: Create transform matrix once and store to self.
+    def d_dr_transform_matrix(self) -> np.ndarray:
+        """Transform matrix for determining d/dr of a staggered quantity on the basic grid."""
         transform: np.ndarray = np.zeros((self.basic.number, self.staggered.number))
         transform[1:-1, :-1] += np.diag(-1 / self.staggered.delta_radii)  # k=0 diagonal.
         transform[1:-1:, 1:] += np.diag(1 / self.staggered.delta_radii)  # k=1 diagonal.
@@ -166,19 +131,25 @@ class SpiderMesh:
         transform[0, :] = transform[1, :]
         # Forward difference at inner radius.
         transform[-1, :] = transform[-2, :]
-        logger.debug("transform = %s", transform)
-        d_dr_at_basic_nodes: np.ndarray = transform.dot(staggered_quantity)
+        logger.debug("_d_dr_transform = %s", transform)
+
+        return transform
+
+    def d_dr_at_basic_nodes(self, staggered_quantity: np.ndarray) -> np.ndarray:
+        """Determines d/dr at the basic nodes of a quantity defined at the staggered nodes.
+
+        Args:
+            staggered_quantity: A quantity defined at the staggered nodes.
+        """
+        assert np.size(staggered_quantity) == self.staggered.number
+
+        d_dr_at_basic_nodes: np.ndarray = self._d_dr_transform.dot(staggered_quantity)
         logger.debug("d_dr_at_basic_nodes = %s", d_dr_at_basic_nodes)
 
         return d_dr_at_basic_nodes
 
-    def quantity_at_basic_nodes(self, staggered_quantity: np.ndarray) -> np.ndarray:
-        """Determines a quantity at the basic nodes that is defined at the staggered nodes.
-
-        Args:
-            staggered_quantity: Some quantity defined at the staggered nodes.
-        """
-        # TODO: Create transform matrix once and store to self.
+    def quantity_transform_matrix(self) -> np.ndarray:
+        """A transform matrix for mapping quantities on the staggered grid to the basic grid."""
         transform: np.ndarray = np.zeros((self.basic.number, self.staggered.number))
         mesh_ratio: np.ndarray = self.basic.delta_radii[:-1] / self.staggered.delta_radii
         transform[1:-1, :-1] += np.diag(1 - 0.5 * mesh_ratio)  # k=0 diagonal.
@@ -188,22 +159,20 @@ class SpiderMesh:
         # Forward difference at outer radius.
         mesh_ratio_outer: np.ndarray = self.basic.delta_radii[-1] / self.staggered.delta_radii[-1]
         transform[-1, -2:] = np.array([-0.5 * mesh_ratio_outer, 1 + 0.5 * mesh_ratio_outer])
-        logger.debug("transform = %s", transform)
-        quantity_at_basic_nodes: np.ndarray = transform.dot(staggered_quantity)
+        logger.debug("_quantity_transform = %s", transform)
+
+        return transform
+
+    def quantity_at_basic_nodes(self, staggered_quantity: np.ndarray) -> np.ndarray:
+        """Determines a quantity at the basic nodes that is defined at the staggered nodes.
+
+        Args:
+            staggered_quantity: A quantity defined at the staggered nodes.
+        """
+        quantity_at_basic_nodes: np.ndarray = self._quantity_transform.dot(staggered_quantity)
         logger.debug("quantity_at_basic_nodes = %s", quantity_at_basic_nodes)
 
         return quantity_at_basic_nodes
-
-
-def main():
-    """Testing mesh creation."""
-
-    spider_mesh: SpiderMesh = SpiderMesh.uniform_radii(0.55, 1.0, 10)
-    print(spider_mesh)
-
-
-if __name__ == "__main__":
-    main()
 
 
 # PREVIOUS BELOW
