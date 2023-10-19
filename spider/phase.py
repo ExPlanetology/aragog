@@ -158,8 +158,8 @@ class Phase:
         return dTdzs
 
 
-def phase_factory(phase_section: SectionProxy) -> Phase:
-    """Instantiates a Phase object.
+def phase_from_configuration(phase_section: SectionProxy) -> Phase:
+    """Instantiates a Phase object from configuration data.
 
     Args:
         phase_section: Configuration section with phase data

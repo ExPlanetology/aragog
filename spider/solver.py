@@ -19,8 +19,8 @@ from scipy.optimize import OptimizeResult
 
 from spider import STEFAN_BOLTZMANN_CONSTANT, YEAR_IN_SECONDS
 from spider.energy import total_heat_flux
-from spider.mesh import StaggeredGrid
-from spider.phase import Phase, phase_factory
+from spider.mesh import StaggeredGrid, mesh_from_configuration
+from spider.phase import Phase, phase_from_configuration
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -30,7 +30,8 @@ class SpiderSolver:
     filename: Union[str, Path]
     root_path: Union[str, Path] = ""
     mesh: StaggeredGrid = field(init=False)
-    phase: Phase = field(init=False)
+    phase_liquid: Phase = field(init=False)
+    phase_solid: Phase = field(init=False)
     initial_temperature: np.ndarray = field(init=False)
     initial_time: float = field(init=False, default=0)
     end_time: float = field(init=False, default=0)
@@ -40,17 +41,9 @@ class SpiderSolver:
         logger.info("Creating a SPIDER model")
         self.config: configparser.ConfigParser = MyConfigParser(self.filename)
         self.root: Path = Path(self.root_path)
-        # Set the mesh.
-        mesh: SectionProxy = self.config["mesh"]
-        self.mesh = StaggeredGrid.uniform_radii(
-            mesh.getfloat("inner_radius"),
-            mesh.getfloat("outer_radius"),
-            mesh.getint("number_of_nodes"),
-        )
-        # Set the phase.
-        # FIXME: Currently only uses the liquid phase. Also don't assume constant phase.
-        self.phase = phase_factory(self.config["phase_liquid"])
-
+        self.mesh = mesh_from_configuration(self.config["mesh"])
+        self.phase_liquid = phase_from_configuration(self.config["phase_liquid"])
+        self.phase_solid = phase_from_configuration(self.config["phase_solid"])
         # Set the time stepping.
         self.initial_time = self.config.getfloat("timestepping", "start_time")
         self.end_time = self.config.getfloat("timestepping", "end_time")
@@ -179,7 +172,11 @@ class SpiderSolver:
             self.initial_temperature,
             method="BDF",
             vectorized=False,  # TODO: True would speed up BDF according to the documentation.
-            args=(self.mesh, self.phase, self.initial_temperature),  # FIXME: Should be pressure.
+            args=(
+                self.mesh,
+                self.phase_liquid,
+                self.initial_temperature,
+            ),  # FIXME: Should be pressure.
         )
         logger.info(self.solution)
 

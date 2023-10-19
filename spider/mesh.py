@@ -6,7 +6,9 @@ See the LICENSE file for licensing information.
 from __future__ import annotations
 
 import logging
+from configparser import SectionProxy
 from dataclasses import dataclass, field
+from typing import Union
 
 import numpy as np
 
@@ -106,19 +108,29 @@ class StaggeredGrid:
 
     @classmethod
     def uniform_radii(
-        cls, inner_radius: float, outer_radius: float, number_of_coordinates: int
+        cls,
+        inner_radius: Union[str, float],
+        outer_radius: Union[str, float],
+        number_of_nodes: Union[str, int],
+        **kwargs,
     ) -> StaggeredGrid:
         """Uniform mesh
+
+        The arguments must allow a string to enable configuration data to be passed in.
 
         Args:
             inner_radius: Inner radius of the basic mesh
             outer_radius: Outer radius of the basic mesh
             number_of_coordinates: Number of basic coordinates
+            **kwargs: Catches unused keyword arguments.
 
         Returns:
             The staggered grid
         """
-        radii: np.ndarray = np.linspace(inner_radius, outer_radius, number_of_coordinates)
+        del kwargs
+        radii: np.ndarray = np.linspace(
+            float(inner_radius), float(outer_radius), int(number_of_nodes)
+        )
 
         return cls(radii)
 
@@ -173,6 +185,20 @@ class StaggeredGrid:
         logger.debug("quantity_at_basic_nodes = %s", quantity_at_basic_nodes)
 
         return quantity_at_basic_nodes
+
+
+def mesh_from_configuration(mesh_section: SectionProxy) -> StaggeredGrid:
+    """Instantiates a StaggeredGrid object from configuration data.
+
+    Args:
+        mesh_section: Configuration section with mesh data
+
+    Returns:
+        A StaggeredGrid object.
+    """
+    mesh: StaggeredGrid = StaggeredGrid.uniform_radii(**mesh_section)
+
+    return mesh
 
 
 # PREVIOUS BELOW
