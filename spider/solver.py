@@ -1,4 +1,7 @@
-"""Solver."""
+"""Solver
+
+See the LICENSE file for licensing information.
+"""
 
 from __future__ import annotations
 
@@ -16,7 +19,7 @@ from scipy.optimize import OptimizeResult
 
 from spider import STEFAN_BOLTZMANN_CONSTANT, YEAR_IN_SECONDS
 from spider.energy import total_heat_flux
-from spider.mesh import SpiderMesh
+from spider.mesh import StaggeredGrid
 from spider.phase import Phase, phase_factory
 
 logger: logging.Logger = logging.getLogger(__name__)
@@ -26,7 +29,7 @@ logger: logging.Logger = logging.getLogger(__name__)
 class SpiderSolver:
     filename: Union[str, Path]
     root_path: Union[str, Path] = ""
-    mesh: SpiderMesh = field(init=False)
+    mesh: StaggeredGrid = field(init=False)
     phase: Phase = field(init=False)
     initial_temperature: np.ndarray = field(init=False)
     initial_time: float = field(init=False, default=0)
@@ -39,7 +42,7 @@ class SpiderSolver:
         self.root: Path = Path(self.root_path)
         # Set the mesh.
         mesh: SectionProxy = self.config["mesh"]
-        self.mesh = SpiderMesh.uniform_radii(
+        self.mesh = StaggeredGrid.uniform_radii(
             mesh.getfloat("inner_radius"),
             mesh.getfloat("outer_radius"),
             mesh.getint("number_of_nodes"),
@@ -68,7 +71,7 @@ class SpiderSolver:
         self,
         time: float,
         temperature: np.ndarray,
-        mesh: SpiderMesh,
+        mesh: StaggeredGrid,
         phase: Phase,
         pressure: np.ndarray,
     ) -> np.ndarray:

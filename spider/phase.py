@@ -1,4 +1,7 @@
-"""A phase defines EOS and transport properties."""
+"""A phase defines EOS and transport properties.
+
+See the LICENSE file for licensing information.
+"""
 
 from __future__ import annotations
 
