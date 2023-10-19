@@ -17,7 +17,7 @@ from scipy.optimize import OptimizeResult
 from spider import STEFAN_BOLTZMANN_CONSTANT, YEAR_IN_SECONDS
 from spider.energy import total_heat_flux
 from spider.mesh import SpiderMesh
-from spider.phase import ConstantPhase, PhaseProtocol
+from spider.phase import ConstantPhase, PhaseABC
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ class SpiderSolver:
     filename: Union[str, Path]
     root_path: Union[str, Path] = ""
     mesh: SpiderMesh = field(init=False)
-    phase: PhaseProtocol = field(init=False)
+    phase: PhaseABC = field(init=False)
     initial_temperature: np.ndarray = field(init=False)
     initial_time: float = field(init=False, default=0)
     end_time: float = field(init=False, default=0)
@@ -45,12 +45,14 @@ class SpiderSolver:
             mesh.getint("number_of_nodes"),
         )
         # Set the phase.
-        gravity: float = self.config.getfloat("DEFAULT", "gravity")
+        gravitational_acceleration_value: float = self.config.getfloat(
+            "DEFAULT", "gravitational_acceleration"
+        )
         # FIXME: Currently only uses the liquid phase. Also don't assume constant phase.
         phase: SectionProxy = self.config["phase_liquid"]
         self.phase = ConstantPhase(
             density_value=phase.getfloat("density"),
-            gravity_value=gravity,
+            gravitational_acceleration_value=gravitational_acceleration_value,
             heat_capacity_value=phase.getfloat("heat_capacity"),
             thermal_conductivity_value=phase.getfloat("thermal_conductivity"),
             thermal_expansivity_value=phase.getfloat("thermal_expansivity"),
@@ -77,7 +79,7 @@ class SpiderSolver:
         time: float,
         temperature: np.ndarray,
         mesh: SpiderMesh,
-        phase: PhaseProtocol,
+        phase: PhaseABC,
         pressure: np.ndarray,
     ) -> np.ndarray:
         """dT/dt at the staggered nodes.

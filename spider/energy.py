@@ -8,14 +8,14 @@ from configparser import SectionProxy
 import numpy as np
 
 from spider.mesh import SpiderMesh
-from spider.phase import PhaseProtocol
+from spider.phase import PhaseABC
 
 logger: logging.Logger = logging.getLogger(__name__)
 
 
 def conductive_heat_flux(
     mesh: SpiderMesh,
-    phase: PhaseProtocol,
+    phase: PhaseABC,
     temperature: np.ndarray,
     pressure: np.ndarray,
 ) -> np.ndarray:
@@ -42,7 +42,7 @@ def conductive_heat_flux(
 
 def convective_heat_flux(
     mesh: SpiderMesh,
-    phase: PhaseProtocol,
+    phase: PhaseABC,
     temperature: np.ndarray,
     pressure: np.ndarray,
 ) -> np.ndarray:
@@ -76,7 +76,7 @@ def convective_heat_flux(
 def total_heat_flux(
     energy: SectionProxy,
     mesh: SpiderMesh,
-    phase: PhaseProtocol,
+    phase: PhaseABC,
     temperature: np.ndarray,
     pressure: np.ndarray,
 ) -> np.ndarray:
