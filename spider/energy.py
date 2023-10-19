@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from configparser import SectionProxy
 
 import numpy as np
 
@@ -73,6 +74,7 @@ def convective_heat_flux(
 
 
 def total_heat_flux(
+    energy: SectionProxy,
     mesh: SpiderMesh,
     phase: PhaseProtocol,
     temperature: np.ndarray,
@@ -81,6 +83,7 @@ def total_heat_flux(
     """Total heat flux.
 
     Args:
+        energy: Energy section from the configuration.
         mesh: Mesh.
         phase: Phase.
         temperature: Temperature at the staggered nodes.
@@ -91,11 +94,10 @@ def total_heat_flux(
     """
     total_heat_flux: np.ndarray = np.zeros(mesh.basic.number)
 
-    # TODO: Should be a user-defined flag.
-    if 1:
+    if energy.getboolean("convection"):
         total_heat_flux += convective_heat_flux(mesh, phase, temperature, pressure)
-    # TODO: Should be a user-defined
-    if 1:
+
+    if energy.getboolean("conduction"):
         total_heat_flux += conductive_heat_flux(mesh, phase, temperature, pressure)
 
     return total_heat_flux

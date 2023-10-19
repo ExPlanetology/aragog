@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import configparser
 import logging
-from dataclasses import dataclass
+from configparser import SectionProxy
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -16,18 +17,60 @@ from scipy.optimize import OptimizeResult
 from spider import STEFAN_BOLTZMANN_CONSTANT, YEAR_IN_SECONDS
 from spider.energy import total_heat_flux
 from spider.mesh import SpiderMesh
-from spider.phase import PhaseProtocol
+from spider.phase import ConstantPhase, PhaseProtocol
 
 logger: logging.Logger = logging.getLogger(__name__)
 
 
 @dataclass
 class SpiderSolver:
-    mesh: SpiderMesh
-    phase: PhaseProtocol
-    initial_temperature: np.ndarray
-    initial_time: float = 0
-    end_time: float = 0
+    filename: Union[str, Path]
+    root_path: Union[str, Path] = ""
+    mesh: SpiderMesh = field(init=False)
+    phase: PhaseProtocol = field(init=False)
+    initial_temperature: np.ndarray = field(init=False)
+    initial_time: float = field(init=False, default=0)
+    end_time: float = field(init=False, default=0)
+    _solution: OptimizeResult = field(init=False, default_factory=OptimizeResult)
+
+    def __post_init__(self):
+        logger.info("Creating a SPIDER model")
+        self.config: configparser.ConfigParser = MyConfigParser(self.filename)
+        self.root: Path = Path(self.root_path)
+        # Set the mesh.
+        mesh: SectionProxy = self.config["mesh"]
+        self.mesh = SpiderMesh.uniform_radii(
+            mesh.getfloat("inner_radius"),
+            mesh.getfloat("outer_radius"),
+            mesh.getint("number_of_nodes"),
+        )
+        # Set the phase.
+        gravity: float = self.config.getfloat("DEFAULT", "gravity")
+        # FIXME: Currently only uses the liquid phase. Also don't assume constant phase.
+        phase: SectionProxy = self.config["phase_liquid"]
+        self.phase = ConstantPhase(
+            density_value=phase.getfloat("density"),
+            gravity_value=gravity,
+            heat_capacity_value=phase.getfloat("heat_capacity"),
+            thermal_conductivity_value=phase.getfloat("thermal_conductivity"),
+            thermal_expansivity_value=phase.getfloat("thermal_expansivity"),
+            log10_viscosity_value=phase.getfloat("log10_viscosity"),
+        )
+        # Set the time stepping.
+        self.initial_time = self.config.getfloat("timestepping", "start_time")
+        self.end_time = self.config.getfloat("timestepping", "end_time")
+        # Set the initial condition.
+        initial: SectionProxy = self.config["initial_condition"]
+        self.initial_temperature = np.linspace(
+            initial.getfloat("basal_temperature"),
+            initial.getfloat("surface_temperature"),
+            self.mesh.staggered.number,
+        )
+
+    @property
+    def solution(self) -> OptimizeResult:
+        """The solution."""
+        return self._solution
 
     def dTdt(
         self,
@@ -49,14 +92,20 @@ class SpiderSolver:
         Returns:
             dT/dt at the staggered nodes.
         """
-        heat_flux: np.ndarray = total_heat_flux(mesh, phase, temperature, pressure)
+        energy: SectionProxy = self.config["energy"]
+        heat_flux: np.ndarray = total_heat_flux(energy, mesh, phase, temperature, pressure)
 
         # TODO: Clean up boundary conditions.
         # No heat flux from the core.
         heat_flux[0] = 0
         # Blackbody cooling.
         heat_flux[-1] = (
-            STEFAN_BOLTZMANN_CONSTANT * mesh.quantity_at_basic_nodes(temperature)[-1] ** 4
+            self.config.getfloat("boundary_conditions", "emissivity")
+            * STEFAN_BOLTZMANN_CONSTANT
+            * (
+                mesh.quantity_at_basic_nodes(temperature)[-1] ** 4
+                - self.config.getfloat("boundary_conditions", "equilibrium_temperature") ** 4
+            )
         )
 
         energy_flux: np.ndarray = heat_flux * mesh.basic.area
@@ -75,16 +124,16 @@ class SpiderSolver:
 
         return dTdt
 
-    def _plot_solution(self, solution: OptimizeResult, num_lines: int = 11) -> None:
+    def plot(self, num_lines: int = 11) -> None:
         """Plots the solution with labelled lines according to time.
 
         Args:
-            solution: Solution.
             num_lines: Number of lines to plot. Defaults to 11.
         """
+        assert self.solution is not None
         radii: np.ndarray = self.mesh.basic.radii
-        y_basic: np.ndarray = self.mesh.quantity_at_basic_nodes(solution.y)
-        times: np.ndarray = solution.t
+        y_basic: np.ndarray = self.mesh.quantity_at_basic_nodes(self.solution.y)
+        times: np.ndarray = self.solution.t
 
         plt.figure(figsize=(8, 6))
         ax = plt.subplot(111)
@@ -127,29 +176,17 @@ class SpiderSolver:
         legend.set_title("Time (Myr)")
         plt.show()
 
-    def solve(self, plot: bool = True) -> OptimizeResult:
-        """Solves system of ODEs to determine the interior temperature profile.
-
-        Args:
-            plot: Plot the solution. Defaults to True.
-
-        Returns:
-            The solution.
-        """
-        solution = solve_ivp(
+    def solve(self) -> None:
+        """Solves the system of ODEs to determine the interior temperature profile."""
+        self._solution = solve_ivp(
             self.dTdt,
             (self.initial_time, self.end_time),
             self.initial_temperature,
             method="BDF",
-            vectorized=False,
+            vectorized=False,  # TODO: True would speed up BDF according to the documentation.
             args=(self.mesh, self.phase, self.initial_temperature),  # FIXME: Should be pressure.
         )
-        logger.info(solution)
-
-        if plot:
-            self._plot_solution(solution)
-
-        return solution
+        logger.info(self.solution)
 
 
 class MyConfigParser(configparser.ConfigParser):

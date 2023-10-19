@@ -40,21 +40,21 @@ class PhaseProtocol(Protocol):
 class ConstantPhase(PhaseProtocol):
     """A phase with constant properties."""
 
-    _density: float
-    _gravity: float
-    _heat_capacity: float
-    _thermal_conductivity: float
-    _thermal_expansivity: float
-    _log10_viscosity: float
+    density_value: float
+    gravity_value: float
+    heat_capacity_value: float
+    thermal_conductivity_value: float
+    thermal_expansivity_value: float
+    log10_viscosity_value: float
     # _phase_boundary: float
 
     def __post_init__(self):
         # Convention is for positive gravity.
-        self._gravity = abs(self._gravity)
+        self.gravity_value = abs(self.gravity_value)
 
     def density(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
         del pressure
-        return self._density * np.ones_like(temperature)
+        return self.density_value * np.ones_like(temperature)
 
     def dTdPs(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
         dTdPs: np.ndarray = (
@@ -73,22 +73,24 @@ class ConstantPhase(PhaseProtocol):
 
     def dTdzs(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
         dTdzs: np.ndarray = (
-            self.density(temperature, pressure) * self._gravity * self.dTdPs(temperature, pressure)
+            self.density(temperature, pressure)
+            * self.gravity_value
+            * self.dTdPs(temperature, pressure)
         )
         return dTdzs
 
     def heat_capacity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
         del pressure
-        return self._heat_capacity * np.ones_like(temperature)
+        return self.heat_capacity_value * np.ones_like(temperature)
 
     def thermal_conductivity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
         del pressure
-        return self._thermal_conductivity * np.ones_like(temperature)
+        return self.thermal_conductivity_value * np.ones_like(temperature)
 
     def thermal_expansivity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
         del pressure
-        return self._thermal_expansivity * np.ones_like(temperature)
+        return self.thermal_expansivity_value * np.ones_like(temperature)
 
     def log10_viscosity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
         del pressure
-        return self._log10_viscosity * np.ones_like(temperature)
+        return self.log10_viscosity_value * np.ones_like(temperature)
