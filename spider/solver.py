@@ -31,6 +31,8 @@ class SpiderSolver:
     mesh: StaggeredMesh = field(init=False)
     phase_liquid: Phase = field(init=False)
     phase_solid: Phase = field(init=False)
+    # Phase for calculations, could be a composite phase.
+    phase: Phase = field(init=False)
     initial_temperature: np.ndarray = field(init=False)
     initial_time: float = field(init=False, default=0)
     end_time: float = field(init=False, default=0)
@@ -43,6 +45,8 @@ class SpiderSolver:
         self.mesh = mesh_from_configuration(self.config["mesh"])
         self.phase_liquid = phase_from_configuration(self.config["phase_liquid"])
         self.phase_solid = phase_from_configuration(self.config["phase_solid"])
+        # FIXME: For time being just set phase to liquid phase.
+        self.phase = self.phase_liquid
         # Set the time stepping.
         self.initial_time = self.config.getfloat("timestepping", "start_time")
         self.end_time = self.config.getfloat("timestepping", "end_time")
@@ -63,8 +67,6 @@ class SpiderSolver:
         self,
         time: float,
         temperature: np.ndarray,
-        mesh: StaggeredMesh,
-        phase: Phase,
         pressure: np.ndarray,
     ) -> np.ndarray:
         """dT/dt at the staggered nodes.
@@ -73,14 +75,15 @@ class SpiderSolver:
             time: Time.
             temperature: Temperature at the staggered nodes.
             mesh: Mesh.
-            phase: Phase.
             pressure: Pressure at the staggered nodes.
 
         Returns:
             dT/dt at the staggered nodes.
         """
         energy: SectionProxy = self.config["energy"]
-        heat_flux: np.ndarray = total_heat_flux(energy, mesh, phase, temperature, pressure)
+        heat_flux: np.ndarray = total_heat_flux(
+            energy, self.mesh, self.phase, temperature, pressure
+        )
 
         # TODO: Clean up boundary conditions.
         # No heat flux from the core.
@@ -90,27 +93,27 @@ class SpiderSolver:
             self.config.getfloat("boundary_conditions", "emissivity")
             * STEFAN_BOLTZMANN_CONSTANT
             * (
-                mesh.quantity_at_basic_nodes(temperature)[-1] ** 4
+                self.mesh.quantity_at_basic_nodes(temperature)[-1] ** 4
                 - self.config.getfloat("boundary_conditions", "equilibrium_temperature") ** 4
             )
         )
 
-        energy_flux: np.ndarray = heat_flux * mesh.basic.area
+        energy_flux: np.ndarray = heat_flux * self.mesh.basic.area
         logger.info("energy_flux = %s", energy_flux)
 
         delta_energy_flux: np.ndarray = np.diff(energy_flux)
         logger.info("delta_energy_flux = %s", delta_energy_flux)
         capacitance: np.ndarray = (
-            phase.heat_capacity(temperature, pressure)
-            * phase.density(temperature, pressure)
-            * mesh.basic.volume
+            self.phase.heat_capacity(temperature, pressure)
+            * self.phase.density(temperature, pressure)
+            * self.mesh.basic.volume
         )
 
         dTdt: np.ndarray = -delta_energy_flux / capacitance
         dTdt += (
-            phase.density(temperature, pressure)
+            self.phase.density(temperature, pressure)
             * total_heating(self.config, time)
-            * mesh.basic.volume
+            * self.mesh.basic.volume
             / capacitance
         )
 
@@ -178,13 +181,90 @@ class SpiderSolver:
             self.initial_temperature,
             method="BDF",
             vectorized=False,  # TODO: True would speed up BDF according to the documentation.
-            args=(
-                self.mesh,
-                self.phase_liquid,
-                self.initial_temperature,
-            ),  # FIXME: Should be pressure.
+            args=(self.initial_temperature,),  # FIXME: Should be pressure.
         )
         logger.info(self.solution)
+
+    def super_adiabatic_temperature_gradient(
+        self, temperature: np.ndarray, pressure: np.ndarray
+    ) -> np.ndarray:
+        """Super-adiabatic temperature gradient at the basic nodes.
+
+        By definition, this is negative if the system is convective, positive if not.
+
+        Args:
+            temperature: Temperature at the staggered nodes.
+            pressure: Pressure at the staggered nodes.
+
+        Returns:
+            Super adiabatic temperature gradient.
+        """
+        temperature_basic: np.ndarray = self.mesh.quantity_at_basic_nodes(temperature)
+        pressure_basic: np.ndarray = self.mesh.quantity_at_basic_nodes(pressure)
+        super_adiabatic: np.ndarray = self.mesh.d_dr_at_basic_nodes(
+            temperature
+        ) - self.phase.dTdrs(temperature_basic, pressure_basic)
+
+        return super_adiabatic
+
+    def is_convective(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        """Is convection occurring at the basic nodes.
+
+        Args:
+            temperature: Temperature at the staggered nodes.
+            pressure: Pressure at the staggered nodes.
+
+        Returns:
+            True if convective, otherwise False.
+        """
+        is_convective: np.ndarray = (
+            self.super_adiabatic_temperature_gradient(temperature, pressure) < 0
+        )
+
+        return is_convective
+
+    def velocity_inviscid(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        """Velocity of convective parcels controlled by dynamic pressure at the basic nodes.
+
+        Args:
+            temperature: Temperature at the staggered nodes.
+            pressure: Pressure at the staggered nodes.
+
+        Returns:
+            True if convective, otherwise False.
+        """
+        temperature_basic: np.ndarray = self.mesh.quantity_at_basic_nodes(temperature)
+        pressure_basic: np.ndarray = self.mesh.quantity_at_basic_nodes(pressure)
+        velocity: np.ndarray = -self.phase.gravitational_acceleration(
+            temperature_basic, pressure_basic
+        ) * self.phase.thermal_expansivity(temperature_basic, pressure_basic)
+        # FIXME: Need to multiply by the mixing length**2.
+        velocity *= self.super_adiabatic_temperature_gradient(temperature, pressure)
+        velocity /= 16
+        velocity = np.sqrt(velocity)
+
+        return velocity
+
+    def velocity_viscous(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        """Velocity of convective parcels controlled by viscous drag at the basic nodes.
+
+        Args:
+            temperature: Temperature at the staggered nodes.
+            pressure: Pressure at the staggered nodes.
+
+        Returns:
+            True if convective, otherwise False.
+        """
+        temperature_basic: np.ndarray = self.mesh.quantity_at_basic_nodes(temperature)
+        pressure_basic: np.ndarray = self.mesh.quantity_at_basic_nodes(pressure)
+        velocity: np.ndarray = -self.phase.gravitational_acceleration(
+            temperature_basic, pressure_basic
+        ) * self.phase.thermal_expansivity(temperature_basic, pressure_basic)
+        # FIXME: Need to multiply by the mixing length**3.
+        velocity *= self.super_adiabatic_temperature_gradient(temperature, pressure)
+        velocity /= 18 * self.phase.kinematic_viscosity(temperature, pressure)
+
+        return velocity
 
 
 class MyConfigParser(ConfigParser):
