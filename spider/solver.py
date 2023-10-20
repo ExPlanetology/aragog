@@ -5,9 +5,8 @@ See the LICENSE file for licensing information.
 
 from __future__ import annotations
 
-import configparser
 import logging
-from configparser import SectionProxy
+from configparser import ConfigParser, SectionProxy
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Union
@@ -18,8 +17,8 @@ from scipy.integrate import solve_ivp
 from scipy.optimize import OptimizeResult
 
 from spider import STEFAN_BOLTZMANN_CONSTANT, YEAR_IN_SECONDS
-from spider.energy import total_heat_flux
-from spider.mesh import StaggeredGrid, mesh_from_configuration
+from spider.energy import total_heat_flux, total_heating
+from spider.mesh import StaggeredMesh, mesh_from_configuration
 from spider.phase import Phase, phase_from_configuration
 
 logger: logging.Logger = logging.getLogger(__name__)
@@ -29,7 +28,7 @@ logger: logging.Logger = logging.getLogger(__name__)
 class SpiderSolver:
     filename: Union[str, Path]
     root_path: Union[str, Path] = ""
-    mesh: StaggeredGrid = field(init=False)
+    mesh: StaggeredMesh = field(init=False)
     phase_liquid: Phase = field(init=False)
     phase_solid: Phase = field(init=False)
     initial_temperature: np.ndarray = field(init=False)
@@ -39,7 +38,7 @@ class SpiderSolver:
 
     def __post_init__(self):
         logger.info("Creating a SPIDER model")
-        self.config: configparser.ConfigParser = MyConfigParser(self.filename)
+        self.config: ConfigParser = MyConfigParser(self.filename)
         self.root: Path = Path(self.root_path)
         self.mesh = mesh_from_configuration(self.config["mesh"])
         self.phase_liquid = phase_from_configuration(self.config["phase_liquid"])
@@ -64,7 +63,7 @@ class SpiderSolver:
         self,
         time: float,
         temperature: np.ndarray,
-        mesh: StaggeredGrid,
+        mesh: StaggeredMesh,
         phase: Phase,
         pressure: np.ndarray,
     ) -> np.ndarray:
@@ -108,6 +107,13 @@ class SpiderSolver:
         )
 
         dTdt: np.ndarray = -delta_energy_flux / capacitance
+        dTdt += (
+            phase.density(temperature, pressure)
+            * total_heating(self.config, time)
+            * mesh.basic.volume
+            / capacitance
+        )
+
         logger.info("dTdt = %s", dTdt)
 
         return dTdt
@@ -181,7 +187,7 @@ class SpiderSolver:
         logger.info(self.solution)
 
 
-class MyConfigParser(configparser.ConfigParser):
+class MyConfigParser(ConfigParser):
     """A configuration parser with some default options.
 
     Args:

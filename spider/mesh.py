@@ -21,8 +21,8 @@ def is_monotonic_increasing(some_array: np.ndarray) -> np.bool_:
 
 
 @dataclass
-class FixedGrid:
-    """A fixed grid
+class FixedMesh:
+    """A fixed mesh
 
     Args:
         radii: Radii of the mesh
@@ -68,10 +68,10 @@ class FixedGrid:
 
 
 @dataclass
-class StaggeredGrid:
-    """A staggered grid.
+class StaggeredMesh:
+    """A staggered mesh.
 
-    The 'basic' grid is used for the flux calculations and the 'staggered' grid is used for the
+    The 'basic' mesh is used for the flux calculations and the 'staggered' mesh is used for the
     volume calculations.
 
     Args:
@@ -79,20 +79,20 @@ class StaggeredGrid:
 
     Attributes:
         radii: Radii of the basic nodes
-        basic: The basic grid.
-        staggered: The staggered grid.
+        basic: The basic mesh.
+        staggered: The staggered mesh.
     """
 
     radii: np.ndarray
-    basic: FixedGrid = field(init=False)
-    staggered: FixedGrid = field(init=False)
+    basic: FixedMesh = field(init=False)
+    staggered: FixedMesh = field(init=False)
     _d_dr_transform: np.ndarray = field(init=False)
     _quantity_transform: np.ndarray = field(init=False)
 
     def __post_init__(self):
-        self.basic = FixedGrid(self.radii)
+        self.basic = FixedMesh(self.radii)
         staggered_coordinates: np.ndarray = self.basic.radii[:-1] + 0.5 * self.basic.delta_radii
-        self.staggered = FixedGrid(staggered_coordinates)
+        self.staggered = FixedMesh(staggered_coordinates)
         self._d_dr_transform = self.d_dr_transform_matrix()
         self._quantity_transform = self.quantity_transform_matrix()
 
@@ -113,7 +113,7 @@ class StaggeredGrid:
         outer_radius: Union[str, float],
         number_of_nodes: Union[str, int],
         **kwargs,
-    ) -> StaggeredGrid:
+    ) -> StaggeredMesh:
         """Uniform mesh
 
         The arguments must allow a string to enable configuration data to be passed in.
@@ -135,7 +135,7 @@ class StaggeredGrid:
         return cls(radii)
 
     def d_dr_transform_matrix(self) -> np.ndarray:
-        """Transform matrix for determining d/dr of a staggered quantity on the basic grid."""
+        """Transform matrix for determining d/dr of a staggered quantity on the basic mesh."""
         transform: np.ndarray = np.zeros((self.basic.number, self.staggered.number))
         transform[1:-1, :-1] += np.diag(-1 / self.staggered.delta_radii)  # k=0 diagonal.
         transform[1:-1:, 1:] += np.diag(1 / self.staggered.delta_radii)  # k=1 diagonal.
@@ -161,7 +161,7 @@ class StaggeredGrid:
         return d_dr_at_basic_nodes
 
     def quantity_transform_matrix(self) -> np.ndarray:
-        """A transform matrix for mapping quantities on the staggered grid to the basic grid."""
+        """A transform matrix for mapping quantities on the staggered mesh to the basic mesh."""
         transform: np.ndarray = np.zeros((self.basic.number, self.staggered.number))
         mesh_ratio: np.ndarray = self.basic.delta_radii[:-1] / self.staggered.delta_radii
         transform[1:-1, :-1] += np.diag(1 - 0.5 * mesh_ratio)  # k=0 diagonal.
@@ -187,16 +187,16 @@ class StaggeredGrid:
         return quantity_at_basic_nodes
 
 
-def mesh_from_configuration(mesh_section: SectionProxy) -> StaggeredGrid:
-    """Instantiates a StaggeredGrid object from configuration data.
+def mesh_from_configuration(mesh_section: SectionProxy) -> StaggeredMesh:
+    """Instantiates a StaggeredMesh object from configuration data.
 
     Args:
         mesh_section: Configuration section with mesh data
 
     Returns:
-        A StaggeredGrid object.
+        A StaggeredMesh object.
     """
-    mesh: StaggeredGrid = StaggeredGrid.uniform_radii(**mesh_section)
+    mesh: StaggeredMesh = StaggeredMesh.uniform_radii(**mesh_section)
 
     return mesh
 
