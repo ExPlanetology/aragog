@@ -47,6 +47,7 @@ def conductive_heat_flux(
 def convective_heat_flux(
     mesh: StaggeredMesh,
     phase: Phase,
+    eddy_diffusivity: np.ndarray,
     temperature: np.ndarray,
     pressure: np.ndarray,
 ) -> np.ndarray:
@@ -55,6 +56,7 @@ def convective_heat_flux(
     Args:
         mesh: Mesh
         phase: Phase
+        eddy_diffusivity: Eddy diffusivity at the basic nodes
         temperature: Temperature at the staggered nodes
         pressure: Pressure at the staggered nodes
 
@@ -63,11 +65,13 @@ def convective_heat_flux(
     """
     temperature_basic: np.ndarray = mesh.quantity_at_basic_nodes(temperature)
     pressure_basic: np.ndarray = mesh.quantity_at_basic_nodes(pressure)
-    heat_flux: np.ndarray = -phase.density(
-        temperature_basic, pressure_basic
-    ) * phase.heat_capacity(temperature_basic, pressure_basic)
+    heat_flux: np.ndarray = (
+        -phase.density(temperature_basic, pressure_basic)
+        * phase.heat_capacity(temperature_basic, pressure_basic)
+        * eddy_diffusivity
+    )
 
-    heat_flux *= 1.0e6  # e6  # FIXME: Multiply by kappa_h. Constant value just for testing.
+    # heat_flux *= 1.0e6  # FIXME: Multiply by kappa_h. Constant value just for testing.
 
     heat_flux *= mesh.d_dr_at_basic_nodes(temperature) - phase.dTdrs(
         temperature_basic, pressure_basic
@@ -81,6 +85,7 @@ def total_heat_flux(
     energy: SectionProxy,
     mesh: StaggeredMesh,
     phase: Phase,
+    eddy_diffusivity: np.ndarray,
     temperature: np.ndarray,
     pressure: np.ndarray,
 ) -> np.ndarray:
@@ -90,6 +95,7 @@ def total_heat_flux(
         energy: Energy section from the configuration
         mesh: Mesh
         phase: Phase
+        eddy_diffusivity: Eddy diffusivity at the basic nodes
         temperature: Temperature at the staggered nodes
         pressure: Pressure at the staggered nodes
 
@@ -99,7 +105,9 @@ def total_heat_flux(
     total_heat_flux: np.ndarray = np.zeros(mesh.basic.number)
 
     if energy.getboolean("convection"):
-        total_heat_flux += convective_heat_flux(mesh, phase, temperature, pressure)
+        total_heat_flux += convective_heat_flux(
+            mesh, phase, eddy_diffusivity, temperature, pressure
+        )
 
     if energy.getboolean("conduction"):
         total_heat_flux += conductive_heat_flux(mesh, phase, temperature, pressure)

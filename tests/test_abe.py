@@ -69,4 +69,6 @@ def test_liquid_with_heating():
     logger.debug("calculated = %s", calculated)
     logger.debug("expected = %s", expected)
 
+    spider_solver.plot()
+
     assert np.isclose(calculated, expected).all()

@@ -37,6 +37,7 @@ class FixedMesh:
         number: Number of radii
         area: Surface area
         volume: Volume of the spherical shells defined between neighbouring radii.
+        mixing_length: Mixing length # TODO: Constant for time being.
     """
 
     radii: np.ndarray
@@ -48,6 +49,7 @@ class FixedMesh:
     number: int = field(init=False)
     area: np.ndarray = field(init=False)
     volume: np.ndarray = field(init=False)
+    mixing_length: np.ndarray = field(init=False)
 
     def __post_init__(self):
         if not is_monotonic_increasing(self.radii):
@@ -65,6 +67,8 @@ class FixedMesh:
         self.area = 4 * np.pi * np.square(self.radii)
         mesh_cubed: np.ndarray = np.power(self.radii, 3)
         self.volume = 4 / 3 * np.pi * (mesh_cubed[1:] - mesh_cubed[:-1])
+        # TODO: To add convention mixing length as well.
+        self.mixing_length = 0.25 * (self.outer_radius - self.inner_radius)
 
 
 @dataclass
