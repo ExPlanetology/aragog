@@ -65,8 +65,8 @@ class PropertyABC(ABC):
             An evaluation based on the provided arguments.
         """
 
-    def __call__(self, *args, **kwargs):
-        return self.get_value(*args, **kwargs)
+    def __call__(self, temperature: np.ndarray, pressure: np.ndarray):
+        return self.get_value(temperature, pressure)
 
 
 @dataclass(kw_only=True, frozen=True)
@@ -156,6 +156,38 @@ class Phase:
         logger.debug("dTdzs = %s", dTdzs)
 
         return dTdzs
+
+    def viscosity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        """Dynamic viscosity
+
+        Args:
+            temperature: Temperature
+            pressure: Pressure
+
+        Returns:
+            Dynamic viscosity
+        """
+        viscosity: np.ndarray = 10 ** self.log10_viscosity(temperature, pressure)
+        logger.debug("viscosity = %s", viscosity)
+
+        return viscosity
+
+    def kinematic_viscosity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        """Kinematic viscosity
+
+        Args:
+            temperature: Temperature
+            pressure: Pressure
+
+        Returns:
+            Kinematic viscosity
+        """
+        kinematic_viscosity: np.ndarray = self.viscosity(temperature, pressure) / self.density(
+            temperature, pressure
+        )
+        logger.debug("kinematic_viscosity = %s", kinematic_viscosity)
+
+        return kinematic_viscosity
 
 
 def phase_from_configuration(phase_section: SectionProxy) -> Phase:
