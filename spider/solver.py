@@ -44,13 +44,16 @@ class SpiderSolver:
         logger.info("Creating a SPIDER model")
         self.config: ConfigParser = MyConfigParser(self.filename)
         self.root: Path = Path(self.root_path)
-        # Set the numerical scalings
         self.numerical_scalings = numerical_scalings_from_configuration(
             self.config["numerical_scalings"]
         )
         self.mesh = mesh_from_configuration(self.config["mesh"], self.numerical_scalings)
-        self.phase_liquid = phase_from_configuration(self.config["phase_liquid"])
-        self.phase_solid = phase_from_configuration(self.config["phase_solid"])
+        self.phase_liquid = phase_from_configuration(
+            self.config["phase_liquid"], self.numerical_scalings
+        )
+        self.phase_solid = phase_from_configuration(
+            self.config["phase_solid"], self.numerical_scalings
+        )
         # FIXME: For time being just set phase to liquid phase.
         self.phase = self.phase_liquid
         # Set the time stepping.
@@ -63,6 +66,7 @@ class SpiderSolver:
             initial.getfloat("surface_temperature"),
             self.mesh.staggered.number,
         )
+        self.initial_temperature /= self.numerical_scalings.temperature
 
     @property
     def solution(self) -> OptimizeResult:
@@ -96,12 +100,17 @@ class SpiderSolver:
         # No heat flux from the core.
         heat_flux[0] = 0
         # Blackbody cooling.
+        equilibrium_temperature: float = self.config.getfloat(
+            "boundary_conditions", "equilibrium_temperature"
+        )
+        equilibrium_temperature /= self.numerical_scalings.temperature
         heat_flux[-1] = (
             self.config.getfloat("boundary_conditions", "emissivity")
             * STEFAN_BOLTZMANN_CONSTANT
+            / self.numerical_scalings.stefan_boltzmann_constant
             * (
                 self.mesh.quantity_at_basic_nodes(temperature)[-1] ** 4
-                - self.config.getfloat("boundary_conditions", "equilibrium_temperature") ** 4
+                - equilibrium_temperature**4
             )
         )
 
@@ -117,6 +126,8 @@ class SpiderSolver:
         )
 
         dTdt: np.ndarray = -delta_energy_flux / capacitance
+
+        # FIXME: Need to non-dimensionalise heating
         dTdt += (
             self.phase.density(temperature, pressure)
             * total_heating(self.config, time)
