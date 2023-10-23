@@ -12,7 +12,7 @@ from typing import Union
 
 import numpy as np
 
-from spider.scalings import NumericalScalings
+from spider.scalings import Scalings
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -90,14 +90,14 @@ class StaggeredMesh:
     """
 
     radii: np.ndarray
-    numerical_scalings: NumericalScalings
+    scalings: Scalings
     basic: _FixedMesh = field(init=False)
     staggered: _FixedMesh = field(init=False)
     _d_dr_transform: np.ndarray = field(init=False)
     _quantity_transform: np.ndarray = field(init=False)
 
     def __post_init__(self):
-        self.radii /= self.numerical_scalings.radius
+        self.radii /= self.scalings.radius
         self.basic = _FixedMesh(self.radii)
         staggered_coordinates: np.ndarray = self.basic.radii[:-1] + 0.5 * self.basic.delta_radii
         self.staggered = _FixedMesh(staggered_coordinates)
@@ -117,7 +117,7 @@ class StaggeredMesh:
     @classmethod
     def uniform_radii(
         cls,
-        numerical_scalings: NumericalScalings,
+        scalings: Scalings,
         /,
         inner_radius: Union[str, float],
         outer_radius: Union[str, float],
@@ -129,7 +129,7 @@ class StaggeredMesh:
         The arguments must allow a string to enable configuration data to be passed in.
 
         Args:
-            numerical_scalings: Scalings for the numerical problem
+            scalings: Scalings for the numerical problem
             inner_radius: Inner radius of the basic mesh
             outer_radius: Outer radius of the basic mesh
             number_of_coordinates: Number of basic coordinates
@@ -143,7 +143,7 @@ class StaggeredMesh:
             float(inner_radius), float(outer_radius), int(number_of_nodes)
         )
 
-        return cls(radii, numerical_scalings)
+        return cls(radii, scalings)
 
     def d_dr_transform_matrix(self) -> np.ndarray:
         """Transform matrix for determining d/dr of a staggered quantity on the basic mesh.
@@ -212,19 +212,17 @@ class StaggeredMesh:
         return quantity_at_basic_nodes
 
 
-def mesh_from_configuration(
-    mesh_section: SectionProxy, numerical_scalings: NumericalScalings
-) -> StaggeredMesh:
+def mesh_from_configuration(mesh_section: SectionProxy, scalings: Scalings) -> StaggeredMesh:
     """Instantiates a StaggeredMesh object from configuration data.
 
     Args:
         mesh_section: Configuration section with mesh data
-        numerical_scalings: Scalings for the numerical problem
+        scalings: Scalings for the numerical problem
 
     Returns:
         A StaggeredMesh object.
     """
-    mesh: StaggeredMesh = StaggeredMesh.uniform_radii(numerical_scalings, **mesh_section)
+    mesh: StaggeredMesh = StaggeredMesh.uniform_radii(scalings, **mesh_section)
 
     return mesh
 

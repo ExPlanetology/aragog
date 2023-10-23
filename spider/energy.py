@@ -12,14 +12,14 @@ import numpy as np
 
 from spider import YEAR_IN_SECONDS
 from spider.mesh import StaggeredMesh
-from spider.phase import Phase
+from spider.phase import PhaseCurrentState
 
 logger: logging.Logger = logging.getLogger(__name__)
 
 
 def conductive_heat_flux(
     mesh: StaggeredMesh,
-    phase: Phase,
+    phase: PhaseCurrentState,
     temperature: np.ndarray,
     pressure: np.ndarray,
 ) -> np.ndarray:
@@ -34,11 +34,7 @@ def conductive_heat_flux(
     Returns:
         Conductive heat flux
     """
-    temperature_basic: np.ndarray = mesh.quantity_at_basic_nodes(temperature)
-    pressure_basic: np.ndarray = mesh.quantity_at_basic_nodes(pressure)
-    heat_flux: np.ndarray = -phase.thermal_conductivity(
-        temperature_basic, pressure_basic
-    ) * mesh.d_dr_at_basic_nodes(temperature)
+    heat_flux: np.ndarray = -phase.thermal_conductivity * mesh.d_dr_at_basic_nodes(temperature)
     logger.info("conductive_heat_flux = %s", heat_flux)
 
     return heat_flux
@@ -46,7 +42,7 @@ def conductive_heat_flux(
 
 def convective_heat_flux(
     mesh: StaggeredMesh,
-    phase: Phase,
+    phase: PhaseCurrentState,
     eddy_diffusivity: np.ndarray,
     temperature: np.ndarray,
     pressure: np.ndarray,
@@ -64,18 +60,11 @@ def convective_heat_flux(
         Convective heat flux
     """
     temperature_basic: np.ndarray = mesh.quantity_at_basic_nodes(temperature)
-    pressure_basic: np.ndarray = mesh.quantity_at_basic_nodes(pressure)
-    heat_flux: np.ndarray = (
-        -phase.density(temperature_basic, pressure_basic)
-        * phase.heat_capacity(temperature_basic, pressure_basic)
-        * eddy_diffusivity
-    )
+    heat_flux: np.ndarray = -phase.density * phase.heat_capacity * eddy_diffusivity
 
     # heat_flux *= 1.0e6  # FIXME: Multiply by kappa_h. Constant value just for testing.
 
-    heat_flux *= mesh.d_dr_at_basic_nodes(temperature) - phase.dTdrs(
-        temperature_basic, pressure_basic
-    )
+    heat_flux *= mesh.d_dr_at_basic_nodes(temperature) - phase.dTdrs
     logger.info("convective_heat_flux = %s", heat_flux)
 
     return heat_flux
@@ -84,7 +73,7 @@ def convective_heat_flux(
 def total_heat_flux(
     energy: SectionProxy,
     mesh: StaggeredMesh,
-    phase: Phase,
+    phase: PhaseCurrentState,
     eddy_diffusivity: np.ndarray,
     temperature: np.ndarray,
     pressure: np.ndarray,
