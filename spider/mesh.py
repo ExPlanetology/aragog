@@ -8,12 +8,11 @@ from __future__ import annotations
 import logging
 from configparser import SectionProxy
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Union
+from typing import Union
 
 import numpy as np
 
-if TYPE_CHECKING:
-    from spider.solver import NumericalScalings
+from spider.scalings import NumericalScalings
 
 logger: logging.Logger = logging.getLogger(__name__)
 

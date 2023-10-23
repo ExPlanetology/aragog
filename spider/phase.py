@@ -199,12 +199,12 @@ def phase_from_configuration(phase_section: SectionProxy) -> Phase:
     Returns:
         A Phase object
     """
-    init_dict: dict = {}
+    init_dict: dict[str, PropertyABC] = {}
     for key, value in phase_section.items():
         try:
-            value = float(value)
-            logger.info("%s (%s) is a number = %f", key, phase_section.name, value)
-            init_dict[key] = ConstantProperty(name=key, value=value)
+            value_float: float = float(value)
+            logger.info("%s (%s) is a number = %f", key, phase_section.name, value_float)
+            init_dict[key] = ConstantProperty(name=key, value=value_float)
 
         # TODO: Add other tries to identify 1-D or 2-D lookup data.
 
