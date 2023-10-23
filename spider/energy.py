@@ -131,7 +131,9 @@ def radiogenic_heating(
     # Time must be in years because t0 and half_life are in years.
     time /= YEAR_IN_SECONDS
     arg: float = (
-        np.log(2) * (radionuclide.getfloat("t0") - time) / radionuclide.getfloat("half_life")
+        np.log(2)
+        * (radionuclide.getfloat("t0_years") - time)
+        / radionuclide.getfloat("half_life_years")
     )
     heating: float = (
         radionuclide.getfloat("heat_production")
