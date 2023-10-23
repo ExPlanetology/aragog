@@ -13,6 +13,9 @@ from spider import TEST_CFG_PATH, SpiderSolver, __version__, debug_logger
 
 logger: logging.Logger = debug_logger()
 
+atol: float = 1e-11
+rtol: float = 1e-11
+
 
 def test_version():
     """Test version."""
@@ -63,7 +66,7 @@ def test_liquid_no_heating():
     logger.debug("calculated = %s", calculated)
     logger.debug("expected = %s", expected)
 
-    assert np.isclose(calculated, expected).all()
+    assert np.isclose(calculated, expected, atol=atol, rtol=rtol).all()
 
 
 def test_liquid_with_heating():
@@ -111,4 +114,4 @@ def test_liquid_with_heating():
 
     # spider_solver.plot()
 
-    assert np.isclose(calculated, expected).all()
+    assert np.isclose(calculated, expected, atol=atol, rtol=rtol).all()

@@ -13,6 +13,8 @@ from typing import Callable
 
 import numpy as np
 
+from spider.scalings import NumericalScalings
+
 logger: logging.Logger = logging.getLogger(__name__)
 
 
@@ -101,7 +103,7 @@ class Phase:
     heat_capacity: PropertyABC
     thermal_conductivity: PropertyABC
     thermal_expansivity: PropertyABC
-    log10_viscosity: PropertyABC
+    viscosity: PropertyABC
 
     def dTdPs(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
         """dTdPs
@@ -157,20 +159,20 @@ class Phase:
 
         return dTdzs
 
-    def viscosity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        """Dynamic viscosity
+    def log10_viscosity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        """Log10 dynamic viscosity
 
         Args:
             temperature: Temperature
             pressure: Pressure
 
         Returns:
-            Dynamic viscosity
+            Log10 dynamic viscosity
         """
-        viscosity: np.ndarray = 10 ** self.log10_viscosity(temperature, pressure)
-        logger.debug("viscosity = %s", viscosity)
+        log10_viscosity: np.ndarray = np.log10(self.viscosity(temperature, pressure))
+        logger.debug("log10_viscosity = %s", log10_viscosity)
 
-        return viscosity
+        return log10_viscosity
 
     def kinematic_viscosity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
         """Kinematic viscosity
@@ -190,11 +192,14 @@ class Phase:
         return kinematic_viscosity
 
 
-def phase_from_configuration(phase_section: SectionProxy) -> Phase:
+def phase_from_configuration(
+    phase_section: SectionProxy, numerical_scalings: NumericalScalings
+) -> Phase:
     """Instantiates a Phase object from configuration data.
 
     Args:
         phase_section: Configuration section with phase data
+        numerical_scalings: Scalings for the numerical problem
 
     Returns:
         A Phase object
@@ -203,6 +208,7 @@ def phase_from_configuration(phase_section: SectionProxy) -> Phase:
     for key, value in phase_section.items():
         try:
             value_float: float = float(value)
+            value_float /= getattr(numerical_scalings, key)
             logger.info("%s (%s) is a number = %f", key, phase_section.name, value_float)
             init_dict[key] = ConstantProperty(name=key, value=value_float)
 
