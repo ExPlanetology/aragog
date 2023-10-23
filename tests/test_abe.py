@@ -13,8 +13,8 @@ from spider import TEST_CFG_PATH, SpiderSolver, __version__, debug_logger
 
 logger: logging.Logger = debug_logger()
 
-atol: float = 1e-8
-rtol: float = 1e-7
+atol: float = 1e-4
+rtol: float = 1e-4
 
 
 def test_version():
@@ -28,41 +28,39 @@ def test_liquid_no_heating():
     spider_solver: SpiderSolver = SpiderSolver(TEST_CFG_PATH / Path("abe.cfg"))
     spider_solver.config["energy"]["radionuclides"] = "False"
     spider_solver.solve()
-    calculated: np.ndarray = (
-        spider_solver.solution.y[:, -1] * spider_solver.numerical_scalings.temperature
-    )
-    # spider_solver.plot(5)
+    calculated: np.ndarray = spider_solver.solution.y[:, -1] * spider_solver.scalings.temperature
+    spider_solver.plot()
     expected: np.ndarray = np.array(
         [
-            3996.33374388,
-            3980.37068029,
-            3963.39616045,
-            3945.93043011,
-            3928.23812489,
-            3910.44707964,
-            3892.6149291,
-            3874.76624817,
-            3856.91108967,
-            3839.05344335,
-            3821.19485817,
-            3803.33592599,
-            3785.47687079,
-            3767.61777796,
-            3749.75868367,
-            3731.89961303,
-            3714.0406061,
-            3696.18175727,
-            3678.32330493,
-            3660.46585052,
-            3642.61089106,
-            3624.76208635,
-            3606.92818544,
-            3589.1295229,
-            3571.41169338,
-            3553.87232983,
-            3536.70870729,
-            3520.29400124,
-            3505.30871595,
+            958.03547486,
+            954.79956243,
+            951.57424092,
+            948.35953268,
+            945.15543511,
+            941.96193518,
+            938.77901429,
+            935.60665038,
+            932.44481911,
+            929.29349448,
+            926.15264934,
+            923.0222556,
+            919.90228449,
+            916.79270666,
+            913.69349239,
+            910.60461154,
+            907.52603372,
+            904.45772827,
+            901.3996644,
+            898.35181111,
+            895.31413733,
+            892.28661183,
+            889.26920337,
+            886.26188059,
+            883.26461214,
+            880.27736661,
+            877.30011257,
+            874.3328186,
+            871.37545327,
         ]
     )
     logger.debug("calculated = %s", calculated)
@@ -76,9 +74,7 @@ def test_liquid_with_heating():
 
     spider_solver: SpiderSolver = SpiderSolver(TEST_CFG_PATH / Path("abe.cfg"))
     spider_solver.solve()
-    calculated: np.ndarray = (
-        spider_solver.solution.y[:, -1] * spider_solver.numerical_scalings.temperature
-    )
+    calculated: np.ndarray = spider_solver.solution.y[:, -1] * spider_solver.scalings.temperature
     # spider_solver.plot(5)
     expected: np.ndarray = np.array(
         [

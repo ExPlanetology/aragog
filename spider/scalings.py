@@ -7,16 +7,15 @@ from __future__ import annotations
 
 import logging
 from configparser import SectionProxy
-from dataclasses import dataclass
-from functools import cached_property
+from dataclasses import dataclass, field
 
 import numpy as np
 
 logger: logging.Logger = logging.getLogger(__name__)
 
 
-@dataclass(kw_only=True, frozen=True)
-class NumericalScalings:
+@dataclass(kw_only=True)
+class Scalings:
     """Scalings for the numerical problem.
 
     Args:
@@ -24,71 +23,63 @@ class NumericalScalings:
         temperature: Temperature in Kelvin. Defaults to 1.
         density: Density in kg/m^3. Defaults to 1.
         time: Time in seconds. Defaults to 1.
+
+    Attributes:
+        radius
+        temperature
+        density
+        time
+        area
+        energy
+        gravitational_acceleration
+        heat_capacity
+        mass
+        power
+        pressure
+        temperature_gradient
+        thermal_conductivity
+        velocity
+        viscosity
+        stefan_boltzmann_constant
     """
 
     radius: float = 1
     temperature: float = 1
     density: float = 1
     time: float = 1
+    area: float = field(init=False)
+    energy: float = field(init=False)
+    gravitational_acceleration: float = field(init=False)
+    heat_capacity: float = field(init=False)
+    mass: float = field(init=False)
+    power: float = field(init=False)
+    pressure: float = field(init=False)
+    temperature_gradient: float = field(init=False)
+    thermal_conductivity: float = field(init=False)
+    velocity: float = field(init=False)
+    stefan_boltzmann_constant: float = field(init=False)
+    viscosity: float = field(init=False)
 
-    @cached_property
-    def area(self) -> float:
-        return np.square(self.radius)
-
-    @cached_property
-    def energy(self) -> float:
-        return self.mass * np.square(self.velocity)
-
-    @cached_property
-    def gravitational_acceleration(self) -> float:
-        return self.radius / np.square(self.time)
-
-    @cached_property
-    def heat_capacity(self) -> float:
-        return self.energy / self.mass / self.temperature
-
-    @cached_property
-    def mass(self) -> float:
-        return self.density * self.volume
-
-    @cached_property
-    def power(self) -> float:
-        return self.energy / self.time
-
-    @cached_property
-    def pressure(self) -> float:
-        return self.density * self.gravitational_acceleration * self.radius
-
-    @cached_property
-    def stefan_boltzmann_constant(self) -> float:
-        return self.power / np.square(self.radius) / np.power(self.temperature, 4)
-
-    @cached_property
-    def temperature_gradient(self) -> float:
-        return self.temperature / self.radius
-
-    @cached_property
-    def thermal_conductivity(self) -> float:
-        return self.power / self.radius / self.temperature
-
-    @cached_property
-    def thermal_expansivity(self) -> float:
-        return 1 / self.temperature
-
-    @cached_property
-    def velocity(self) -> float:
-        return self.radius / self.time
-
-    @cached_property
-    def viscosity(self) -> float:
-        return self.pressure * self.time
-
-    @cached_property
-    def volume(self) -> float:
-        return np.power(self.radius, 3)
+    def __post_init__(self):
+        self.area = np.square(self.radius)
+        self.gravitational_acceleration = self.radius / np.square(self.time)
+        self.temperature_gradient = self.temperature / self.radius
+        self.thermal_expansivity = 1 / self.temperature
+        self.volume = np.power(self.radius, 3)
+        self.mass = self.density * self.volume
+        self.pressure = self.density * self.gravitational_acceleration * self.radius
+        self.velocity = self.radius / self.time
+        self.energy = self.mass * np.square(self.velocity)
+        self.heat_capacity = self.energy / self.mass / self.temperature
+        self.power = self.energy / self.time
+        self.thermal_conductivity = self.power / self.radius / self.temperature
+        self.stefan_boltzmann_constant = (
+            self.power / np.square(self.radius) / np.power(self.temperature, 4)
+        )
+        self.viscosity = self.pressure * self.time
 
 
-def numerical_scalings_from_configuration(scalings_section: SectionProxy) -> NumericalScalings:
+def scalings_from_configuration(scalings_section: SectionProxy) -> Scalings:
     """Instantiates the scalings for the numerical problem.
 
     Args:
@@ -102,8 +93,8 @@ def numerical_scalings_from_configuration(scalings_section: SectionProxy) -> Num
     density: float = scalings_section.getfloat("density")
     time: float = scalings_section.getfloat("time")
 
-    numerical_scalings: NumericalScalings = NumericalScalings(
+    scalings: Scalings = Scalings(
         radius=radius, temperature=temperature, density=density, time=time
     )
 
-    return numerical_scalings
+    return scalings

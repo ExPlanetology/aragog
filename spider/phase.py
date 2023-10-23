@@ -8,12 +8,12 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from configparser import SectionProxy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable
 
 import numpy as np
 
-from spider.scalings import NumericalScalings
+from spider.scalings import Scalings
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -57,7 +57,7 @@ class PropertyABC(ABC):
 
     @abstractmethod
     def get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        """Computes the property value for given input arguments.
+        """Computes the property value at temperature and pressure.
 
         Args:
             temperature: Temperature
@@ -67,7 +67,7 @@ class PropertyABC(ABC):
             An evaluation based on the provided arguments.
         """
 
-    def __call__(self, temperature: np.ndarray, pressure: np.ndarray):
+    def __call__(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
         return self.get_value(temperature, pressure)
 
 
@@ -94,9 +94,69 @@ class ConstantProperty(PropertyABC):
         return self.value  # The decorator ensures return type is np.ndarray.
 
 
+@dataclass
+class PhaseCurrentState:
+    """Evaluates and stores the state of a phase at temperature and pressure.
+
+    This minimises the number of function evaluations to get the phase properties.
+
+    Args:
+        phase_evaluator: A PhaseEvaluator.
+    """
+
+    phase_evaluator: PhaseEvaluator
+    density: np.ndarray = field(init=False)
+    gravitational_acceleration: np.ndarray = field(init=False)
+    heat_capacity: np.ndarray = field(init=False)
+    pressure: np.ndarray = field(init=False)
+    temperature: np.ndarray = field(init=False)
+    thermal_conductivity: np.ndarray = field(init=False)
+    thermal_expansivity: np.ndarray = field(init=False)
+    viscosity: np.ndarray = field(init=False)
+    _dTdrs: np.ndarray = field(init=False)
+    _kinematic_viscosity: np.ndarray = field(init=False)
+
+    def eval(self, temperature: np.ndarray, pressure: np.ndarray) -> None:
+        """Evaluates and stores the state.
+
+        The order of evaluation matters.
+
+        Args:
+            temperature: Temperature
+            pressure: Pressure
+        """
+        self.temperature = temperature
+        self.pressure = pressure
+        self.density = self.phase_evaluator.density(temperature, pressure)
+        self.gravitational_acceleration = self.phase_evaluator.gravitational_acceleration(
+            temperature, pressure
+        )
+        self.heat_capacity = self.phase_evaluator.heat_capacity(temperature, pressure)
+        self.thermal_conductivity = self.phase_evaluator.thermal_conductivity(
+            temperature, pressure
+        )
+        self.thermal_expansivity = self.phase_evaluator.thermal_expansivity(temperature, pressure)
+        self.viscosity = self.phase_evaluator.viscosity(temperature, pressure)
+        self._dTdrs = (
+            -self.gravitational_acceleration
+            * self.thermal_expansivity
+            * temperature
+            / self.heat_capacity
+        )
+        self._kinematic_viscosity = self.viscosity / self.density
+
+    @property
+    def dTdrs(self) -> np.ndarray:
+        return self._dTdrs
+
+    @property
+    def kinematic_viscosity(self) -> np.ndarray:
+        return self._kinematic_viscosity
+
+
 @dataclass(kw_only=True, frozen=True)
-class Phase:
-    """Base class for a phase with EOS and transport properties."""
+class PhaseEvaluator:
+    """Contains the objects to evaluate the EOS and transport properties of a phase"""
 
     density: PropertyABC
     gravitational_acceleration: PropertyABC
@@ -105,101 +165,13 @@ class Phase:
     thermal_expansivity: PropertyABC
     viscosity: PropertyABC
 
-    def dTdPs(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        """dTdPs
 
-        Args:
-            temperature: Temperature
-            pressure: Pressure
-
-        Returns:
-            dTdPs
-        """
-        dTdPs: np.ndarray = (
-            self.thermal_expansivity(temperature, pressure)
-            * temperature
-            / self.density(temperature, pressure)
-            / self.heat_capacity(temperature, pressure)
-        )
-        logger.debug("dTdPs = %s", dTdPs)
-
-        return dTdPs
-
-    def dTdrs(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        """dTdrs
-
-        Args:
-            temperature: Temperature
-            pressure: Pressure
-
-        Returns:
-            dTdrs
-        """
-        dTdrs: np.ndarray = -self.dTdzs(temperature, pressure)
-        logger.debug("dTdrs = %s", dTdrs)
-
-        return dTdrs
-
-    def dTdzs(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        """dTdzs
-
-        Args:
-            temperature: Temperature
-            pressure: Pressure
-
-        Returns:
-            dTdzs
-        """
-        dTdzs: np.ndarray = (
-            self.density(temperature, pressure)
-            * self.dTdPs(temperature, pressure)
-            * self.gravitational_acceleration(temperature, pressure)
-        )
-        logger.debug("dTdzs = %s", dTdzs)
-
-        return dTdzs
-
-    def log10_viscosity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        """Log10 dynamic viscosity
-
-        Args:
-            temperature: Temperature
-            pressure: Pressure
-
-        Returns:
-            Log10 dynamic viscosity
-        """
-        log10_viscosity: np.ndarray = np.log10(self.viscosity(temperature, pressure))
-        logger.debug("log10_viscosity = %s", log10_viscosity)
-
-        return log10_viscosity
-
-    def kinematic_viscosity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        """Kinematic viscosity
-
-        Args:
-            temperature: Temperature
-            pressure: Pressure
-
-        Returns:
-            Kinematic viscosity
-        """
-        kinematic_viscosity: np.ndarray = self.viscosity(temperature, pressure) / self.density(
-            temperature, pressure
-        )
-        logger.debug("kinematic_viscosity = %s", kinematic_viscosity)
-
-        return kinematic_viscosity
-
-
-def phase_from_configuration(
-    phase_section: SectionProxy, numerical_scalings: NumericalScalings
-) -> Phase:
-    """Instantiates a Phase object from configuration data.
+def phase_from_configuration(phase_section: SectionProxy, scalings: Scalings) -> PhaseEvaluator:
+    """Instantiates a PhaseEvaluator object from configuration data.
 
     Args:
         phase_section: Configuration section with phase data
-        numerical_scalings: Scalings for the numerical problem
+        scalings: Scalings for the numerical problem
 
     Returns:
         A Phase object
@@ -208,7 +180,7 @@ def phase_from_configuration(
     for key, value in phase_section.items():
         try:
             value_float: float = float(value)
-            value_float /= getattr(numerical_scalings, key)
+            value_float /= getattr(scalings, key)
             logger.info("%s (%s) is a number = %f", key, phase_section.name, value_float)
             init_dict[key] = ConstantProperty(name=key, value=value_float)
 
@@ -217,6 +189,6 @@ def phase_from_configuration(
         except TypeError:
             raise
 
-    phase: Phase = Phase(**init_dict)
+    phase_evaluator: PhaseEvaluator = PhaseEvaluator(**init_dict)
 
-    return phase
+    return phase_evaluator
