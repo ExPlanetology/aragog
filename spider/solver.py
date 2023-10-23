@@ -58,7 +58,9 @@ class SpiderSolver:
         self.phase = self.phase_liquid
         # Set the time stepping.
         self.initial_time = self.config.getfloat("timestepping", "start_time")
+        self.initial_time /= self.numerical_scalings.time
         self.end_time = self.config.getfloat("timestepping", "end_time")
+        self.end_time /= self.numerical_scalings.time
         # Set the initial condition.
         initial: SectionProxy = self.config["initial_condition"]
         self.initial_temperature = np.linspace(

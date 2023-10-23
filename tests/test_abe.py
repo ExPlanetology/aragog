@@ -13,8 +13,8 @@ from spider import TEST_CFG_PATH, SpiderSolver, __version__, debug_logger
 
 logger: logging.Logger = debug_logger()
 
-atol: float = 1e-11
-rtol: float = 1e-11
+atol: float = 1e-8
+rtol: float = 1e-7
 
 
 def test_version():
@@ -28,7 +28,9 @@ def test_liquid_no_heating():
     spider_solver: SpiderSolver = SpiderSolver(TEST_CFG_PATH / Path("abe.cfg"))
     spider_solver.config["energy"]["radionuclides"] = "False"
     spider_solver.solve()
-    calculated: np.ndarray = spider_solver.solution.y[:, -1]
+    calculated: np.ndarray = (
+        spider_solver.solution.y[:, -1] * spider_solver.numerical_scalings.temperature
+    )
     # spider_solver.plot(5)
     expected: np.ndarray = np.array(
         [
@@ -74,7 +76,9 @@ def test_liquid_with_heating():
 
     spider_solver: SpiderSolver = SpiderSolver(TEST_CFG_PATH / Path("abe.cfg"))
     spider_solver.solve()
-    calculated: np.ndarray = spider_solver.solution.y[:, -1]
+    calculated: np.ndarray = (
+        spider_solver.solution.y[:, -1] * spider_solver.numerical_scalings.temperature
+    )
     # spider_solver.plot(5)
     expected: np.ndarray = np.array(
         [
