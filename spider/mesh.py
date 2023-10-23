@@ -8,9 +8,12 @@ from __future__ import annotations
 import logging
 from configparser import SectionProxy
 from dataclasses import dataclass, field
-from typing import Union
+from typing import TYPE_CHECKING, Union
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from spider.solver import NumericalScalings
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -21,11 +24,11 @@ def is_monotonic_increasing(some_array: np.ndarray) -> np.bool_:
 
 
 @dataclass
-class FixedMesh:
+class _FixedMesh:
     """A fixed mesh
 
     Args:
-        radii: Radii of the mesh
+        radii: Radii of the mesh, which could be in non-dimensional units.
 
     Attributes:
         radii: Radii of the mesh
@@ -56,7 +59,6 @@ class FixedMesh:
             msg: str = "Mesh must be monotonically increasing"
             logger.error(msg)
             raise ValueError(msg)
-
         self.inner_radius = self.radii[0]
         self.outer_radius = self.radii[-1]
         self.delta_radii = np.diff(self.radii)
@@ -67,7 +69,7 @@ class FixedMesh:
         self.area = 4 * np.pi * np.square(self.radii)
         mesh_cubed: np.ndarray = np.power(self.radii, 3)
         self.volume = 4 / 3 * np.pi * (mesh_cubed[1:] - mesh_cubed[:-1])
-        # TODO: To add convention mixing length as well.
+        # TODO: To add conventional mixing length as well.
         self.mixing_length = 0.25 * (self.outer_radius - self.inner_radius)
 
 
@@ -80,6 +82,7 @@ class StaggeredMesh:
 
     Args:
         radii: Radii of the basic nodes.
+        numerical_scalings: Scalings for the numerical problem
 
     Attributes:
         radii: Radii of the basic nodes
@@ -88,15 +91,17 @@ class StaggeredMesh:
     """
 
     radii: np.ndarray
-    basic: FixedMesh = field(init=False)
-    staggered: FixedMesh = field(init=False)
+    numerical_scalings: NumericalScalings
+    basic: _FixedMesh = field(init=False)
+    staggered: _FixedMesh = field(init=False)
     _d_dr_transform: np.ndarray = field(init=False)
     _quantity_transform: np.ndarray = field(init=False)
 
     def __post_init__(self):
-        self.basic = FixedMesh(self.radii)
+        self.radii /= self.numerical_scalings.radius
+        self.basic = _FixedMesh(self.radii)
         staggered_coordinates: np.ndarray = self.basic.radii[:-1] + 0.5 * self.basic.delta_radii
-        self.staggered = FixedMesh(staggered_coordinates)
+        self.staggered = _FixedMesh(staggered_coordinates)
         self._d_dr_transform = self.d_dr_transform_matrix()
         self._quantity_transform = self.quantity_transform_matrix()
 
@@ -113,6 +118,8 @@ class StaggeredMesh:
     @classmethod
     def uniform_radii(
         cls,
+        numerical_scalings: NumericalScalings,
+        /,
         inner_radius: Union[str, float],
         outer_radius: Union[str, float],
         number_of_nodes: Union[str, int],
@@ -123,23 +130,28 @@ class StaggeredMesh:
         The arguments must allow a string to enable configuration data to be passed in.
 
         Args:
+            numerical_scalings: Scalings for the numerical problem
             inner_radius: Inner radius of the basic mesh
             outer_radius: Outer radius of the basic mesh
             number_of_coordinates: Number of basic coordinates
             **kwargs: Catches unused keyword arguments.
 
         Returns:
-            The staggered grid
+            The staggered mesh
         """
         del kwargs
         radii: np.ndarray = np.linspace(
             float(inner_radius), float(outer_radius), int(number_of_nodes)
         )
 
-        return cls(radii)
+        return cls(radii, numerical_scalings)
 
     def d_dr_transform_matrix(self) -> np.ndarray:
-        """Transform matrix for determining d/dr of a staggered quantity on the basic mesh."""
+        """Transform matrix for determining d/dr of a staggered quantity on the basic mesh.
+
+        Returns:
+            The transform matrix
+        """
         transform: np.ndarray = np.zeros((self.basic.number, self.staggered.number))
         transform[1:-1, :-1] += np.diag(-1 / self.staggered.delta_radii)  # k=0 diagonal.
         transform[1:-1:, 1:] += np.diag(1 / self.staggered.delta_radii)  # k=1 diagonal.
@@ -156,6 +168,9 @@ class StaggeredMesh:
 
         Args:
             staggered_quantity: A quantity defined at the staggered nodes.
+
+        Returns:
+            d/dr at the basic nodes
         """
         assert np.size(staggered_quantity) == self.staggered.number
 
@@ -165,7 +180,11 @@ class StaggeredMesh:
         return d_dr_at_basic_nodes
 
     def quantity_transform_matrix(self) -> np.ndarray:
-        """A transform matrix for mapping quantities on the staggered mesh to the basic mesh."""
+        """A transform matrix for mapping quantities on the staggered mesh to the basic mesh.
+
+        Returns:
+            The transform matrix
+        """
         transform: np.ndarray = np.zeros((self.basic.number, self.staggered.number))
         mesh_ratio: np.ndarray = self.basic.delta_radii[:-1] / self.staggered.delta_radii
         transform[1:-1, :-1] += np.diag(1 - 0.5 * mesh_ratio)  # k=0 diagonal.
@@ -184,6 +203,9 @@ class StaggeredMesh:
 
         Args:
             staggered_quantity: A quantity defined at the staggered nodes.
+
+        Returns:
+            The quantity at the basic nodes
         """
         quantity_at_basic_nodes: np.ndarray = self._quantity_transform.dot(staggered_quantity)
         logger.debug("quantity_at_basic_nodes = %s", quantity_at_basic_nodes)
@@ -191,16 +213,19 @@ class StaggeredMesh:
         return quantity_at_basic_nodes
 
 
-def mesh_from_configuration(mesh_section: SectionProxy) -> StaggeredMesh:
+def mesh_from_configuration(
+    mesh_section: SectionProxy, numerical_scalings: NumericalScalings
+) -> StaggeredMesh:
     """Instantiates a StaggeredMesh object from configuration data.
 
     Args:
         mesh_section: Configuration section with mesh data
+        numerical_scalings: Scalings for the numerical problem
 
     Returns:
         A StaggeredMesh object.
     """
-    mesh: StaggeredMesh = StaggeredMesh.uniform_radii(**mesh_section)
+    mesh: StaggeredMesh = StaggeredMesh.uniform_radii(numerical_scalings, **mesh_section)
 
     return mesh
 
