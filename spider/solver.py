@@ -35,6 +35,7 @@ class State:
     Args:
         _phase_evaluator: A PhaseEvaluator
         _mesh: A StaggeredMesh
+        _config_energy: Configuration section with energy data
 
     Attributes:
         phase_basic: Phase properties at the basic nodes
@@ -44,10 +45,12 @@ class State:
         critical_reynolds_number: Critical Reynolds number
         dTdr: Temperature gradient with respect to radius at the basic nodes
         eddy_diffusivity: Eddy diffusivity at the basic nodes
+        gravitational_separation: Gravitational separation at the basic nodes
         heat_flux: Heat flux at the basic nodes
         inviscid_regime: Array with True if the flow is inviscid and otherwise False
         inviscid_velocity: Inviscid velocity
         is_convective: Array with True if the flow is convecting and otherwise False
+        mixing: Mixing heat flux at the basic nodes
         reynolds_number: Reynolds number
         super_adiabatic_temperature_gradient: Super adiabatic temperature gradient
         viscous_regime: Array with True if the flow is viscous and otherwise False
@@ -56,6 +59,10 @@ class State:
 
     _phase_evaluator: PhaseEvaluator
     _mesh: StaggeredMesh
+    _config_energy: SectionProxy
+    _heat_fluxes_to_include: list[Callable[[], np.ndarray]] = field(
+        init=False, default_factory=list
+    )
     phase_basic: PhaseStateBasic = field(init=False)
     phase_staggered: PhaseStateStaggered = field(init=False)
     _dTdr: np.ndarray = field(init=False)
@@ -69,14 +76,29 @@ class State:
     def __post_init__(self):
         self.phase_basic = PhaseStateBasic(self._phase_evaluator)
         self.phase_staggered = PhaseStateStaggered(self._phase_evaluator)
+        self._set_heat_fluxes_to_include()
 
-    @property
+    def _set_heat_fluxes_to_include(self):
+        """Sets the heat fluxes to include in the calculation.
+
+        The desired heat fluxes are known from the configuration, so to avoid writing a switch
+        statement that would need to be evaluated every call, instead we can just append the
+        necessary methods to a list to be looped over.
+        """
+        if self._config_energy.getboolean("conduction"):
+            self._heat_fluxes_to_include.append(self.conductive_heat_flux)
+        if self._config_energy.getboolean("convection"):
+            self._heat_fluxes_to_include.append(self.convective_heat_flux)
+        if self._config_energy.getboolean("gravitational_separation"):
+            self._heat_fluxes_to_include.append(self.gravitational_separation)
+        if self._config_energy.getboolean("mixing"):
+            self._heat_fluxes_to_include.append(self.mixing)
+
     def conductive_heat_flux(self) -> np.ndarray:
         """Conductive heat flux is only accessed once so therefore it is a property."""
         conductive_heat_flux: np.ndarray = -self.phase_basic.thermal_conductivity * self._dTdr
         return conductive_heat_flux
 
-    @property
     def convective_heat_flux(self) -> np.ndarray:
         """Convective heat flux is only accessed once so therefore it is a property."""
         convective_heat_flux: np.ndarray = (
@@ -100,9 +122,16 @@ class State:
     def eddy_diffusivity(self) -> np.ndarray:
         return self._eddy_diffusivity
 
-    @property
+    def gravitational_separation(self) -> np.ndarray:
+        """Gravitational separation"""
+        raise NotImplementedError
+
     def heat_flux(self) -> np.ndarray:
-        return self.conductive_heat_flux + self.convective_heat_flux
+        """The total heat flux according to the fluxes specified in the configuration."""
+        heat_flux: np.ndarray = np.zeros(self._mesh.basic.number)
+        for heat_flux_ in self._heat_fluxes_to_include:
+            heat_flux += heat_flux_()
+        return heat_flux
 
     @property
     def inviscid_regime(self) -> np.ndarray:
@@ -115,6 +144,10 @@ class State:
     @property
     def is_convective(self) -> np.ndarray:
         return self._is_convective
+
+    def mixing(self) -> np.ndarray:
+        """Mixing heat flux"""
+        raise NotImplementedError
 
     @property
     def reynolds_number(self) -> np.ndarray:
@@ -194,8 +227,6 @@ class SpiderSolver:
     phase_evaluator: PhaseEvaluator = field(init=False)
     state: State = field(init=False)
     initial_temperature: np.ndarray = field(init=False)
-    initial_time: float = field(init=False, default=0)
-    end_time: float = field(init=False, default=0)
     _solution: OptimizeResult = field(init=False, default_factory=OptimizeResult)
 
     def __post_init__(self):
@@ -213,12 +244,7 @@ class SpiderSolver:
         )
         # FIXME: For time being just set phase to liquid phase.
         self.phase_evaluator = self.phase_liquid_evaluator
-        self.state = State(self.phase_evaluator, self.mesh)
-        # Set the time stepping.
-        self.initial_time = self.config.getfloat("timestepping", "start_time_years")
-        self.initial_time *= self.constants.YEAR_IN_SECONDS
-        self.end_time = self.config.getfloat("timestepping", "end_time_years")
-        self.end_time *= self.constants.YEAR_IN_SECONDS
+        self.state = State(self.phase_evaluator, self.mesh, self.config["energy"])
         # Set the initial condition.
         initial: SectionProxy = self.config["initial_condition"]
         self.initial_temperature = np.linspace(
@@ -244,24 +270,13 @@ class SpiderSolver:
         Args:
             time: Time.
             temperature: Temperature at the staggered nodes.
-            mesh: Mesh.
             pressure: Pressure at the staggered nodes.
 
         Returns:
             dT/dt at the staggered nodes.
         """
         self.state.update(temperature, pressure)
-
-        # energy: SectionProxy = self.config["energy"]
-        # heat_flux: np.ndarray = total_heat_flux(
-        #     energy,
-        #     self.mesh,
-        #     self.state,
-        #     temperature,
-        #     pressure,
-        # )
-
-        heat_flux: np.ndarray = self.state.heat_flux
+        heat_flux: np.ndarray = self.state.heat_flux()
         # TODO: Clean up boundary conditions.
         # No heat flux from the core.
         heat_flux[0] = 0
@@ -351,16 +366,20 @@ class SpiderSolver:
         legend.set_title("Time (yr)")
         plt.show()
 
-    def solve(self, atol: float = 1.0e-6, rtol: float = 1.0e-6) -> None:
-        """Solves the system of ODEs to determine the interior temperature profile.
+    def solve(self) -> None:
+        """Solves the system of ODEs to determine the interior temperature profile."""
 
-        Args:
-            atol: Absolute tolerance. Defaults to 1.0e-6.
-            rtol: Relative tolerance. Defaults to 1.0e-6.
-        """
+        config_solver: SectionProxy = self.config["solver"]
+        start_time: float = (
+            config_solver.getfloat("start_time_years") * self.constants.YEAR_IN_SECONDS
+        )
+        end_time: float = config_solver.getfloat("end_time_years") * self.constants.YEAR_IN_SECONDS
+        atol: float = config_solver.getfloat("atol")
+        rtol: float = config_solver.getfloat("rtol")
+
         self._solution = solve_ivp(
             self.dTdt,
-            (self.initial_time, self.end_time),
+            (start_time, end_time),
             self.initial_temperature,
             method="BDF",
             vectorized=False,  # TODO: True could speed up BDF according to the documentation.
