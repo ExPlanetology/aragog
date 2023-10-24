@@ -6,7 +6,6 @@ See the LICENSE file for licensing information.
 from __future__ import annotations
 
 import logging
-from configparser import SectionProxy
 from dataclasses import dataclass, field
 from typing import Union
 
@@ -40,6 +39,8 @@ class _FixedMesh:
         area: Surface area
         volume: Volume of the spherical shells defined between neighbouring radii.
         mixing_length: Mixing length # TODO: Constant for time being.
+        mixing_length_squared: Mixing length squared
+        mixing_length_cubed: Mixing length cubed
     """
 
     radii: np.ndarray
@@ -52,12 +53,15 @@ class _FixedMesh:
     area: np.ndarray = field(init=False)
     volume: np.ndarray = field(init=False)
     mixing_length: np.ndarray = field(init=False)
+    mixing_length_squared: np.ndarray = field(init=False)
+    mixing_length_cubed: np.ndarray = field(init=False)
 
     def __post_init__(self):
         if not is_monotonic_increasing(self.radii):
             msg: str = "Mesh must be monotonically increasing"
             logger.error(msg)
             raise ValueError(msg)
+
         self.inner_radius = self.radii[0]
         self.outer_radius = self.radii[-1]
         self.delta_radii = np.diff(self.radii)
@@ -70,6 +74,8 @@ class _FixedMesh:
         self.volume = 4 / 3 * np.pi * (mesh_cubed[1:] - mesh_cubed[:-1])
         # TODO: To add conventional mixing length as well.
         self.mixing_length = 0.25 * (self.outer_radius - self.inner_radius)
+        self.mixing_length_squared = np.square(self.mixing_length)
+        self.mixing_length_cubed = np.power(self.mixing_length, 3)
 
 
 @dataclass
@@ -210,21 +216,6 @@ class StaggeredMesh:
         logger.debug("quantity_at_basic_nodes = %s", quantity_at_basic_nodes)
 
         return quantity_at_basic_nodes
-
-
-def mesh_from_configuration(mesh_section: SectionProxy, scalings: Scalings) -> StaggeredMesh:
-    """Instantiates a StaggeredMesh object from configuration data.
-
-    Args:
-        mesh_section: Configuration section with mesh data
-        scalings: Scalings for the numerical problem
-
-    Returns:
-        A StaggeredMesh object.
-    """
-    mesh: StaggeredMesh = StaggeredMesh.uniform_radii(scalings, **mesh_section)
-
-    return mesh
 
 
 # PREVIOUS BELOW

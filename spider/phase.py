@@ -18,7 +18,9 @@ from spider.scalings import Scalings
 logger: logging.Logger = logging.getLogger(__name__)
 
 
-def ensure_size_equal_to_temperature(func: Callable) -> Callable:
+def ensure_size_equal_to_temperature(
+    func: Callable[[ConstantProperty, np.ndarray, np.ndarray], float]
+) -> Callable:
     """A decorator to ensure that the returned array is the same size as the temperature array.
 
     This is necessary when a phase is specified with constant properties that should be applied
@@ -44,7 +46,7 @@ def ensure_size_equal_to_temperature(func: Callable) -> Callable:
 
 @dataclass(kw_only=True, frozen=True)
 class PropertyABC(ABC):
-    """A property whose value can be accessed with a get_value method.
+    """A property whose value can be evaluated at temperature and pressure.
 
     Args:
         name: Name of the property.
@@ -64,7 +66,7 @@ class PropertyABC(ABC):
             pressure: Pressure
 
         Returns:
-            An evaluation based on the provided arguments.
+            The property value evaluated at temperature and pressure.
         """
 
     def __call__(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
@@ -76,11 +78,11 @@ class ConstantProperty(PropertyABC):
     """A property with a constant value
 
     Args:
-        name: Name of the property.
+        name: Name of the property
         value: The constant value
 
     Attributes:
-        name: Name of the property.
+        name: Name of the property
         value: The constant value
     """
 
@@ -95,38 +97,81 @@ class ConstantProperty(PropertyABC):
 
 
 @dataclass
-class PhaseCurrentState:
-    """Evaluates and stores the state of a phase at temperature and pressure.
+class PhaseStateStaggered:
+    """Stores the state (material properties) of a phase at the staggered nodes.
 
-    This minimises the number of function evaluations to get the phase properties.
+    This only evaluates the necessary quantities to solve the system of equations to avoid
+    unnecessary function calls that may slow down the code.
+
+    Args:
+        phase_evaluator: A PhaseEvaluator
+
+    Attributes:
+        capacitance: Thermal capacitance
+        density: Density
+        heat_capacity: Heat capacity
+    """
+
+    phase_evaluator: PhaseEvaluator
+    capacitance: np.ndarray = field(init=False)
+    density: np.ndarray = field(init=False)
+    heat_capacity: np.ndarray = field(init=False)
+
+    def update(self, temperature: np.ndarray, pressure: np.ndarray) -> None:
+        """Updates the state.
+
+        The order of evaluation matters.
+
+        Args:
+            temperature: Temperature at the staggered nodes
+            pressure: Pressure at the staggered nodes
+        """
+        logger.info("Updating the state of %s", self.__class__.__name__)
+        self.density = self.phase_evaluator.density(temperature, pressure)
+        self.heat_capacity = self.phase_evaluator.heat_capacity(temperature, pressure)
+        self.capacitance = self.density * self.heat_capacity
+
+
+@dataclass
+class PhaseStateBasic:
+    """Stores the state (material properties) of a phase at the basic nodes.
+
+    This minimises the number of function evaluations to avoid slowing down the code.
 
     Args:
         phase_evaluator: A PhaseEvaluator.
+
+    Attributes:
+        density: Density
+        dTdrs: Adiabatic temperature gradient with respect to radius
+        gravitational_acceleration: Gravitational acceleration
+        heat_capacity: Heat capacity
+        kinematic_viscosity: Kinematic viscosity
+        thermal_conductivity: Thermal conductivity
+        thermal_expansivity: Thermal expansivity
+        viscosity: Dynamic viscosity
     """
 
     phase_evaluator: PhaseEvaluator
     density: np.ndarray = field(init=False)
     gravitational_acceleration: np.ndarray = field(init=False)
     heat_capacity: np.ndarray = field(init=False)
-    pressure: np.ndarray = field(init=False)
-    temperature: np.ndarray = field(init=False)
     thermal_conductivity: np.ndarray = field(init=False)
     thermal_expansivity: np.ndarray = field(init=False)
     viscosity: np.ndarray = field(init=False)
     _dTdrs: np.ndarray = field(init=False)
     _kinematic_viscosity: np.ndarray = field(init=False)
 
-    def eval(self, temperature: np.ndarray, pressure: np.ndarray) -> None:
-        """Evaluates and stores the state.
+    def update(self, temperature: np.ndarray, pressure: np.ndarray) -> None:
+        """Updates the state.
 
         The order of evaluation matters.
 
         Args:
-            temperature: Temperature
-            pressure: Pressure
+            temperature: Temperature at the basic nodes
+            pressure: Pressure at the basic nodes
         """
-        self.temperature = temperature
-        self.pressure = pressure
+        logger.info("Updating the state of %s", self.__class__.__name__)
         self.density = self.phase_evaluator.density(temperature, pressure)
         self.gravitational_acceleration = self.phase_evaluator.gravitational_acceleration(
             temperature, pressure
@@ -156,7 +201,24 @@ class PhaseCurrentState:
 
 @dataclass(kw_only=True, frozen=True)
 class PhaseEvaluator:
-    """Contains the objects to evaluate the EOS and transport properties of a phase"""
+    """Contains the objects to evaluate the EOS and transport properties of a phase.
+
+    Args:
+        density: To evaluate density at temperature and pressure
+        gravitational_acceleration: To evaluate gravitational acceleration
+        heat_capacity: To evaluate heat capacity
+        thermal_conductivity: To evaluate thermal conductivity
+        thermal_expansivity: To evaluate thermal expansivity
+        viscosity: To evaluate viscosity
+
+    Attributes:
+        density: To evaluate density at temperature and pressure
+        gravitational_acceleration: To evaluate gravitational acceleration
+        heat_capacity: To evaluate heat capacity
+        thermal_conductivity: To evaluate thermal conductivity
+        thermal_expansivity: To evaluate thermal expansivity
+        viscosity: To evaluate viscosity
+    """
 
     density: PropertyABC
     gravitational_acceleration: PropertyABC
