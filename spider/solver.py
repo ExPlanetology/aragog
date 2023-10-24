@@ -16,38 +16,195 @@ import numpy as np
 from scipy.integrate import solve_ivp
 from scipy.optimize import OptimizeResult
 
-from spider import STEFAN_BOLTZMANN_CONSTANT, YEAR_IN_SECONDS
-from spider.energy import total_heat_flux, total_heating
-from spider.mesh import StaggeredMesh, mesh_from_configuration
-from spider.phase import PhaseCurrentState, PhaseEvaluator, phase_from_configuration
-from spider.scalings import Scalings, scalings_from_configuration
+from spider.mesh import StaggeredMesh
+from spider.phase import (
+    PhaseEvaluator,
+    PhaseStateBasic,
+    PhaseStateStaggered,
+    phase_from_configuration,
+)
+from spider.scalings import Constants, Scalings, scalings_from_configuration
 
 logger: logging.Logger = logging.getLogger(__name__)
+
+
+@dataclass
+class State:
+    """Stores the state at temperature and pressure.
+
+    Args:
+        _phase_evaluator: A PhaseEvaluator
+        _mesh: A StaggeredMesh
+
+    Attributes:
+        phase_basic: Phase properties at the basic nodes
+        phase_staggered: Phase properties at the staggered nodes
+        conductive_heat_flux: Conductive heat flux at the basic nodes
+        convective_heat_flux: Convective heat flux at the basic nodes
+        critical_reynolds_number: Critical Reynolds number
+        dTdr: Temperature gradient with respect to radius at the basic nodes
+        eddy_diffusivity: Eddy diffusivity at the basic nodes
+        heat_flux: Heat flux at the basic nodes
+        inviscid_regime: Array with True if the flow is inviscid and otherwise False
+        inviscid_velocity: Inviscid velocity
+        is_convective: Array with True if the flow is convecting and otherwise False
+        reynolds_number: Reynolds number
+        super_adiabatic_temperature_gradient: Super adiabatic temperature gradient
+        viscous_regime: Array with True if the flow is viscous and otherwise False
+        viscous_velocity: Viscous velocity
+    """
+
+    _phase_evaluator: PhaseEvaluator
+    _mesh: StaggeredMesh
+    phase_basic: PhaseStateBasic = field(init=False)
+    phase_staggered: PhaseStateStaggered = field(init=False)
+    _dTdr: np.ndarray = field(init=False)
+    _eddy_diffusivity: np.ndarray = field(init=False)
+    _is_convective: np.ndarray = field(init=False)
+    _reynolds_number: np.ndarray = field(init=False)
+    _super_adiabatic_temperature_gradient: np.ndarray = field(init=False)
+    _viscous_velocity: np.ndarray = field(init=False)
+    _inviscid_velocity: np.ndarray = field(init=False)
+
+    def __post_init__(self):
+        self.phase_basic = PhaseStateBasic(self._phase_evaluator)
+        self.phase_staggered = PhaseStateStaggered(self._phase_evaluator)
+
+    @property
+    def conductive_heat_flux(self) -> np.ndarray:
+        """Conductive heat flux is only accessed once so therefore it is a property."""
+        conductive_heat_flux: np.ndarray = -self.phase_basic.thermal_conductivity * self._dTdr
+        return conductive_heat_flux
+
+    @property
+    def convective_heat_flux(self) -> np.ndarray:
+        """Convective heat flux is only accessed once so therefore it is a property."""
+        convective_heat_flux: np.ndarray = (
+            -self.phase_basic.density
+            * self.phase_basic.heat_capacity
+            * self._eddy_diffusivity
+            * self._super_adiabatic_temperature_gradient
+        )
+        return convective_heat_flux
+
+    @property
+    def critical_reynolds_number(self) -> float:
+        """Critical Reynolds number from Abe (1993)"""
+        return 9 / 8
+
+    @property
+    def dTdr(self) -> np.ndarray:
+        return self._dTdr
+
+    @property
+    def eddy_diffusivity(self) -> np.ndarray:
+        return self._eddy_diffusivity
+
+    @property
+    def heat_flux(self) -> np.ndarray:
+        return self.conductive_heat_flux + self.convective_heat_flux
+
+    @property
+    def inviscid_regime(self) -> np.ndarray:
+        return self._reynolds_number > self.critical_reynolds_number
+
+    @property
+    def inviscid_velocity(self) -> np.ndarray:
+        return self._inviscid_velocity
+
+    @property
+    def is_convective(self) -> np.ndarray:
+        return self._is_convective
+
+    @property
+    def reynolds_number(self) -> np.ndarray:
+        return self._reynolds_number
+
+    @property
+    def super_adiabatic_temperature_gradient(self) -> np.ndarray:
+        return self._super_adiabatic_temperature_gradient
+
+    @property
+    def viscous_regime(self) -> np.ndarray:
+        return self._reynolds_number <= self.critical_reynolds_number
+
+    @property
+    def viscous_velocity(self) -> np.ndarray:
+        return self._viscous_velocity
+
+    def update(self, temperature: np.ndarray, pressure: np.ndarray) -> None:
+        """Updates the state.
+
+        The evaluation order matters because we want to minimise the number of evaluations.
+
+        Args:
+            temperature: Temperature at the staggered nodes.
+            pressure: Pressure at the staggered nodes.
+        """
+        logger.info("Updating the state")
+        self.phase_staggered.update(temperature, pressure)
+        temperature_basic: np.ndarray = self._mesh.quantity_at_basic_nodes(temperature)
+        pressure_basic: np.ndarray = self._mesh.quantity_at_basic_nodes(pressure)
+        self.phase_basic.update(temperature_basic, pressure_basic)
+        self._dTdr = self._mesh.d_dr_at_basic_nodes(temperature)
+        self._super_adiabatic_temperature_gradient = self._dTdr - self.phase_basic.dTdrs
+        self._is_convective = self._super_adiabatic_temperature_gradient < 0
+        velocity_prefactor: np.ndarray = (
+            -self.phase_basic.gravitational_acceleration
+            * self.phase_basic.thermal_expansivity
+            * self._super_adiabatic_temperature_gradient
+        )
+        # Viscous velocity
+        self._viscous_velocity = (velocity_prefactor * self._mesh.basic.mixing_length_cubed) / (
+            18 * self.phase_basic.kinematic_viscosity
+        )
+        self._viscous_velocity[~self.is_convective] = 0  # Must be super-adiabatic
+        # Inviscid velocity
+        self._inviscid_velocity = (
+            velocity_prefactor * self._mesh.basic.mixing_length_squared
+        ) / 16
+        self._inviscid_velocity[~self.is_convective] = 0  # Must be super-adiabatic
+        self._inviscid_velocity[self._is_convective] = np.sqrt(
+            self._inviscid_velocity[self._is_convective]
+        )
+        # Reynolds number
+        self._reynolds_number = (
+            self._viscous_velocity
+            * self._mesh.basic.mixing_length
+            / self.phase_basic.kinematic_viscosity
+        )
+        # Eddy diffusivity
+        self._eddy_diffusivity = np.where(
+            self.viscous_regime, self._viscous_velocity, self._inviscid_velocity
+        )
+        self._eddy_diffusivity *= self._mesh.basic.mixing_length
 
 
 @dataclass
 class SpiderSolver:
     filename: Union[str, Path]
     root_path: Union[str, Path] = ""
+    root: Path = field(init=False)
+    scalings: Scalings = field(init=False)
+    constants: Constants = field(init=False)
     mesh: StaggeredMesh = field(init=False)
     phase_liquid_evaluator: PhaseEvaluator = field(init=False)
     phase_solid_evaluator: PhaseEvaluator = field(init=False)
     # Phase for calculations, could be a composite phase.
     phase_evaluator: PhaseEvaluator = field(init=False)
-    phase_current_state_basic: PhaseCurrentState = field(init=False)
-    phase_current_state_staggered: PhaseCurrentState = field(init=False)
+    state: State = field(init=False)
     initial_temperature: np.ndarray = field(init=False)
     initial_time: float = field(init=False, default=0)
     end_time: float = field(init=False, default=0)
-    scalings: Scalings = field(init=False)
     _solution: OptimizeResult = field(init=False, default_factory=OptimizeResult)
 
     def __post_init__(self):
         logger.info("Creating a SPIDER model")
         self.config: ConfigParser = MyConfigParser(self.filename)
-        self.root: Path = Path(self.root_path)
+        self.root = Path(self.root_path)
         self.scalings = scalings_from_configuration(self.config["scalings"])
-        self.mesh = mesh_from_configuration(self.config["mesh"], self.scalings)
+        self.constants = Constants(self.scalings)
+        self.mesh = StaggeredMesh.uniform_radii(self.scalings, **self.config["mesh"])
         self.phase_liquid_evaluator = phase_from_configuration(
             self.config["phase_liquid_evaluator"], self.scalings
         )
@@ -56,13 +213,12 @@ class SpiderSolver:
         )
         # FIXME: For time being just set phase to liquid phase.
         self.phase_evaluator = self.phase_liquid_evaluator
-        self.phase_current_state_basic = PhaseCurrentState(self.phase_evaluator)
-        self.phase_current_state_staggered = PhaseCurrentState(self.phase_evaluator)
+        self.state = State(self.phase_evaluator, self.mesh)
         # Set the time stepping.
         self.initial_time = self.config.getfloat("timestepping", "start_time_years")
-        self.initial_time *= YEAR_IN_SECONDS / self.scalings.time
+        self.initial_time *= self.constants.YEAR_IN_SECONDS
         self.end_time = self.config.getfloat("timestepping", "end_time_years")
-        self.end_time *= YEAR_IN_SECONDS / self.scalings.time
+        self.end_time *= self.constants.YEAR_IN_SECONDS
         # Set the initial condition.
         initial: SectionProxy = self.config["initial_condition"]
         self.initial_temperature = np.linspace(
@@ -94,22 +250,18 @@ class SpiderSolver:
         Returns:
             dT/dt at the staggered nodes.
         """
-        temperature_basic: np.ndarray = self.mesh.quantity_at_basic_nodes(temperature)
-        pressure_basic: np.ndarray = self.mesh.quantity_at_basic_nodes(pressure)
-        self.phase_current_state_staggered.eval(temperature, pressure)
-        self.phase_current_state_basic.eval(temperature_basic, pressure_basic)
+        self.state.update(temperature, pressure)
 
-        eddy_diffusivity: np.ndarray = self.eddy_diffusivity()
-        energy: SectionProxy = self.config["energy"]
-        heat_flux: np.ndarray = total_heat_flux(
-            energy,
-            self.mesh,
-            self.phase_current_state_basic,
-            eddy_diffusivity,
-            temperature,
-            pressure,
-        )
+        # energy: SectionProxy = self.config["energy"]
+        # heat_flux: np.ndarray = total_heat_flux(
+        #     energy,
+        #     self.mesh,
+        #     self.state,
+        #     temperature,
+        #     pressure,
+        # )
 
+        heat_flux: np.ndarray = self.state.heat_flux
         # TODO: Clean up boundary conditions.
         # No heat flux from the core.
         heat_flux[0] = 0
@@ -120,8 +272,7 @@ class SpiderSolver:
         equilibrium_temperature /= self.scalings.temperature
         heat_flux[-1] = (
             self.config.getfloat("boundary_conditions", "emissivity")
-            * STEFAN_BOLTZMANN_CONSTANT
-            / self.scalings.stefan_boltzmann_constant
+            * self.constants.STEFAN_BOLTZMANN_CONSTANT
             * (
                 self.mesh.quantity_at_basic_nodes(temperature)[-1] ** 4
                 - equilibrium_temperature**4
@@ -133,11 +284,7 @@ class SpiderSolver:
 
         delta_energy_flux: np.ndarray = np.diff(energy_flux)
         logger.info("delta_energy_flux = %s", delta_energy_flux)
-        capacitance: np.ndarray = (
-            self.phase_current_state_staggered.heat_capacity
-            * self.phase_current_state_staggered.density
-            * self.mesh.basic.volume
-        )
+        capacitance: np.ndarray = self.state.phase_staggered.capacitance * self.mesh.basic.volume
 
         dTdt: np.ndarray = -delta_energy_flux / capacitance
 
@@ -176,7 +323,7 @@ class SpiderSolver:
         time_step: float = time_range / (num_lines - 1)
 
         # Plot the first line.
-        label_first: str = f"{times[0]/YEAR_IN_SECONDS:.2f}"
+        label_first: str = f"{times[0]:.2f}"
         ax.plot(y_basic[:, 0], radii, label=label_first)
 
         # Loop through the selected lines and plot each with a label.
@@ -185,11 +332,11 @@ class SpiderSolver:
             # Find the closest available time step.
             closest_time_index: int = np.argmin(np.abs(times - desired_time))
             time: float = times[closest_time_index]
-            label: str = f"{time/YEAR_IN_SECONDS:.2f}"  # Create a label based on the time.
+            label: str = f"{time:.2f}"  # Create a label based on the time.
             plt.plot(y_basic[:, closest_time_index], radii, label=label)
 
         # Plot the last line.
-        label_last: str = f"{times[-1]/YEAR_IN_SECONDS:.2f}"
+        label_last: str = f"{times[-1]:.2f}"
         ax.plot(y_basic[:, -1], radii, label=label_last)
 
         # Shrink current axis by 20%.
@@ -223,123 +370,6 @@ class SpiderSolver:
         )
 
         logger.info(self.solution)
-
-    def super_adiabatic_temperature_gradient(self) -> np.ndarray:
-        """Super-adiabatic temperature gradient at the basic nodes
-
-        By definition, this is negative if the system is convective, positive if not.
-
-        Returns:
-            Super adiabatic temperature gradient
-        """
-        super_adiabatic: np.ndarray = (
-            self.mesh.d_dr_at_basic_nodes(self.phase_current_state_staggered.temperature)
-            - self.phase_current_state_basic.dTdrs
-        )
-        logger.info("super_adiabatic_temperature_gradient = %s", super_adiabatic)
-        return super_adiabatic
-
-    def is_convective(self) -> np.ndarray:
-        """Is convection occurring at the basic nodes.
-
-        Args:
-            temperature: Temperature at the staggered nodes
-            pressure: Pressure at the staggered nodes
-
-        Returns:
-            True if convective, otherwise False
-        """
-        is_convective: np.ndarray = self.super_adiabatic_temperature_gradient() < 0
-        logger.info("is_convective = %s", is_convective)
-
-        return is_convective
-
-    def velocity_inviscid(self) -> np.ndarray:
-        """Velocity of convective parcels controlled by dynamic pressure at the basic nodes.
-
-        Args:
-            temperature: Temperature at the staggered nodes
-            pressure: Pressure at the staggered nodes
-
-        Returns:
-            Inviscid convective velocity
-        """
-        velocity: np.ndarray = (
-            -self.phase_current_state_basic.gravitational_acceleration
-            * self.phase_current_state_basic.thermal_expansivity
-            * np.square(self.mesh.basic.mixing_length)
-        )
-        velocity *= self.super_adiabatic_temperature_gradient()
-        velocity /= 16
-        # A convective velocity requires a super-adiabatic temperature gradient.
-        velocity[velocity < 0] = 0
-        velocity[velocity > 0] = np.sqrt(velocity[velocity > 0])
-
-        logger.info("velocity_inviscid = %s", velocity)
-
-        return velocity
-
-    def velocity_viscous(self) -> np.ndarray:
-        """Velocity of convective parcels controlled by viscous drag at the basic nodes.
-
-        Returns:
-            Viscous convective velocity
-        """
-        velocity: np.ndarray = (
-            -self.phase_current_state_basic.gravitational_acceleration
-            * self.phase_current_state_basic.thermal_expansivity
-            * np.power(self.mesh.basic.mixing_length, 3)
-        )
-        velocity *= self.super_adiabatic_temperature_gradient()
-        velocity /= 18 * self.phase_current_state_basic.kinematic_viscosity
-        # A convective velocity requires a super-adiabatic temperature gradient.
-        velocity[velocity < 0] = 0
-        logger.info("velocity_viscous = %s", velocity)
-
-        return velocity
-
-    def reynolds_number(self) -> np.ndarray:
-        """Reynolds number at the basic nodes
-
-        Args:
-            temperature: Temperature at the staggered nodes
-            pressure: Pressure at the staggered nodes
-
-        Returns:
-            Reynolds number
-        """
-        reynolds: np.ndarray = self.velocity_viscous() * self.mesh.basic.mixing_length
-        reynolds /= self.phase_current_state_basic.kinematic_viscosity
-        logger.info("reynolds_number = %s", reynolds)
-
-        return reynolds
-
-    def eddy_diffusivity(self) -> np.ndarray:
-        """Eddy diffusivity at the basic nodes
-
-        Args:
-            temperature: Temperature at the staggered nodes
-            pressure: Pressure at the staggered nodes
-
-        Returns:
-            Eddy diffusivity
-        """
-        critical_reynolds_number: float = self.config["energy"].getfloat(
-            "critical_reynolds_number"
-        )
-        eddy_diffusivity: np.ndarray = np.zeros(self.mesh.basic.number)
-        reynolds_number: np.ndarray = self.reynolds_number()
-
-        eddy_diffusivity[reynolds_number <= critical_reynolds_number] = self.velocity_viscous()[
-            reynolds_number <= critical_reynolds_number
-        ]
-        eddy_diffusivity[reynolds_number > critical_reynolds_number] = self.velocity_inviscid()[
-            reynolds_number > critical_reynolds_number
-        ]
-        eddy_diffusivity *= self.mesh.basic.mixing_length
-        logger.info("eddy_diffusivity = %s", eddy_diffusivity)
-
-        return eddy_diffusivity
 
 
 class MyConfigParser(ConfigParser):

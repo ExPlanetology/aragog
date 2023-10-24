@@ -10,6 +10,8 @@ from configparser import SectionProxy
 from dataclasses import dataclass, field
 
 import numpy as np
+from scipy import constants
+from thermochem import codata
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -57,8 +59,8 @@ class Scalings:
     temperature_gradient: float = field(init=False)
     thermal_conductivity: float = field(init=False)
     velocity: float = field(init=False)
-    stefan_boltzmann_constant: float = field(init=False)
     viscosity: float = field(init=False)
+    stefan_boltzmann_constant: float = field(init=False)
 
     def __post_init__(self):
         self.area = np.square(self.radius)
@@ -83,7 +85,7 @@ def scalings_from_configuration(scalings_section: SectionProxy) -> Scalings:
     """Instantiates the scalings for the numerical problem.
 
     Args:
-        scalings_section: Configuration section with scalings.
+        scalings_section: Configuration section with scalings
 
     Returns:
         The numerical scalings.
@@ -98,3 +100,26 @@ def scalings_from_configuration(scalings_section: SectionProxy) -> Scalings:
     )
 
     return scalings
+
+
+@dataclass
+class Constants:
+    """Constants, which are non-dimensionalised according to Scalings.
+
+    Args:
+        Scalings: The scalings for the numerical problem
+
+    Attributes:
+        STEFAN_BOLTZMANN_CONSTANT: Scaled (non-dimensional) Stefan-Boltzmann constant
+        YEAR_IN_SECONDS: Scaled (non-dimensional) number of seconds in one year
+    """
+
+    Scalings: Scalings
+    STEFAN_BOLTZMANN_CONSTANT: float = field(init=False)
+    YEAR_IN_SECONDS: float = field(init=False)
+
+    def __post_init__(self):
+        self.STEFAN_BOLTZMANN_CONSTANT = codata.value("Stefan-Boltzmann constant")  # W/m2/K^4
+        self.STEFAN_BOLTZMANN_CONSTANT /= self.Scalings.stefan_boltzmann_constant
+        self.YEAR_IN_SECONDS = constants.Julian_year  # s
+        self.YEAR_IN_SECONDS /= self.Scalings.time
