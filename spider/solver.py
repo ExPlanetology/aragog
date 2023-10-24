@@ -53,6 +53,7 @@ class State:
         mixing: Mixing heat flux at the basic nodes
         reynolds_number: Reynolds number
         super_adiabatic_temperature_gradient: Super adiabatic temperature gradient
+        temperature_basic: Temperature at the basic nodes
         viscous_regime: Array with True if the flow is viscous and otherwise False
         viscous_velocity: Viscous velocity
     """
@@ -70,6 +71,7 @@ class State:
     _is_convective: np.ndarray = field(init=False)
     _reynolds_number: np.ndarray = field(init=False)
     _super_adiabatic_temperature_gradient: np.ndarray = field(init=False)
+    _temperature_basic: np.ndarray = field(init=False)
     _viscous_velocity: np.ndarray = field(init=False)
     _inviscid_velocity: np.ndarray = field(init=False)
 
@@ -128,7 +130,7 @@ class State:
 
     def heat_flux(self) -> np.ndarray:
         """The total heat flux according to the fluxes specified in the configuration."""
-        heat_flux: np.ndarray = np.zeros(self._mesh.basic.number)
+        heat_flux: np.ndarray = np.zeros_like(self.temperature_basic)
         for heat_flux_ in self._heat_fluxes_to_include:
             heat_flux += heat_flux_()
         return heat_flux
@@ -158,6 +160,10 @@ class State:
         return self._super_adiabatic_temperature_gradient
 
     @property
+    def temperature_basic(self) -> np.ndarray:
+        return self._temperature_basic
+
+    @property
     def viscous_regime(self) -> np.ndarray:
         return self._reynolds_number <= self.critical_reynolds_number
 
@@ -176,9 +182,9 @@ class State:
         """
         logger.info("Updating the state")
         self.phase_staggered.update(temperature, pressure)
-        temperature_basic: np.ndarray = self._mesh.quantity_at_basic_nodes(temperature)
+        self._temperature_basic = self._mesh.quantity_at_basic_nodes(temperature)
         pressure_basic: np.ndarray = self._mesh.quantity_at_basic_nodes(pressure)
-        self.phase_basic.update(temperature_basic, pressure_basic)
+        self.phase_basic.update(self._temperature_basic, pressure_basic)
         self._dTdr = self._mesh.d_dr_at_basic_nodes(temperature)
         self._super_adiabatic_temperature_gradient = self._dTdr - self.phase_basic.dTdrs
         self._is_convective = self._super_adiabatic_temperature_gradient < 0
@@ -275,31 +281,39 @@ class SpiderSolver:
         Returns:
             dT/dt at the staggered nodes.
         """
+        logger.info("temperature passed into dTdt = %s", temperature)
         self.state.update(temperature, pressure)
         heat_flux: np.ndarray = self.state.heat_flux()
+        logger.info("heat_flux = %s", heat_flux)
         # TODO: Clean up boundary conditions.
         # No heat flux from the core.
-        heat_flux[0] = 0
+        heat_flux[0, :] = 0
+        logger.info("heat_flux = %s", heat_flux)
         # Blackbody cooling.
         equilibrium_temperature: float = self.config.getfloat(
             "boundary_conditions", "equilibrium_temperature"
         )
         equilibrium_temperature /= self.scalings.temperature
-        heat_flux[-1] = (
+        heat_flux[-1, :] = (
             self.config.getfloat("boundary_conditions", "emissivity")
             * self.constants.STEFAN_BOLTZMANN_CONSTANT
             * (
-                self.mesh.quantity_at_basic_nodes(temperature)[-1] ** 4
+                self.mesh.quantity_at_basic_nodes(temperature)[-1, :] ** 4
                 - equilibrium_temperature**4
             )
         )
+        logger.info("heat_flux = %s", heat_flux)
+        logger.info("mesh.basic.area.shape = %s", self.mesh.basic.area.shape)
 
-        energy_flux: np.ndarray = heat_flux * self.mesh.basic.area
+        energy_flux: np.ndarray = heat_flux * self.mesh.basic.area.reshape(-1, 1)
         logger.info("energy_flux = %s", energy_flux)
+        logger.info("energy_flux size = %s", energy_flux.shape)
 
-        delta_energy_flux: np.ndarray = np.diff(energy_flux)
+        delta_energy_flux: np.ndarray = np.diff(energy_flux, axis=0)
         logger.info("delta_energy_flux = %s", delta_energy_flux)
-        capacitance: np.ndarray = self.state.phase_staggered.capacitance * self.mesh.basic.volume
+        capacitance: np.ndarray = (
+            self.state.phase_staggered.capacitance * self.mesh.basic.volume.reshape(-1, 1)
+        )
 
         dTdt: np.ndarray = -delta_energy_flux / capacitance
 
@@ -382,7 +396,7 @@ class SpiderSolver:
             (start_time, end_time),
             self.initial_temperature,
             method="BDF",
-            vectorized=False,  # TODO: True could speed up BDF according to the documentation.
+            vectorized=True,
             args=(self.initial_temperature,),  # FIXME: Should be pressure.
             atol=atol,
             rtol=rtol,

@@ -128,8 +128,11 @@ class PhaseStateStaggered:
         """
         logger.info("Updating the state of %s", self.__class__.__name__)
         self.density = self.phase_evaluator.density(temperature, pressure)
+        logger.info("density = %s", self.density)
         self.heat_capacity = self.phase_evaluator.heat_capacity(temperature, pressure)
+        logger.info("heat_capacity = %s", self.heat_capacity)
         self.capacitance = self.density * self.heat_capacity
+        logger.info("capacitance = %s", self.capacitance)
 
 
 @dataclass
