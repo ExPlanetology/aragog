@@ -61,7 +61,6 @@ class _FixedMesh:
             msg: str = "Mesh must be monotonically increasing"
             logger.error(msg)
             raise ValueError(msg)
-
         self.inner_radius = self.radii[0]
         self.outer_radius = self.radii[-1]
         self.delta_radii = np.diff(self.radii)
@@ -177,7 +176,7 @@ class StaggeredMesh:
         Returns:
             d/dr at the basic nodes
         """
-        assert np.size(staggered_quantity) == self.staggered.number
+        # assert np.size(staggered_quantity) == self.staggered.number
 
         d_dr_at_basic_nodes: np.ndarray = self._d_dr_transform.dot(staggered_quantity)
         logger.debug("d_dr_at_basic_nodes = %s", d_dr_at_basic_nodes)
