@@ -62,6 +62,8 @@ class State(DataclassFromConfiguration):
         reynolds_number: Reynolds number
         super_adiabatic_temperature_gradient: Super adiabatic temperature gradient
         temperature_basic: Temperature at the basic nodes
+        bottom_temperature: Temperature at the bottom basic node
+        top_temperature: Temperature at the top basic node
         viscous_regime: Array with True if the flow is viscous and otherwise False
         viscous_velocity: Viscous velocity
     """
@@ -81,6 +83,7 @@ class State(DataclassFromConfiguration):
     phase_staggered: PhaseStateStaggered = field(init=False)
     _dTdr: np.ndarray = field(init=False)
     _eddy_diffusivity: np.ndarray = field(init=False)
+    _heat_flux: np.ndarray = field(init=False)
     _is_convective: np.ndarray = field(init=False)
     _reynolds_number: np.ndarray = field(init=False)
     _super_adiabatic_temperature_gradient: np.ndarray = field(init=False)
@@ -141,12 +144,15 @@ class State(DataclassFromConfiguration):
         """Gravitational separation"""
         raise NotImplementedError
 
+    @property
     def heat_flux(self) -> np.ndarray:
         """The total heat flux according to the fluxes specified in the configuration."""
-        heat_flux: np.ndarray = np.zeros_like(self.temperature_basic)
-        for heat_flux_ in self._heat_fluxes_to_include:
-            heat_flux += heat_flux_()
-        return heat_flux
+        return self._heat_flux
+
+    @heat_flux.setter
+    def heat_flux(self, value):
+        """Setter for applying boundary conditions"""
+        self._heat_flux = value
 
     @property
     def inviscid_regime(self) -> np.ndarray:
@@ -175,6 +181,14 @@ class State(DataclassFromConfiguration):
     @property
     def temperature_basic(self) -> np.ndarray:
         return self._temperature_basic
+
+    @property
+    def top_temperature(self) -> np.ndarray:
+        return self._temperature_basic[-1, :]
+
+    @property
+    def bottom_temperature(self) -> np.ndarray:
+        return self._temperature_basic[0, :]
 
     @property
     def viscous_regime(self) -> np.ndarray:
@@ -230,6 +244,10 @@ class State(DataclassFromConfiguration):
             self.viscous_regime, self._viscous_velocity, self._inviscid_velocity
         )
         self._eddy_diffusivity *= self._mesh.basic.mixing_length
+        # Heat flux
+        self._heat_flux: np.ndarray = np.zeros_like(self.temperature_basic)
+        for heat_flux_ in self._heat_fluxes_to_include:
+            self._heat_flux += heat_flux_()
 
 
 @dataclass
@@ -312,11 +330,9 @@ class SpiderSolver:
         """
         logger.info("temperature passed into dTdt = %s", temperature)
         self.state.update(temperature, pressure)
-        heat_flux: np.ndarray = self.state.heat_flux()
+        heat_flux: np.ndarray = self.state.heat_flux
         logger.info("heat_flux = %s", heat_flux)
-
-        self.bc.apply(heat_flux, self.state.temperature_basic[-1, :])
-
+        self.bc.apply(self.state)
         logger.info("heat_flux = %s", heat_flux)
         logger.info("mesh.basic.area.shape = %s", self.mesh.basic.area.shape)
 
