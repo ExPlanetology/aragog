@@ -17,7 +17,7 @@ from scipy.integrate import solve_ivp
 from scipy.optimize import OptimizeResult
 
 from spider.bc import BoundaryConditions
-from spider.interfaces import MyConfigParser
+from spider.interfaces import DataclassFromConfiguration, MyConfigParser
 from spider.mesh import StaggeredMesh
 from spider.phase import PhaseEvaluator, PhaseStateBasic, PhaseStateStaggered
 from spider.scalings import Scalings
@@ -26,15 +26,26 @@ logger: logging.Logger = logging.getLogger(__name__)
 
 
 @dataclass
-class State:
+class State(DataclassFromConfiguration):
     """Stores the state at temperature and pressure.
 
     Args:
         _phase_evaluator: A PhaseEvaluator
         _mesh: A StaggeredMesh
-        _config_energy: Configuration section with energy data
+        conduction: Include conduction flux
+        convection: Include convection flux
+        gravitational_separation: Include gravitational separation flux
+        mixing: Include mixing flux
+        radionuclides: Include radionuclides
+        tidal: Include tidal heating
 
     Attributes:
+        conduction: Include conduction flux
+        convection: Include convection flux
+        gravitational_separation: Include gravitational separation flux
+        mixing: Include mixing flux
+        radionuclides: Include radionuclides
+        tidal: Include tidal heating
         phase_basic: Phase properties at the basic nodes
         phase_staggered: Phase properties at the staggered nodes
         conductive_heat_flux: Conductive heat flux at the basic nodes
@@ -57,7 +68,12 @@ class State:
 
     _phase_evaluator: PhaseEvaluator
     _mesh: StaggeredMesh
-    _config_energy: SectionProxy
+    conduction: bool
+    convection: bool
+    gravitational_separation: bool
+    mixing: bool
+    radionuclides: bool
+    tidal: bool
     _heat_fluxes_to_include: list[Callable[[], np.ndarray]] = field(
         init=False, default_factory=list
     )
@@ -84,14 +100,14 @@ class State:
         statement that would need to be evaluated every call, instead we can just append the
         necessary methods to a list to be looped over.
         """
-        if self._config_energy.getboolean("conduction"):
+        if self.conduction:
             self._heat_fluxes_to_include.append(self.conductive_heat_flux)
-        if self._config_energy.getboolean("convection"):
+        if self.convection:
             self._heat_fluxes_to_include.append(self.convective_heat_flux)
-        if self._config_energy.getboolean("gravitational_separation"):
-            self._heat_fluxes_to_include.append(self.gravitational_separation)
-        if self._config_energy.getboolean("mixing"):
-            self._heat_fluxes_to_include.append(self.mixing)
+        if self.gravitational_separation:
+            self._heat_fluxes_to_include.append(self.gravitational_separation_flux)
+        if self.mixing:
+            self._heat_fluxes_to_include.append(self.mixing_flux)
 
     def conductive_heat_flux(self) -> np.ndarray:
         """Conductive heat flux is only accessed once so therefore it is a property."""
@@ -121,7 +137,7 @@ class State:
     def eddy_diffusivity(self) -> np.ndarray:
         return self._eddy_diffusivity
 
-    def gravitational_separation(self) -> np.ndarray:
+    def gravitational_separation_flux(self) -> np.ndarray:
         """Gravitational separation"""
         raise NotImplementedError
 
@@ -144,7 +160,7 @@ class State:
     def is_convective(self) -> np.ndarray:
         return self._is_convective
 
-    def mixing(self) -> np.ndarray:
+    def mixing_flux(self) -> np.ndarray:
         """Mixing heat flux"""
         raise NotImplementedError
 
@@ -245,8 +261,8 @@ class SpiderSolver:
 
     def __post_init__(self):
         logger.info("Creating a SPIDER model")
-        self.config: ConfigParser = MyConfigParser(self.filename)
         self.root = Path(self.root_path)
+        self.config: ConfigParser = MyConfigParser(self.root / self.filename)
         self.scalings = Scalings.from_configuration(config=self.config["scalings"])
         self.mesh = StaggeredMesh.uniform_radii(self.scalings, **self.config["mesh"])
         self.phase_liquid_evaluator = PhaseEvaluator.from_configuration(
@@ -258,7 +274,9 @@ class SpiderSolver:
 
         # FIXME: For time being just set phase to liquid phase.
         self.phase_evaluator = self.phase_liquid_evaluator
-        self.state = State(self.phase_evaluator, self.mesh, self.config["energy"])
+        self.state = State.from_configuration(
+            self.phase_evaluator, self.mesh, config=self.config["energy"]
+        )
         # Set the initial condition.
         initial: SectionProxy = self.config["initial_condition"]
         self.bc = BoundaryConditions.from_configuration(

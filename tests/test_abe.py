@@ -25,7 +25,7 @@ def test_version():
 def test_liquid_no_heating():
     """Test Abe (1993."""
 
-    spider_solver: SpiderSolver = SpiderSolver(TEST_CFG_PATH / Path("abe.cfg"))
+    spider_solver: SpiderSolver = SpiderSolver(Path("abe.cfg"), TEST_CFG_PATH)
     spider_solver.config["energy"]["radionuclides"] = "False"
     spider_solver.solve()
     calculated: np.ndarray = spider_solver.solution.y[:, -1] * spider_solver.scalings.temperature
