@@ -9,7 +9,7 @@ import logging
 from abc import ABC, abstractmethod
 from configparser import SectionProxy
 from dataclasses import dataclass, field
-from typing import Callable
+from typing import Callable, Self
 
 import numpy as np
 
@@ -230,30 +230,28 @@ class PhaseEvaluator:
     thermal_expansivity: PropertyABC
     viscosity: PropertyABC
 
+    @classmethod
+    def from_configuration(cls, scalings: Scalings, *, config: SectionProxy) -> Self:
+        """Creates a class instance from a configuration section.
 
-def phase_from_configuration(phase_section: SectionProxy, scalings: Scalings) -> PhaseEvaluator:
-    """Instantiates a PhaseEvaluator object from configuration data.
+        Args:
+            scalings: Scalings for the numerical problem
+            config: A configuration section with phase data
 
-    Args:
-        phase_section: Configuration section with phase data
-        scalings: Scalings for the numerical problem
+        Returns:
+            A PhaseEvaluator
+        """
+        init_dict: dict[str, PropertyABC] = {}
+        for key, value in config.items():
+            try:
+                value_float: float = float(value)
+                value_float /= getattr(scalings, key)
+                logger.info("%s (%s) is a number = %f", key, config.name, value_float)
+                init_dict[key] = ConstantProperty(name=key, value=value_float)
 
-    Returns:
-        A Phase object
-    """
-    init_dict: dict[str, PropertyABC] = {}
-    for key, value in phase_section.items():
-        try:
-            value_float: float = float(value)
-            value_float /= getattr(scalings, key)
-            logger.info("%s (%s) is a number = %f", key, phase_section.name, value_float)
-            init_dict[key] = ConstantProperty(name=key, value=value_float)
+            # TODO: Add other tries to identify 1-D or 2-D lookup data.
 
-        # TODO: Add other tries to identify 1-D or 2-D lookup data.
+            except TypeError:
+                raise
 
-        except TypeError:
-            raise
-
-    phase_evaluator: PhaseEvaluator = PhaseEvaluator(**init_dict)
-
-    return phase_evaluator
+        return cls(**init_dict)

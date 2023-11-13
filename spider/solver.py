@@ -16,14 +16,11 @@ import numpy as np
 from scipy.integrate import solve_ivp
 from scipy.optimize import OptimizeResult
 
+from spider.bc import BoundaryConditions
+from spider.interfaces import MyConfigParser
 from spider.mesh import StaggeredMesh
-from spider.phase import (
-    PhaseEvaluator,
-    PhaseStateBasic,
-    PhaseStateStaggered,
-    phase_from_configuration,
-)
-from spider.scalings import Constants, Scalings, scalings_from_configuration
+from spider.phase import PhaseEvaluator, PhaseStateBasic, PhaseStateStaggered
+from spider.scalings import Scalings
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -177,8 +174,8 @@ class State:
         The evaluation order matters because we want to minimise the number of evaluations.
 
         Args:
-            temperature: Temperature at the staggered nodes.
-            pressure: Pressure at the staggered nodes.
+            temperature: Temperature at the staggered nodes
+            pressure: Pressure at the staggered nodes
         """
         logger.info("Updating the state")
         self.phase_staggered.update(temperature, pressure)
@@ -221,11 +218,21 @@ class State:
 
 @dataclass
 class SpiderSolver:
+    """Creates the system and solves the interior dynamics
+
+    Args:
+        filename: Filename of a file with configuration settings
+        root_path: Root path to the flename
+
+    Attributes:
+        filename: Filename of a file with configuration settings
+        root_path: Root path to the filename
+    """
+
     filename: Union[str, Path]
     root_path: Union[str, Path] = ""
     root: Path = field(init=False)
     scalings: Scalings = field(init=False)
-    constants: Constants = field(init=False)
     mesh: StaggeredMesh = field(init=False)
     phase_liquid_evaluator: PhaseEvaluator = field(init=False)
     phase_solid_evaluator: PhaseEvaluator = field(init=False)
@@ -233,26 +240,30 @@ class SpiderSolver:
     phase_evaluator: PhaseEvaluator = field(init=False)
     state: State = field(init=False)
     initial_temperature: np.ndarray = field(init=False)
+    bc: BoundaryConditions = field(init=False)
     _solution: OptimizeResult = field(init=False, default_factory=OptimizeResult)
 
     def __post_init__(self):
         logger.info("Creating a SPIDER model")
         self.config: ConfigParser = MyConfigParser(self.filename)
         self.root = Path(self.root_path)
-        self.scalings = scalings_from_configuration(self.config["scalings"])
-        self.constants = Constants(self.scalings)
+        self.scalings = Scalings.from_configuration(config=self.config["scalings"])
         self.mesh = StaggeredMesh.uniform_radii(self.scalings, **self.config["mesh"])
-        self.phase_liquid_evaluator = phase_from_configuration(
-            self.config["phase_liquid_evaluator"], self.scalings
+        self.phase_liquid_evaluator = PhaseEvaluator.from_configuration(
+            self.scalings, config=self.config["phase_liquid_evaluator"]
         )
-        self.phase_solid_evaluator = phase_from_configuration(
-            self.config["phase_solid_evaluator"], self.scalings
+        self.phase_solid_evaluator = PhaseEvaluator.from_configuration(
+            self.scalings, config=self.config["phase_solid_evaluator"]
         )
+
         # FIXME: For time being just set phase to liquid phase.
         self.phase_evaluator = self.phase_liquid_evaluator
         self.state = State(self.phase_evaluator, self.mesh, self.config["energy"])
         # Set the initial condition.
         initial: SectionProxy = self.config["initial_condition"]
+        self.bc = BoundaryConditions.from_configuration(
+            self.scalings, config=self.config["boundary_conditions"]
+        )
         self.initial_temperature = np.linspace(
             initial.getfloat("basal_temperature"),
             initial.getfloat("surface_temperature"),
@@ -285,23 +296,9 @@ class SpiderSolver:
         self.state.update(temperature, pressure)
         heat_flux: np.ndarray = self.state.heat_flux()
         logger.info("heat_flux = %s", heat_flux)
-        # TODO: Clean up boundary conditions.
-        # No heat flux from the core.
-        heat_flux[0, :] = 0
-        logger.info("heat_flux = %s", heat_flux)
-        # Blackbody cooling.
-        equilibrium_temperature: float = self.config.getfloat(
-            "boundary_conditions", "equilibrium_temperature"
-        )
-        equilibrium_temperature /= self.scalings.temperature
-        heat_flux[-1, :] = (
-            self.config.getfloat("boundary_conditions", "emissivity")
-            * self.constants.STEFAN_BOLTZMANN_CONSTANT
-            * (
-                self.mesh.quantity_at_basic_nodes(temperature)[-1, :] ** 4
-                - equilibrium_temperature**4
-            )
-        )
+
+        self.bc.apply(heat_flux, self.state.temperature_basic[-1, :])
+
         logger.info("heat_flux = %s", heat_flux)
         logger.info("mesh.basic.area.shape = %s", self.mesh.basic.area.shape)
 
@@ -385,9 +382,9 @@ class SpiderSolver:
 
         config_solver: SectionProxy = self.config["solver"]
         start_time: float = (
-            config_solver.getfloat("start_time_years") * self.constants.YEAR_IN_SECONDS
+            config_solver.getfloat("start_time_years") * self.scalings.year_in_seconds
         )
-        end_time: float = config_solver.getfloat("end_time_years") * self.constants.YEAR_IN_SECONDS
+        end_time: float = config_solver.getfloat("end_time_years") * self.scalings.year_in_seconds
         atol: float = config_solver.getfloat("atol")
         rtol: float = config_solver.getfloat("rtol")
 
@@ -403,18 +400,3 @@ class SpiderSolver:
         )
 
         logger.info(self.solution)
-
-
-class MyConfigParser(ConfigParser):
-    """A configuration parser with some default options
-
-    Args:
-        *filenames: Filenames of one or several configuration files
-    """
-
-    getpath: Callable[..., Path]  # For typing.
-
-    def __init__(self, *filenames):
-        kwargs: dict = {"comment_prefixes": ("#",), "converters": {"path": Path}}
-        super().__init__(**kwargs)
-        self.read(filenames)
