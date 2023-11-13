@@ -7,12 +7,15 @@ from __future__ import annotations
 
 import logging
 from dataclasses import KW_ONLY, dataclass
-from typing import Union
+from typing import TYPE_CHECKING, Union
 
 import numpy as np
 
 from spider.interfaces import DataclassFromConfiguration
 from spider.scalings import Scalings
+
+if TYPE_CHECKING:
+    from spider.solver import State
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -40,32 +43,23 @@ class BoundaryConditions(DataclassFromConfiguration):
     core_density: float
     core_heat_capacity: float
 
-    def _grey_body(self, top_temperature: np.ndarray) -> np.ndarray:
-        """Applies a grey body at the surface
-
-        Args:
-            top_temperature: An array of the surface temperatures
-
-        Returns:
-            An array of the grey body heat flux
-        """
-        ...
-
-    def apply(self, heat_flux: np.ndarray, top_temperature: np.ndarray) -> None:
-        """Applies the boundary conditions.
-
-        Args:
-            heat_flux: Heat flux to apply the boundary conditions to
-            top_temperature: An array of the surface temperature
-        """
-        # No heat flux from the core.
-        heat_flux[0, :] = 0
-
-        heat_flux[-1, :] = (
+    def _grey_body(self, state: State) -> None:
+        """Applies a grey body at the surface."""
+        state.heat_flux[-1, :] = (
             self.emissivity
             * self.scalings.stefan_boltzmann_constant
             * (
-                np.power(top_temperature, 4)
+                np.power(state.top_temperature, 4)
                 - (self.equilibrium_temperature / self.scalings.temperature) ** 4
             )
         )
+
+    def apply(self, state: State) -> None:
+        """Applies the boundary conditions."""
+        self.core_heat_flux(state)
+        self._grey_body(state)
+
+    def core_heat_flux(self, state: State) -> None:
+        """Applies the heat flux at the core-mantle boundary."""
+        # No heat flux from the core.
+        state.heat_flux[0, :] = 0
