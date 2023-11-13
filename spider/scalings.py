@@ -6,18 +6,19 @@ See the LICENSE file for licensing information.
 from __future__ import annotations
 
 import logging
-from configparser import SectionProxy
 from dataclasses import dataclass, field
 
 import numpy as np
 from scipy import constants
 from thermochem import codata
 
+from spider.interfaces import DataclassFromConfiguration
+
 logger: logging.Logger = logging.getLogger(__name__)
 
 
 @dataclass(kw_only=True)
-class Scalings:
+class Scalings(DataclassFromConfiguration):
     """Scalings for the numerical problem.
 
     Args:
@@ -42,7 +43,8 @@ class Scalings:
         thermal_conductivity
         velocity
         viscosity
-        stefan_boltzmann_constant
+        stefan_boltzmann_constant (non-dimensional)
+        year_in_seconds (non-dimensional)
     """
 
     radius: float = 1
@@ -61,6 +63,7 @@ class Scalings:
     velocity: float = field(init=False)
     viscosity: float = field(init=False)
     stefan_boltzmann_constant: float = field(init=False)
+    year_in_seconds: float = field(init=False)
 
     def __post_init__(self):
         self.area = np.square(self.radius)
@@ -75,51 +78,10 @@ class Scalings:
         self.heat_capacity = self.energy / self.mass / self.temperature
         self.power = self.energy / self.time
         self.thermal_conductivity = self.power / self.radius / self.temperature
+        self.viscosity = self.pressure * self.time
+        # Useful non-dimensional constants
         self.stefan_boltzmann_constant = (
             self.power / np.square(self.radius) / np.power(self.temperature, 4)
         )
-        self.viscosity = self.pressure * self.time
-
-
-def scalings_from_configuration(scalings_section: SectionProxy) -> Scalings:
-    """Instantiates the scalings for the numerical problem.
-
-    Args:
-        scalings_section: Configuration section with scalings
-
-    Returns:
-        The numerical scalings.
-    """
-    radius: float = scalings_section.getfloat("radius")
-    temperature: float = scalings_section.getfloat("temperature")
-    density: float = scalings_section.getfloat("density")
-    time: float = scalings_section.getfloat("time")
-
-    scalings: Scalings = Scalings(
-        radius=radius, temperature=temperature, density=density, time=time
-    )
-
-    return scalings
-
-
-@dataclass
-class Constants:
-    """Constants, which are non-dimensionalised according to Scalings.
-
-    Args:
-        Scalings: The scalings for the numerical problem
-
-    Attributes:
-        STEFAN_BOLTZMANN_CONSTANT: Scaled (non-dimensional) Stefan-Boltzmann constant
-        YEAR_IN_SECONDS: Scaled (non-dimensional) number of seconds in one year
-    """
-
-    Scalings: Scalings
-    STEFAN_BOLTZMANN_CONSTANT: float = field(init=False)
-    YEAR_IN_SECONDS: float = field(init=False)
-
-    def __post_init__(self):
-        self.STEFAN_BOLTZMANN_CONSTANT = codata.value("Stefan-Boltzmann constant")  # W/m2/K^4
-        self.STEFAN_BOLTZMANN_CONSTANT /= self.Scalings.stefan_boltzmann_constant
-        self.YEAR_IN_SECONDS = constants.Julian_year  # s
-        self.YEAR_IN_SECONDS /= self.Scalings.time
+        self.stefan_boltzmann_constant *= codata.value("Stefan-Boltzmann constant")  # W/m2/K^4
+        self.year_in_seconds = constants.Julian_year / self.time
