@@ -67,6 +67,10 @@ class BoundaryConditions(DataclassFromConfiguration):
             * self.scalings.stefan_boltzmann_constant
             * (np.power(state.top_temperature, 4) - self.equilibrium_temperature**4)
         )
+        # Below for debugging
+        # state.heat_flux[-1, :] = 1e6 / self.scalings.heat_flux
+        #  # 10**6 / (self.scalings.power / self.scalings.area)
+        # state.heat_flux[-1, :] = 0
 
     def apply(self, state: State) -> None:
         """Applies the boundary conditions to the state.
@@ -76,6 +80,8 @@ class BoundaryConditions(DataclassFromConfiguration):
         """
         self.core_heat_flux(state)
         self.grey_body(state)
+        logger.info("temperature = %s", state.temperature_basic * self.scalings.temperature)
+        logger.info("heat_flux = %s", state.heat_flux * self.scalings.heat_flux)
 
     def core_heat_flux(self, state: State) -> None:
         """Applies the heat flux at the core-mantle boundary.

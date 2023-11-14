@@ -126,13 +126,13 @@ class PhaseStateStaggered:
             temperature: Temperature at the staggered nodes
             pressure: Pressure at the staggered nodes
         """
-        logger.info("Updating the state of %s", self.__class__.__name__)
+        logger.debug("Updating the state of %s", self.__class__.__name__)
         self.density = self.phase_evaluator.density(temperature, pressure)
-        logger.info("density = %s", self.density)
+        logger.debug("density = %s", self.density)
         self.heat_capacity = self.phase_evaluator.heat_capacity(temperature, pressure)
-        logger.info("heat_capacity = %s", self.heat_capacity)
+        logger.debug("heat_capacity = %s", self.heat_capacity)
         self.capacitance = self.density * self.heat_capacity
-        logger.info("capacitance = %s", self.capacitance)
+        logger.debug("capacitance = %s", self.capacitance)
 
 
 @dataclass
@@ -174,7 +174,7 @@ class PhaseStateBasic:
             temperature: Temperature at the basic nodes
             pressure: Pressure at the basic nodes
         """
-        logger.info("Updating the state of %s", self.__class__.__name__)
+        logger.debug("Updating the state of %s", self.__class__.__name__)
         self.density = self.phase_evaluator.density(temperature, pressure)
         self.gravitational_acceleration = self.phase_evaluator.gravitational_acceleration(
             temperature, pressure
@@ -246,7 +246,7 @@ class PhaseEvaluator:
             try:
                 value_float: float = float(value)
                 value_float /= getattr(scalings, key)
-                logger.info("%s (%s) is a number = %f", key, config.name, value_float)
+                logger.debug("%s (%s) is a number = %f", key, config.name, value_float)
                 init_dict[key] = ConstantProperty(name=key, value=value_float)
 
             # TODO: Add other tries to identify 1-D or 2-D lookup data.
