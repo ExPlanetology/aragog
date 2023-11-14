@@ -52,6 +52,10 @@ class BoundaryConditions(DataclassFromConfiguration):
     core_density: float
     core_heat_capacity: float
 
+    def __post_init__(self):
+        # Non-dimensionalise
+        self.equilibrium_temperature /= self.scalings.temperature
+
     def grey_body(self, state: State) -> None:
         """Applies a grey body flux at the surface.
 
@@ -61,10 +65,7 @@ class BoundaryConditions(DataclassFromConfiguration):
         state.heat_flux[-1, :] = (
             self.emissivity
             * self.scalings.stefan_boltzmann_constant
-            * (
-                np.power(state.top_temperature, 4)
-                - (self.equilibrium_temperature / self.scalings.temperature) ** 4
-            )
+            * (np.power(state.top_temperature, 4) - self.equilibrium_temperature**4)
         )
 
     def apply(self, state: State) -> None:
