@@ -36,6 +36,7 @@ class Scalings(DataclassFromConfiguration):
         energy
         gravitational_acceleration
         heat_capacity
+        heat_flux
         mass
         power
         pressure
@@ -55,6 +56,7 @@ class Scalings(DataclassFromConfiguration):
     energy: float = field(init=False)
     gravitational_acceleration: float = field(init=False)
     heat_capacity: float = field(init=False)
+    heat_flux: float = field(init=False)
     mass: float = field(init=False)
     power: float = field(init=False)
     pressure: float = field(init=False)
@@ -77,6 +79,7 @@ class Scalings(DataclassFromConfiguration):
         self.energy = self.mass * np.square(self.velocity)
         self.heat_capacity = self.energy / self.mass / self.temperature
         self.power = self.energy / self.time
+        self.heat_flux = self.power / self.area
         self.thermal_conductivity = self.power / self.radius / self.temperature
         self.viscosity = self.pressure * self.time
         # Useful non-dimensional constants

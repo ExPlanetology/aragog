@@ -134,6 +134,8 @@ class State(DataclassFromConfiguration):
 
     @property
     def dTdr(self) -> np.ndarray:
+        # logger.warning("dTdr = %s", self._dTdr)
+        # print("dTdr = %s", self._dTdr)
         return self._dTdr
 
     @property
@@ -207,12 +209,13 @@ class State(DataclassFromConfiguration):
             temperature: Temperature at the staggered nodes
             pressure: Pressure at the staggered nodes
         """
-        logger.info("Updating the state")
+        logger.debug("Updating the state")
         self.phase_staggered.update(temperature, pressure)
         self._temperature_basic = self._mesh.quantity_at_basic_nodes(temperature)
         pressure_basic: np.ndarray = self._mesh.quantity_at_basic_nodes(pressure)
         self.phase_basic.update(self._temperature_basic, pressure_basic)
         self._dTdr = self._mesh.d_dr_at_basic_nodes(temperature)
+        self.dTdr
         self._super_adiabatic_temperature_gradient = self._dTdr - self.phase_basic.dTdrs
         self._is_convective = self._super_adiabatic_temperature_gradient < 0
         velocity_prefactor: np.ndarray = (
@@ -328,20 +331,20 @@ class SpiderSolver:
         Returns:
             dT/dt at the staggered nodes.
         """
-        logger.info("temperature passed into dTdt = %s", temperature)
+        logger.debug("temperature passed into dTdt = %s", temperature)
         self.state.update(temperature, pressure)
         heat_flux: np.ndarray = self.state.heat_flux
-        logger.info("heat_flux = %s", heat_flux)
+        logger.debug("heat_flux = %s", heat_flux)
         self.bc.apply(self.state)
-        logger.info("heat_flux = %s", heat_flux)
-        logger.info("mesh.basic.area.shape = %s", self.mesh.basic.area.shape)
+        logger.debug("heat_flux = %s", heat_flux)
+        logger.debug("mesh.basic.area.shape = %s", self.mesh.basic.area.shape)
 
         energy_flux: np.ndarray = heat_flux * self.mesh.basic.area.reshape(-1, 1)
-        logger.info("energy_flux = %s", energy_flux)
-        logger.info("energy_flux size = %s", energy_flux.shape)
+        logger.debug("energy_flux = %s", energy_flux)
+        logger.debug("energy_flux size = %s", energy_flux.shape)
 
         delta_energy_flux: np.ndarray = np.diff(energy_flux, axis=0)
-        logger.info("delta_energy_flux = %s", delta_energy_flux)
+        logger.debug("delta_energy_flux = %s", delta_energy_flux)
         capacitance: np.ndarray = (
             self.state.phase_staggered.capacitance * self.mesh.basic.volume.reshape(-1, 1)
         )
@@ -355,7 +358,7 @@ class SpiderSolver:
         #     * self.mesh.basic.volume
         #     / capacitance
         # )
-        # logger.info("dTdt = %s", dTdt)
+        logger.info("dTdt = %s", dTdt)
 
         return dTdt
 
@@ -366,9 +369,13 @@ class SpiderSolver:
             num_lines: Number of lines to plot. Defaults to 11.
         """
         assert self.solution is not None
-        radii: np.ndarray = self.mesh.basic.radii
-        y_basic: np.ndarray = self.mesh.quantity_at_basic_nodes(self.solution.y)
-        times: np.ndarray = self.solution.t
+
+        # Dimensionalise quantities for plotting
+        radii: np.ndarray = self.mesh.basic.radii * self.scalings.radius * 1.0e-3  # km
+        temperature: np.ndarray = (
+            self.mesh.quantity_at_basic_nodes(self.solution.y) * self.scalings.temperature  # K
+        )
+        times: np.ndarray = self.solution.t / self.scalings.time_year  # years
 
         plt.figure(figsize=(8, 6))
         ax = plt.subplot(111)
@@ -384,7 +391,7 @@ class SpiderSolver:
 
         # Plot the first line.
         label_first: str = f"{times[0]:.2f}"
-        ax.plot(y_basic[:, 0], radii, label=label_first)
+        ax.plot(temperature[:, 0], radii, label=label_first)
 
         # Loop through the selected lines and plot each with a label.
         for i in range(1, num_lines - 1):
@@ -393,18 +400,19 @@ class SpiderSolver:
             closest_time_index: int = np.argmin(np.abs(times - desired_time))
             time: float = times[closest_time_index]
             label: str = f"{time:.2f}"  # Create a label based on the time.
-            plt.plot(y_basic[:, closest_time_index], radii, label=label)
+            plt.plot(temperature[:, closest_time_index], radii, label=label)
 
         # Plot the last line.
-        label_last: str = f"{times[-1]:.2f}"
-        ax.plot(y_basic[:, -1], radii, label=label_last)
+        times_end: float = times[-1]
+        label_last: str = f"{times_end:.2f}"
+        ax.plot(temperature[:, -1], radii, label=label_last)
 
-        # Shrink current axis by 20%.
+        # Shrink current axis by 20% to allow space for the legend.
         box = ax.get_position()
         ax.set_position((box.x0, box.y0, box.width * 0.8, box.height))
 
         ax.set_xlabel("Temperature (K)")
-        ax.set_ylabel("Radii (m)")
+        ax.set_ylabel("Radii (km)")
         ax.set_title("Magma ocean thermal profile")
         ax.grid(True)
         legend = plt.legend(loc="center left", bbox_to_anchor=(1, 0.5))
@@ -415,10 +423,10 @@ class SpiderSolver:
         """Solves the system of ODEs to determine the interior temperature profile."""
 
         config_solver: SectionProxy = self.config["solver"]
-        start_time: float = (
-            config_solver.getfloat("start_time_years") * self.scalings.year_in_seconds
-        )
-        end_time: float = config_solver.getfloat("end_time_years") * self.scalings.year_in_seconds
+        start_time: float = config_solver.getfloat("start_time_years") * self.scalings.time_year
+        logger.debug("start_time = %f", start_time)
+        end_time: float = config_solver.getfloat("end_time_years") * self.scalings.time_year
+        logger.debug("end_time = %f", end_time)
         atol: float = config_solver.getfloat("atol")
         rtol: float = config_solver.getfloat("rtol")
 
