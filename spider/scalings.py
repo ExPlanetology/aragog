@@ -80,8 +80,9 @@ class Scalings(DataclassFromConfiguration):
         self.thermal_conductivity = self.power / self.radius / self.temperature
         self.viscosity = self.pressure * self.time
         # Useful non-dimensional constants
-        self.stefan_boltzmann_constant = (
+        self.stefan_boltzmann_constant = codata.value("Stefan-Boltzmann constant")  # W/m2/K^4
+        self.stefan_boltzmann_constant /= (
             self.power / np.square(self.radius) / np.power(self.temperature, 4)
         )
-        self.stefan_boltzmann_constant *= codata.value("Stefan-Boltzmann constant")  # W/m2/K^4
+        # one Julian year (365.25 days) in non-dimensional time
         self.year_in_seconds = constants.Julian_year / self.time
