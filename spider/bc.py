@@ -67,10 +67,6 @@ class BoundaryConditions(DataclassFromConfiguration):
             * self.scalings.stefan_boltzmann_constant
             * (np.power(state.top_temperature, 4) - self.equilibrium_temperature**4)
         )
-        # Below for debugging
-        # state.heat_flux[-1, :] = 1e6 / self.scalings.heat_flux
-        #  # 10**6 / (self.scalings.power / self.scalings.area)
-        # state.heat_flux[-1, :] = 0
 
     def apply(self, state: State) -> None:
         """Applies the boundary conditions to the state.
