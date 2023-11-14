@@ -63,7 +63,7 @@ class Scalings(DataclassFromConfiguration):
     velocity: float = field(init=False)
     viscosity: float = field(init=False)
     stefan_boltzmann_constant: float = field(init=False)
-    year_in_seconds: float = field(init=False)
+    time_year: float = field(init=False)
 
     def __post_init__(self):
         self.area = np.square(self.radius)
@@ -80,9 +80,10 @@ class Scalings(DataclassFromConfiguration):
         self.thermal_conductivity = self.power / self.radius / self.temperature
         self.viscosity = self.pressure * self.time
         # Useful non-dimensional constants
-        self.stefan_boltzmann_constant = codata.value("Stefan-Boltzmann constant")  # W/m2/K^4
+        self.stefan_boltzmann_constant = codata.value("Stefan-Boltzmann constant")  # W/m^2/K^4
         self.stefan_boltzmann_constant /= (
             self.power / np.square(self.radius) / np.power(self.temperature, 4)
         )
         # one Julian year (365.25 days) in non-dimensional time
-        self.year_in_seconds = constants.Julian_year / self.time
+        self.time_year = constants.Julian_year / self.time
+        logger.debug("scalings = %s", self)
