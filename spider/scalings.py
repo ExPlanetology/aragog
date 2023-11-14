@@ -33,12 +33,11 @@ class Scalings(DataclassFromConfiguration):
         density
         time
         area
-        energy
+        kinetic_energy_per_volume
         gravitational_acceleration
         heat_capacity
         heat_flux
-        mass
-        power
+        power_per_volume
         pressure
         temperature_gradient
         thermal_conductivity
@@ -53,12 +52,11 @@ class Scalings(DataclassFromConfiguration):
     density: float = 1
     time: float = 1
     area: float = field(init=False)
-    energy: float = field(init=False)
+    kinetic_energy_per_volume: float = field(init=False)
     gravitational_acceleration: float = field(init=False)
     heat_capacity: float = field(init=False)
     heat_flux: float = field(init=False)
-    mass: float = field(init=False)
-    power: float = field(init=False)
+    power_per_volume: float = field(init=False)
     pressure: float = field(init=False)
     temperature_gradient: float = field(init=False)
     thermal_conductivity: float = field(init=False)
@@ -72,20 +70,18 @@ class Scalings(DataclassFromConfiguration):
         self.gravitational_acceleration = self.radius / np.square(self.time)
         self.temperature_gradient = self.temperature / self.radius
         self.thermal_expansivity = 1 / self.temperature
-        self.volume = np.power(self.radius, 3)
-        self.mass = self.density * self.volume
         self.pressure = self.density * self.gravitational_acceleration * self.radius
         self.velocity = self.radius / self.time
-        self.energy = self.mass * np.square(self.velocity)
-        self.heat_capacity = self.energy / self.mass / self.temperature
-        self.power = self.energy / self.time
-        self.heat_flux = self.power / self.area
-        self.thermal_conductivity = self.power / self.radius / self.temperature
+        self.kinetic_energy_per_volume = self.density * np.square(self.velocity)
+        self.heat_capacity = self.kinetic_energy_per_volume / self.density / self.temperature
+        self.power_per_volume = self.kinetic_energy_per_volume / self.time
+        self.heat_flux = self.power_per_volume * self.radius
+        self.thermal_conductivity = self.power_per_volume * self.area / self.temperature
         self.viscosity = self.pressure * self.time
         # Useful non-dimensional constants
         self.stefan_boltzmann_constant = codata.value("Stefan-Boltzmann constant")  # W/m^2/K^4
         self.stefan_boltzmann_constant /= (
-            self.power / np.square(self.radius) / np.power(self.temperature, 4)
+            self.power_per_volume * self.radius / np.power(self.temperature, 4)
         )
         # one Julian year (365.25 days) in non-dimensional time
         self.time_year = constants.Julian_year / self.time
