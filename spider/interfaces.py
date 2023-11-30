@@ -45,7 +45,7 @@ class DataclassFromConfiguration:
 
 @dataclass
 class ScaledDataclassFromConfiguration(DataclassFromConfiguration):
-    """A dataclass that requires its attributes to be scaled"""
+    """A dataclass that requires its attributes to be scaled."""
 
     def __post_init__(self):
         self.scale_attributes()
@@ -75,8 +75,8 @@ class Scalings(ScaledDataclassFromConfiguration):
         gravitational_acceleration, m/s^2
         heat_capacity, J/kg/K
         heat_flux, W/m^2
-        power_per_volume, W/m^3
         power_per_mass, W/kg
+        power_per_volume, W/m^3
         pressure, Pa
         temperature_gradient, K/m
         thermal_conductivity, W/m/K
@@ -86,24 +86,27 @@ class Scalings(ScaledDataclassFromConfiguration):
         stefan_boltzmann_constant (non-dimensional)
     """
 
+    # Default scalings
     radius: float = 1
     temperature: float = 1
     density: float = 1
     time: float = 1
+    # Scalings (dimensional)
     area: float = field(init=False)
-    kinetic_energy_per_volume: float = field(init=False)
     gravitational_acceleration: float = field(init=False)
     heat_capacity: float = field(init=False)
     heat_flux: float = field(init=False)
-    power_per_volume: float = field(init=False)
+    kinetic_energy_per_volume: float = field(init=False)
     power_per_mass: float = field(init=False)
+    power_per_volume: float = field(init=False)
     pressure: float = field(init=False)
     temperature_gradient: float = field(init=False)
+    time_years: float = field(init=False)  # Equivalent to TIMEYRS in C code version
     thermal_conductivity: float = field(init=False)
     velocity: float = field(init=False)
     viscosity: float = field(init=False)
+    # Scalings (non-dimensional)
     stefan_boltzmann_constant: float = field(init=False)
-    time_years: float = field(init=False)  # Equivalent to TIMEYRS in C code version
 
     def scale_attributes(self):
         self.area = np.square(self.radius)
