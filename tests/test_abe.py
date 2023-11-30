@@ -13,9 +13,9 @@ from spider import TEST_CFG_PATH, SpiderSolver, __version__, debug_logger
 
 # from tests.conftest import profile_decorator
 
-# logger: logging.Logger = debug_logger()
+logger: logging.Logger = debug_logger()
 # Comment out for default debug logger, but this will slow down the tests
-# logger.setLevel(logging.INFO)
+logger.setLevel(logging.WARNING)
 
 atol: float = 1e-4
 rtol: float = 1e-4

@@ -11,8 +11,7 @@ from typing import TYPE_CHECKING, Union
 
 import numpy as np
 
-from spider.interfaces import DataclassFromConfiguration
-from spider.scalings import Scalings
+from spider.interfaces import DataclassFromConfiguration, Scalings
 
 if TYPE_CHECKING:
     from spider.solver import State
@@ -76,8 +75,8 @@ class BoundaryConditions(DataclassFromConfiguration):
         """
         self.core_heat_flux(state)
         self.grey_body(state)
-        logger.info("temperature = %s", state.temperature_basic * self.scalings.temperature)
-        logger.info("heat_flux = %s", state.heat_flux * self.scalings.heat_flux)
+        logger.info("temperature (SI) = %s", state.temperature_basic * self.scalings.temperature)
+        logger.info("heat_flux (SI) = %s", state.heat_flux * self.scalings.heat_flux)
 
     def core_heat_flux(self, state: State) -> None:
         """Applies the heat flux at the core-mantle boundary.
