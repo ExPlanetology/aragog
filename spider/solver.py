@@ -6,8 +6,7 @@ See the LICENSE file for licensing information.
 from __future__ import annotations
 
 import logging
-from ast import literal_eval
-from configparser import ConfigParser, SectionProxy
+from configparser import SectionProxy
 from dataclasses import KW_ONLY, dataclass, field
 from pathlib import Path
 from typing import Callable, Union
@@ -17,87 +16,12 @@ import numpy as np
 from scipy.integrate import solve_ivp
 from scipy.optimize import OptimizeResult
 
-from spider.bc import BoundaryConditions
-from spider.energy import Radionuclide
-from spider.interfaces import DataclassFromConfiguration, Scalings
+from spider.core import SpiderConfigParser, SpiderData  # , SpiderMesh
+from spider.interfaces import DataclassFromConfiguration
 from spider.mesh import StaggeredMesh
 from spider.phase import PhaseEvaluator, PhaseStateBasic, PhaseStateStaggered
 
 logger: logging.Logger = logging.getLogger(__name__)
-
-
-class SpiderConfigParser(ConfigParser):
-    """Parser for SPIDER configuration files
-
-    Args:
-        *filenames: Filenames of one or several configuration files
-    """
-
-    getpath: Callable[..., Path]  # For typing.
-
-    def __init__(self, *filenames):
-        kwargs: dict = {
-            "comment_prefixes": ("#",),
-            "converters": {"path": Path, "any": lambda x: literal_eval(x)},
-        }
-        super().__init__(**kwargs)
-        self.read(filenames)
-
-    @property
-    def phases(self) -> dict[str, SectionProxy]:
-        """Dictionary of the sections relating to phases"""
-        return {
-            self[section].name.split("_")[1]: self[section]
-            for section in self.sections()
-            if section.startswith("phase_")
-        }
-
-    @property
-    def radionuclides(self) -> dict[str, SectionProxy]:
-        """Dictionary of the sections relating to radionuclides"""
-        return {
-            self[section].name.split("_")[1]: self[section]
-            for section in self.sections()
-            if section.startswith("radionuclide_")
-        }
-
-
-@dataclass
-class SpiderData:
-    """Container for the objects necessary to compute the interior evolution.
-
-    This parsers the sections of the configuration data and instantiates the objects.
-
-    Args:
-        config_parser: A SpiderConfigParser
-
-    Attributes:
-        TODO
-    """
-
-    config_parser: SpiderConfigParser
-    scalings: Scalings = field(init=False)
-    boundary_conditions: BoundaryConditions = field(init=False)
-    mesh: StaggeredMesh = field(init=False)
-    phases: dict[str, PhaseEvaluator] = field(init=False, default_factory=dict)
-    radionuclides: dict[str, Radionuclide] = field(init=False, default_factory=dict)
-
-    def __post_init__(self):
-        self.scalings = Scalings.from_configuration(section=self.config_parser["scalings"])
-        self.boundary_conditions = BoundaryConditions.from_configuration(
-            self.scalings, section=self.config_parser["boundary_conditions"]
-        )
-        self.mesh = StaggeredMesh.uniform_radii(self.scalings, **self.config_parser["mesh"])
-        for phase_name, phase_section in self.config_parser.phases.items():
-            phase: PhaseEvaluator = PhaseEvaluator.from_configuration(
-                self.scalings, phase_name, section=phase_section
-            )
-            self.phases[phase_name] = phase
-        for radionuclide_name, radionuclide_section in self.config_parser.radionuclides.items():
-            radionuclide: Radionuclide = Radionuclide.from_configuration(
-                self.scalings, radionuclide_name, section=radionuclide_section
-            )
-            self.radionuclides[radionuclide_name] = radionuclide
 
 
 @dataclass
@@ -289,7 +213,6 @@ class State(DataclassFromConfiguration):
         pressure_basic: np.ndarray = self._mesh.quantity_at_basic_nodes(pressure)
         self.phase_basic.update(self._temperature_basic, pressure_basic)
         self._dTdr = self._mesh.d_dr_at_basic_nodes(temperature)
-        self.dTdr
         self._super_adiabatic_temperature_gradient = self._dTdr - self.phase_basic.dTdrs
         self._is_convective = self._super_adiabatic_temperature_gradient < 0
         velocity_prefactor: np.ndarray = (
@@ -343,31 +266,19 @@ class SpiderSolver:
     filename: Union[str, Path]
     root_path: Union[str, Path] = ""
     root: Path = field(init=False)
+    config: SpiderConfigParser = field(init=False)
     data: SpiderData = field(init=False)
-    # Phase for calculations, could be a composite phase.
-    phase_evaluator: PhaseEvaluator = field(init=False)
     state: State = field(init=False)
-    initial_temperature: np.ndarray = field(init=False)
     _solution: OptimizeResult = field(init=False, default_factory=OptimizeResult)
 
     def __post_init__(self):
         logger.info("Creating a SPIDER model")
         self.root = Path(self.root_path)
-        self.config: ConfigParser = SpiderConfigParser(self.root / self.filename)
+        self.config = SpiderConfigParser(self.root / self.filename)
         self.data = SpiderData(self.config)
-        # FIXME: For time being just set phase to liquid phase.
-        self.phase_evaluator = self.data.phases["liquid"]
         self.state = State.from_configuration(
-            self.phase_evaluator, self.data.mesh, section=self.config["energy"]
+            self.data.phase, self.data.mesh, section=self.config["energy"]
         )
-        # Set the initial condition.
-        initial: SectionProxy = self.config["initial_condition"]
-        self.initial_temperature = np.linspace(
-            initial.getfloat("basal_temperature"),
-            initial.getfloat("surface_temperature"),
-            self.data.mesh.staggered.number,
-        )
-        self.initial_temperature /= self.data.scalings.temperature
 
     @property
     def solution(self) -> OptimizeResult:
@@ -495,10 +406,10 @@ class SpiderSolver:
         self._solution = solve_ivp(
             self.dTdt,
             (start_time, end_time),
-            self.initial_temperature,
+            self.data.initial_condition.temperature,
             method="BDF",
             vectorized=True,
-            args=(self.initial_temperature,),  # FIXME: Should be pressure.
+            args=(self.data.initial_condition.temperature,),  # FIXME: Should be pressure.
             atol=atol,
             rtol=rtol,
         )

@@ -8,11 +8,14 @@ from __future__ import annotations
 import logging
 from configparser import SectionProxy
 from dataclasses import KW_ONLY, dataclass, field
-from typing import Callable, Self
+from typing import TYPE_CHECKING, Callable, Self
 
 import numpy as np
 
-from spider.interfaces import PropertyABC, ScaledDataclassFromConfiguration, Scalings
+from spider.interfaces import PropertyABC
+
+if TYPE_CHECKING:
+    from spider.core import Scalings
 
 logger: logging.Logger = logging.getLogger(__name__)
 
