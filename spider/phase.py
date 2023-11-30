@@ -13,7 +13,7 @@ from typing import Callable, Self
 
 import numpy as np
 
-from spider.scalings import Scalings
+from spider.interfaces import Scalings
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -49,10 +49,10 @@ class PropertyABC(ABC):
     """A property whose value can be evaluated at temperature and pressure.
 
     Args:
-        name: Name of the property.
+        name: Name of the property
 
     Attributes:
-        name: Name of the property.
+        name: Name of the property
     """
 
     name: str
@@ -142,7 +142,7 @@ class PhaseStateBasic:
     This minimises the number of function evaluations to avoid slowing down the code.
 
     Args:
-        phase_evaluator: A PhaseEvaluator.
+        phase_evaluator: A PhaseEvaluator
 
     Attributes:
         density: Density

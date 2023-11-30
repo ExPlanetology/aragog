@@ -6,8 +6,9 @@ See the LICENSE file for licensing information.
 from __future__ import annotations
 
 import logging
+from ast import literal_eval
 from configparser import ConfigParser, SectionProxy
-from dataclasses import dataclass, field
+from dataclasses import KW_ONLY, dataclass, field
 from pathlib import Path
 from typing import Callable, Union
 
@@ -17,12 +18,33 @@ from scipy.integrate import solve_ivp
 from scipy.optimize import OptimizeResult
 
 from spider.bc import BoundaryConditions
-from spider.interfaces import DataclassFromConfiguration, MyConfigParser
+from spider.energy import RadiogenicHeating
+from spider.interfaces import DataclassFromConfiguration, Scalings
 from spider.mesh import StaggeredMesh
 from spider.phase import PhaseEvaluator, PhaseStateBasic, PhaseStateStaggered
-from spider.scalings import Scalings
 
 logger: logging.Logger = logging.getLogger(__name__)
+
+
+class SpiderConfigParser(ConfigParser):
+    """Parser for SPIDER configuration files
+
+    Args:
+        *filenames: Filenames of one or several configuration files
+    """
+
+    getpath: Callable[..., Path]  # For typing.
+
+    def __init__(self, *filenames):
+        kwargs: dict = {
+            "comment_prefixes": ("#",),
+            "converters": {"path": Path, "any": lambda x: literal_eval(x)},
+        }
+        super().__init__(**kwargs)
+        self.read(filenames)
+
+    def radionuclides(self):
+        ...
 
 
 @dataclass
@@ -70,6 +92,7 @@ class State(DataclassFromConfiguration):
 
     _phase_evaluator: PhaseEvaluator
     _mesh: StaggeredMesh
+    _: KW_ONLY
     conduction: bool
     convection: bool
     gravitational_separation: bool
@@ -134,8 +157,6 @@ class State(DataclassFromConfiguration):
 
     @property
     def dTdr(self) -> np.ndarray:
-        # logger.warning("dTdr = %s", self._dTdr)
-        # print("dTdr = %s", self._dTdr)
         return self._dTdr
 
     @property
@@ -278,12 +299,13 @@ class SpiderSolver:
     state: State = field(init=False)
     initial_temperature: np.ndarray = field(init=False)
     bc: BoundaryConditions = field(init=False)
+    radiogenic_heating: RadiogenicHeating = field(init=False)
     _solution: OptimizeResult = field(init=False, default_factory=OptimizeResult)
 
     def __post_init__(self):
         logger.info("Creating a SPIDER model")
         self.root = Path(self.root_path)
-        self.config: ConfigParser = MyConfigParser(self.root / self.filename)
+        self.config: ConfigParser = SpiderConfigParser(self.root / self.filename)
         self.scalings = Scalings.from_configuration(config=self.config["scalings"])
         self.mesh = StaggeredMesh.uniform_radii(self.scalings, **self.config["mesh"])
         self.phase_liquid_evaluator = PhaseEvaluator.from_configuration(
@@ -298,6 +320,8 @@ class SpiderSolver:
         self.state = State.from_configuration(
             self.phase_evaluator, self.mesh, config=self.config["energy"]
         )
+        self.radiogenic_heating = RadiogenicHeating(self.scalings, config=self.config)
+        logger.warning(self.radiogenic_heating)
         # Set the initial condition.
         initial: SectionProxy = self.config["initial_condition"]
         self.bc = BoundaryConditions.from_configuration(
@@ -321,15 +345,15 @@ class SpiderSolver:
         temperature: np.ndarray,
         pressure: np.ndarray,
     ) -> np.ndarray:
-        """dT/dt at the staggered nodes.
+        """dT/dt at the staggered nodes
 
         Args:
-            time: Time.
-            temperature: Temperature at the staggered nodes.
-            pressure: Pressure at the staggered nodes.
+            time: Time
+            temperature: Temperature at the staggered nodes
+            pressure: Pressure at the staggered nodes
 
         Returns:
-            dT/dt at the staggered nodes.
+            dT/dt at the staggered nodes
         """
         logger.debug("temperature passed into dTdt = %s", temperature)
         self.state.update(temperature, pressure)
@@ -350,15 +374,15 @@ class SpiderSolver:
         )
 
         dTdt: np.ndarray = -delta_energy_flux / capacitance
+        logger.debug("dTdt (fluxes only) = %s", dTdt)
 
-        # FIXME: Need to non-dimensionalise heating
-        # dTdt += (
-        #     self.phase.density
-        #     * total_heating(self.config, time)
-        #     * self.mesh.basic.volume
-        #     / capacitance
-        # )
-        logger.info("dTdt = %s", dTdt)
+        dTdt += (
+            self.state.phase_staggered.density
+            * self.radiogenic_heating(time)
+            * self.mesh.basic.volume.reshape(-1, 1)
+            / capacitance
+        )
+        logger.debug("dTdt (with internal heating) = %s", dTdt)
 
         return dTdt
 
@@ -375,7 +399,7 @@ class SpiderSolver:
         temperature: np.ndarray = (
             self.mesh.quantity_at_basic_nodes(self.solution.y) * self.scalings.temperature  # K
         )
-        times: np.ndarray = self.solution.t / self.scalings.time_year  # years
+        times: np.ndarray = self.solution.t * self.scalings.time_years  # years
 
         plt.figure(figsize=(8, 6))
         ax = plt.subplot(111)
@@ -423,9 +447,9 @@ class SpiderSolver:
         """Solves the system of ODEs to determine the interior temperature profile."""
 
         config_solver: SectionProxy = self.config["solver"]
-        start_time: float = config_solver.getfloat("start_time_years") * self.scalings.time_year
+        start_time: float = config_solver.getfloat("start_time_years") / self.scalings.time_years
         logger.debug("start_time = %f", start_time)
-        end_time: float = config_solver.getfloat("end_time_years") * self.scalings.time_year
+        end_time: float = config_solver.getfloat("end_time_years") / self.scalings.time_years
         logger.debug("end_time = %f", end_time)
         atol: float = config_solver.getfloat("atol")
         rtol: float = config_solver.getfloat("rtol")

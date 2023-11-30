@@ -11,7 +11,7 @@ from typing import Union
 
 import numpy as np
 
-from spider.scalings import Scalings
+from spider.interfaces import Scalings
 
 logger: logging.Logger = logging.getLogger(__name__)
 

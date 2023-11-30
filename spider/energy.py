@@ -7,102 +7,94 @@ from __future__ import annotations
 
 import logging
 from configparser import ConfigParser, SectionProxy
+from dataclasses import KW_ONLY, dataclass, field
 
 import numpy as np
+
+from spider.interfaces import DataclassFromConfiguration, Scalings
 
 logger: logging.Logger = logging.getLogger(__name__)
 
 
-def radiogenic_heating(
-    radionuclide: SectionProxy,
-    time: float,
-) -> float:
+@dataclass
+class Radionuclide(DataclassFromConfiguration):
+    """Radionuclide
+
+    Args:
+        scalings: Scalings
+        name: Name of the radionuclide
+        t0_years: TODO
+        abundance: TODO
+        concentration: TODO
+        heat_production: TODO
+        half_life_years: TODO
+
+    Attributes:
+        # TODO
+    """
+
+    scalings: Scalings
+    name: str
+    _: KW_ONLY
+    t0_years: float
+    abundance: float
+    concentration: float
+    heat_production: float
+    half_life_years: float
+
+    def __post_init__(self):
+        # Non-dimensionalise
+        self.t0_years /= self.scalings.time_years
+        self.concentration *= 1e-6  # to mass fraction
+        self.heat_production /= self.scalings.power_per_mass
+        self.half_life_years /= self.scalings.time_years
+
+    def radiogenic_heating(self, time: float) -> float:
+        """Radiogenic heating
+
+        Args:
+            time: Time in non-dimensional units
+
+        Returns:
+            Radiogenic heating in non-dimensional units
+        """
+        arg: float = np.log(2) * (self.t0_years - time) / self.half_life_years
+        heating: float = self.heat_production * self.abundance * self.concentration * np.exp(arg)
+        logger.debug("Radiogenic heating due to %s = %f", self.name, heating)
+
+        return heating
+
+
+@dataclass
+class RadiogenicHeating:
     """Radiogenic heating
 
     Args:
-        radionuclide: A radionuclide section from the configuration
-        time: Time in seconds
-
-    Returns:
-        Radiogenic heating
+        TODO
     """
-    # Time must be in years because t0 and half_life are in years.
-    # time /= YEAR_IN_SECONDS
-    # FIXME: Time will now come in non-dimensional
-    arg: float = (
-        np.log(2)
-        * (radionuclide.getfloat("t0_years") - time)
-        / radionuclide.getfloat("half_life_years")
-    )
-    heating: float = (
-        radionuclide.getfloat("heat_production")
-        * radionuclide.getfloat("abundance")
-        * radionuclide.getfloat("concentration")
-        * np.exp(arg)
-    )
-    radionuclide_name: str = radionuclide.name.split("_")[-1]
-    logger.debug("Heating rate due to %s = %f", radionuclide_name, heating)
 
-    return heating
+    scalings: Scalings
+    _: KW_ONLY
+    config: ConfigParser
+    _radionuclides: list[Radionuclide] = field(init=False, default_factory=list)
 
+    def __post_init__(self):
+        radionuclide_sections: list[SectionProxy] = [
+            self.config[section]
+            for section in self.config.sections()
+            if section.startswith("radionuclide_")
+        ]
+        for radionuclide_section in radionuclide_sections:
+            radionuclide: Radionuclide = Radionuclide.from_configuration(
+                self.scalings,
+                radionuclide_section.name.split("_")[-1],
+                config=radionuclide_section,
+            )
+            self._radionuclides.append(radionuclide)
 
-def tidal_heating(time: float) -> float:
-    """Tidal heating
+    def __call__(self, time: float) -> float:
+        heating: float = 0
+        for radionuclide in self._radionuclides:
+            heating += radionuclide.radiogenic_heating(time)
 
-    Args:
-        time: Time in seconds
-
-    Returns:
-        Tidal heating
-
-    Raises:
-        NotImplementedError
-    """
-    del time
-
-    raise NotImplementedError
-
-
-def total_radiogenic_heating(config: ConfigParser, time: float) -> float:
-    """Total radiogenic heating
-
-    Args:
-        config: Configuration with zero or several sections beginning with 'radionuclide_'
-        time: Time in seconds
-
-    Returns:
-        Total radiogenic heating
-    """
-    radionuclides: list[SectionProxy] = [
-        config[section] for section in config.sections() if section.startswith("radionuclide_")
-    ]
-    total_radiogenic_heating: float = 0
-    for radionuclide in radionuclides:
-        total_radiogenic_heating += radiogenic_heating(radionuclide, time)
-
-    logger.debug("Total radiogenic heating rate = %f", total_radiogenic_heating)
-
-    return total_radiogenic_heating
-
-
-def total_heating(config: ConfigParser, time: float) -> float:
-    """Total heating
-
-    Args:
-        config: Configuration
-        time: Time in seconds
-
-    Returns:
-        Total heating
-    """
-    energy: SectionProxy = config["energy"]
-
-    total_heating: float = 0
-
-    if energy.getboolean("radionuclides"):
-        total_heating += total_radiogenic_heating(config, time)
-
-    if energy.getboolean("tidal"):
-        total_heating += tidal_heating(time)
-
-    return total_heating
+        return heating
