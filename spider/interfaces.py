@@ -24,7 +24,7 @@ class DataclassFromConfiguration:
     """A dataclass that can source its attributes from a configuration section"""
 
     @classmethod
-    def from_configuration(cls, *args, config: SectionProxy) -> Self:
+    def from_configuration(cls, *args, section: SectionProxy) -> Self:
         """Creates an instance from a configuration section.
 
         This reads the configuration data and sources the attributes from this data and performs
@@ -38,7 +38,7 @@ class DataclassFromConfiguration:
             A dataclass with its attributes populated
         """
         init_dict: dict[str, Any] = {
-            k: config.getany(k) for k in config.keys() if k in inspect.signature(cls).parameters
+            k: section.getany(k) for k in section.keys() if k in inspect.signature(cls).parameters
         }
         return cls(*args, **init_dict)
 

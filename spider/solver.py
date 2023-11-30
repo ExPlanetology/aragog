@@ -18,7 +18,7 @@ from scipy.integrate import solve_ivp
 from scipy.optimize import OptimizeResult
 
 from spider.bc import BoundaryConditions
-from spider.energy import RadiogenicHeating
+from spider.energy import Radionuclide
 from spider.interfaces import DataclassFromConfiguration, Scalings
 from spider.mesh import StaggeredMesh
 from spider.phase import PhaseEvaluator, PhaseStateBasic, PhaseStateStaggered
@@ -43,8 +43,61 @@ class SpiderConfigParser(ConfigParser):
         super().__init__(**kwargs)
         self.read(filenames)
 
-    def radionuclides(self):
-        ...
+    @property
+    def phases(self) -> dict[str, SectionProxy]:
+        """Dictionary of the sections relating to phases"""
+        return {
+            self[section].name.split("_")[1]: self[section]
+            for section in self.sections()
+            if section.startswith("phase_")
+        }
+
+    @property
+    def radionuclides(self) -> dict[str, SectionProxy]:
+        """Dictionary of the sections relating to radionuclides"""
+        return {
+            self[section].name.split("_")[1]: self[section]
+            for section in self.sections()
+            if section.startswith("radionuclide_")
+        }
+
+
+@dataclass
+class SpiderData:
+    """Container for the objects necessary to compute the interior evolution.
+
+    This parsers the sections of the configuration data and instantiates the objects.
+
+    Args:
+        config_parser: A SpiderConfigParser
+
+    Attributes:
+        TODO
+    """
+
+    config_parser: SpiderConfigParser
+    scalings: Scalings = field(init=False)
+    boundary_conditions: BoundaryConditions = field(init=False)
+    mesh: StaggeredMesh = field(init=False)
+    phases: dict[str, PhaseEvaluator] = field(init=False, default_factory=dict)
+    radionuclides: dict[str, Radionuclide] = field(init=False, default_factory=dict)
+
+    def __post_init__(self):
+        self.scalings = Scalings.from_configuration(section=self.config_parser["scalings"])
+        self.boundary_conditions = BoundaryConditions.from_configuration(
+            self.scalings, section=self.config_parser["boundary_conditions"]
+        )
+        self.mesh = StaggeredMesh.uniform_radii(self.scalings, **self.config_parser["mesh"])
+        for phase_name, phase_section in self.config_parser.phases.items():
+            phase: PhaseEvaluator = PhaseEvaluator.from_configuration(
+                self.scalings, phase_name, section=phase_section
+            )
+            self.phases[phase_name] = phase
+        for radionuclide_name, radionuclide_section in self.config_parser.radionuclides.items():
+            radionuclide: Radionuclide = Radionuclide.from_configuration(
+                self.scalings, radionuclide_name, section=radionuclide_section
+            )
+            self.radionuclides[radionuclide_name] = radionuclide
 
 
 @dataclass
@@ -290,49 +343,31 @@ class SpiderSolver:
     filename: Union[str, Path]
     root_path: Union[str, Path] = ""
     root: Path = field(init=False)
-    scalings: Scalings = field(init=False)
-    mesh: StaggeredMesh = field(init=False)
-    phase_liquid_evaluator: PhaseEvaluator = field(init=False)
-    phase_solid_evaluator: PhaseEvaluator = field(init=False)
+    data: SpiderData = field(init=False)
     # Phase for calculations, could be a composite phase.
     phase_evaluator: PhaseEvaluator = field(init=False)
     state: State = field(init=False)
     initial_temperature: np.ndarray = field(init=False)
-    bc: BoundaryConditions = field(init=False)
-    radiogenic_heating: RadiogenicHeating = field(init=False)
     _solution: OptimizeResult = field(init=False, default_factory=OptimizeResult)
 
     def __post_init__(self):
         logger.info("Creating a SPIDER model")
         self.root = Path(self.root_path)
         self.config: ConfigParser = SpiderConfigParser(self.root / self.filename)
-        self.scalings = Scalings.from_configuration(config=self.config["scalings"])
-        self.mesh = StaggeredMesh.uniform_radii(self.scalings, **self.config["mesh"])
-        self.phase_liquid_evaluator = PhaseEvaluator.from_configuration(
-            self.scalings, config=self.config["phase_liquid_evaluator"]
-        )
-        self.phase_solid_evaluator = PhaseEvaluator.from_configuration(
-            self.scalings, config=self.config["phase_solid_evaluator"]
-        )
-
+        self.data = SpiderData(self.config)
         # FIXME: For time being just set phase to liquid phase.
-        self.phase_evaluator = self.phase_liquid_evaluator
+        self.phase_evaluator = self.data.phases["liquid"]
         self.state = State.from_configuration(
-            self.phase_evaluator, self.mesh, config=self.config["energy"]
+            self.phase_evaluator, self.data.mesh, section=self.config["energy"]
         )
-        self.radiogenic_heating = RadiogenicHeating(self.scalings, config=self.config)
-        logger.warning(self.radiogenic_heating)
         # Set the initial condition.
         initial: SectionProxy = self.config["initial_condition"]
-        self.bc = BoundaryConditions.from_configuration(
-            self.scalings, config=self.config["boundary_conditions"]
-        )
         self.initial_temperature = np.linspace(
             initial.getfloat("basal_temperature"),
             initial.getfloat("surface_temperature"),
-            self.mesh.staggered.number,
+            self.data.mesh.staggered.number,
         )
-        self.initial_temperature /= self.scalings.temperature
+        self.initial_temperature /= self.data.scalings.temperature
 
     @property
     def solution(self) -> OptimizeResult:
@@ -359,29 +394,29 @@ class SpiderSolver:
         self.state.update(temperature, pressure)
         heat_flux: np.ndarray = self.state.heat_flux
         logger.debug("heat_flux = %s", heat_flux)
-        self.bc.apply(self.state)
+        self.data.boundary_conditions.apply(self.state)
         logger.debug("heat_flux = %s", heat_flux)
-        logger.debug("mesh.basic.area.shape = %s", self.mesh.basic.area.shape)
+        logger.debug("mesh.basic.area.shape = %s", self.data.mesh.basic.area.shape)
 
-        energy_flux: np.ndarray = heat_flux * self.mesh.basic.area.reshape(-1, 1)
+        energy_flux: np.ndarray = heat_flux * self.data.mesh.basic.area.reshape(-1, 1)
         logger.debug("energy_flux = %s", energy_flux)
         logger.debug("energy_flux size = %s", energy_flux.shape)
 
         delta_energy_flux: np.ndarray = np.diff(energy_flux, axis=0)
         logger.debug("delta_energy_flux = %s", delta_energy_flux)
         capacitance: np.ndarray = (
-            self.state.phase_staggered.capacitance * self.mesh.basic.volume.reshape(-1, 1)
+            self.state.phase_staggered.capacitance * self.data.mesh.basic.volume.reshape(-1, 1)
         )
 
         dTdt: np.ndarray = -delta_energy_flux / capacitance
         logger.debug("dTdt (fluxes only) = %s", dTdt)
 
-        dTdt += (
-            self.state.phase_staggered.density
-            * self.radiogenic_heating(time)
-            * self.mesh.basic.volume.reshape(-1, 1)
-            / capacitance
-        )
+        # dTdt += (
+        #     self.state.phase_staggered.density
+        #     * self.radiogenic_heating(time)
+        #     * self.data.mesh.basic.volume.reshape(-1, 1)
+        #     / capacitance
+        # )
         logger.debug("dTdt (with internal heating) = %s", dTdt)
 
         return dTdt
@@ -395,11 +430,12 @@ class SpiderSolver:
         assert self.solution is not None
 
         # Dimensionalise quantities for plotting
-        radii: np.ndarray = self.mesh.basic.radii * self.scalings.radius * 1.0e-3  # km
+        radii: np.ndarray = self.data.mesh.basic.radii * self.data.scalings.radius * 1.0e-3  # km
         temperature: np.ndarray = (
-            self.mesh.quantity_at_basic_nodes(self.solution.y) * self.scalings.temperature  # K
+            self.data.mesh.quantity_at_basic_nodes(self.solution.y)
+            * self.data.scalings.temperature  # K
         )
-        times: np.ndarray = self.solution.t * self.scalings.time_years  # years
+        times: np.ndarray = self.solution.t * self.data.scalings.time_years  # years
 
         plt.figure(figsize=(8, 6))
         ax = plt.subplot(111)
@@ -447,9 +483,11 @@ class SpiderSolver:
         """Solves the system of ODEs to determine the interior temperature profile."""
 
         config_solver: SectionProxy = self.config["solver"]
-        start_time: float = config_solver.getfloat("start_time_years") / self.scalings.time_years
+        start_time: float = (
+            config_solver.getfloat("start_time_years") / self.data.scalings.time_years
+        )
         logger.debug("start_time = %f", start_time)
-        end_time: float = config_solver.getfloat("end_time_years") / self.scalings.time_years
+        end_time: float = config_solver.getfloat("end_time_years") / self.data.scalings.time_years
         logger.debug("end_time = %f", end_time)
         atol: float = config_solver.getfloat("atol")
         rtol: float = config_solver.getfloat("rtol")
