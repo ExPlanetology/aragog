@@ -7,11 +7,12 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Union
+from typing import TYPE_CHECKING, Union
 
 import numpy as np
 
-from spider.interfaces import Scalings
+if TYPE_CHECKING:
+    from spider.core import Scalings
 
 logger: logging.Logger = logging.getLogger(__name__)
 
