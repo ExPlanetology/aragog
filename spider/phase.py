@@ -6,14 +6,13 @@ See the LICENSE file for licensing information.
 from __future__ import annotations
 
 import logging
-from abc import ABC, abstractmethod
 from configparser import SectionProxy
 from dataclasses import dataclass, field
 from typing import Callable, Self
 
 import numpy as np
 
-from spider.interfaces import Scalings
+from spider.interfaces import PropertyABC, Scalings
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -42,35 +41,6 @@ def ensure_size_equal_to_temperature(
         return result
 
     return wrapper
-
-
-@dataclass(kw_only=True, frozen=True)
-class PropertyABC(ABC):
-    """A property whose value can be evaluated at temperature and pressure.
-
-    Args:
-        name: Name of the property
-
-    Attributes:
-        name: Name of the property
-    """
-
-    name: str
-
-    @abstractmethod
-    def get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        """Computes the property value at temperature and pressure.
-
-        Args:
-            temperature: Temperature
-            pressure: Pressure
-
-        Returns:
-            The property value evaluated at temperature and pressure.
-        """
-
-    def __call__(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        return self.get_value(temperature, pressure)
 
 
 @dataclass(kw_only=True, frozen=True)
