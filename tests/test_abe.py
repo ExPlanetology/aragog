@@ -33,7 +33,9 @@ def test_liquid_no_heating():
     spider_solver: SpiderSolver = SpiderSolver(Path("abe.cfg"), TEST_CFG_PATH)
     spider_solver.config["energy"]["radionuclides"] = "False"
     spider_solver.solve()
-    calculated: np.ndarray = spider_solver.solution.y[:, -1] * spider_solver.scalings.temperature
+    calculated: np.ndarray = (
+        spider_solver.solution.y[:, -1] * spider_solver.data.scalings.temperature
+    )
     spider_solver.plot()
     expected: np.ndarray = np.array(
         [
@@ -149,7 +151,9 @@ def test_liquid_with_heating():
 
     spider_solver: SpiderSolver = SpiderSolver(TEST_CFG_PATH / Path("abe.cfg"))
     spider_solver.solve()
-    calculated: np.ndarray = spider_solver.solution.y[:, -1] * spider_solver.scalings.temperature
+    calculated: np.ndarray = (
+        spider_solver.solution.y[:, -1] * spider_solver.data.scalings.temperature
+    )
     # spider_solver.plot(5)
     expected: np.ndarray = np.array(
         [

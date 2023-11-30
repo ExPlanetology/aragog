@@ -7,12 +7,12 @@ from __future__ import annotations
 
 import logging
 from configparser import SectionProxy
-from dataclasses import dataclass, field
+from dataclasses import KW_ONLY, dataclass, field
 from typing import Callable, Self
 
 import numpy as np
 
-from spider.interfaces import PropertyABC, Scalings
+from spider.interfaces import PropertyABC, ScaledDataclassFromConfiguration, Scalings
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -172,11 +172,13 @@ class PhaseStateBasic:
         return self._kinematic_viscosity
 
 
-@dataclass(kw_only=True, frozen=True)
+@dataclass(frozen=True)
 class PhaseEvaluator:
     """Contains the objects to evaluate the EOS and transport properties of a phase.
 
     Args:
+        scalings: Scalings
+        name: Name of the phase
         density: To evaluate density at temperature and pressure
         gravitational_acceleration: To evaluate gravitational acceleration
         heat_capacity: To evaluate heat capacity
@@ -185,6 +187,8 @@ class PhaseEvaluator:
         viscosity: To evaluate viscosity
 
     Attributes:
+        scalings: Scalings
+        name: Name of the phase
         density: To evaluate density at temperature and pressure
         gravitational_acceleration: To evaluate gravitational acceleration
         heat_capacity: To evaluate heat capacity
@@ -193,6 +197,9 @@ class PhaseEvaluator:
         viscosity: To evaluate viscosity
     """
 
+    scalings: Scalings
+    name: str
+    _: KW_ONLY
     density: PropertyABC
     gravitational_acceleration: PropertyABC
     heat_capacity: PropertyABC
@@ -201,10 +208,11 @@ class PhaseEvaluator:
     viscosity: PropertyABC
 
     @classmethod
-    def from_configuration(cls, scalings: Scalings, *, config: SectionProxy) -> Self:
+    def from_configuration(cls, scalings: Scalings, name: str, *, section: SectionProxy) -> Self:
         """Creates a class instance from a configuration section.
 
         Args:
+            name: Name of the phase
             scalings: Scalings for the numerical problem
             config: A configuration section with phase data
 
@@ -212,11 +220,11 @@ class PhaseEvaluator:
             A PhaseEvaluator
         """
         init_dict: dict[str, PropertyABC] = {}
-        for key, value in config.items():
+        for key, value in section.items():
             try:
                 value_float: float = float(value)
                 value_float /= getattr(scalings, key)
-                logger.debug("%s (%s) is a number = %f", key, config.name, value_float)
+                logger.debug("%s (%s) is a number = %f", key, section.name, value_float)
                 init_dict[key] = ConstantProperty(name=key, value=value_float)
 
             # TODO: Add other tries to identify 1-D or 2-D lookup data.
@@ -224,4 +232,4 @@ class PhaseEvaluator:
             except TypeError:
                 raise
 
-        return cls(**init_dict)
+        return cls(scalings, name, **init_dict)
