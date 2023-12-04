@@ -16,9 +16,8 @@ import numpy as np
 from scipy.integrate import solve_ivp
 from scipy.optimize import OptimizeResult
 
-from spider.core import SpiderConfigParser, SpiderData  # , SpiderMesh
+from spider.core import SpiderConfigParser, SpiderData, SpiderMesh
 from spider.interfaces import DataclassFromConfiguration
-from spider.mesh import StaggeredMesh
 from spider.phase import PhaseEvaluator, PhaseStateBasic, PhaseStateStaggered
 
 logger: logging.Logger = logging.getLogger(__name__)
@@ -30,7 +29,7 @@ class State(DataclassFromConfiguration):
 
     Args:
         _phase_evaluator: A PhaseEvaluator
-        _mesh: A StaggeredMesh
+        _mesh: A SpiderMesh
         conduction: Include conduction flux
         convection: Include convection flux
         gravitational_separation: Include gravitational separation flux
@@ -68,7 +67,7 @@ class State(DataclassFromConfiguration):
     """
 
     _phase_evaluator: PhaseEvaluator
-    _mesh: StaggeredMesh
+    _mesh: SpiderMesh
     _: KW_ONLY
     conduction: bool
     convection: bool
@@ -76,9 +75,6 @@ class State(DataclassFromConfiguration):
     mixing: bool
     radionuclides: bool
     tidal: bool
-    _heat_fluxes_to_include: list[Callable[[], np.ndarray]] = field(
-        init=False, default_factory=list
-    )
     phase_basic: PhaseStateBasic = field(init=False)
     phase_staggered: PhaseStateStaggered = field(init=False)
     _dTdr: np.ndarray = field(init=False)
@@ -94,23 +90,6 @@ class State(DataclassFromConfiguration):
     def __post_init__(self):
         self.phase_basic = PhaseStateBasic(self._phase_evaluator)
         self.phase_staggered = PhaseStateStaggered(self._phase_evaluator)
-        self._set_heat_fluxes_to_include()
-
-    def _set_heat_fluxes_to_include(self):
-        """Sets the heat fluxes to include in the calculation.
-
-        The desired heat fluxes are known from the configuration, so to avoid writing a switch
-        statement that would need to be evaluated every call, instead we can just append the
-        necessary methods to a list to be looped over.
-        """
-        if self.conduction:
-            self._heat_fluxes_to_include.append(self.conductive_heat_flux)
-        if self.convection:
-            self._heat_fluxes_to_include.append(self.convective_heat_flux)
-        if self.gravitational_separation:
-            self._heat_fluxes_to_include.append(self.gravitational_separation_flux)
-        if self.mixing:
-            self._heat_fluxes_to_include.append(self.mixing_flux)
 
     def conductive_heat_flux(self) -> np.ndarray:
         """Conductive heat flux is only accessed once so therefore it is a property."""
@@ -246,8 +225,14 @@ class State(DataclassFromConfiguration):
         self._eddy_diffusivity *= self._mesh.basic.mixing_length
         # Heat flux
         self._heat_flux: np.ndarray = np.zeros_like(self.temperature_basic)
-        for heat_flux_ in self._heat_fluxes_to_include:
-            self._heat_flux += heat_flux_()
+        if self.conduction:
+            self._heat_flux += self.conductive_heat_flux()
+        if self.convection:
+            self._heat_flux += self.convective_heat_flux()
+        if self.gravitational_separation:
+            self._heat_flux += self.gravitational_separation_flux()
+        if self.mixing:
+            self._heat_flux += self.mixing_flux()
 
 
 @dataclass

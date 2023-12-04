@@ -1,4 +1,4 @@
-"""Core
+"""Core classes and functions
 
 See the LICENSE file for licensing information.
 """
@@ -17,7 +17,6 @@ from scipy import constants
 from thermochem import codata
 
 from spider.interfaces import ScaledDataclassFromConfiguration
-from spider.mesh import StaggeredMesh
 from spider.phase import PhaseEvaluator
 
 if TYPE_CHECKING:
@@ -32,26 +31,47 @@ class BoundaryConditions(ScaledDataclassFromConfiguration):
 
     Args:
         scalings: Scalings
-        outer_boundary_condition: TODO
-        outer_boundary_value: TODO
-        inner_boundary_condition: TODO
-        inner_boundary_value: TODO
-        emissivity: TODO
-        equilibrium_temperature: TODO
-        core_radius: TODO
-        core_density: TODO
-        core_heat_capacity: TODO
+        outer_boundary_condition: Outer boundary condition (flux, temperature, etc.)
+        outer_boundary_value: Value of the outer boundary condition (flux, temperature, etc.)
+        inner_boundary_condition: Inner boundary condition (flux, temperature. etc.)
+        inner_boundary_value: Value of the inner boundary condition (flux, temperature, etc.)
+        emissivity: Emissivity of the atmosphere (not necessarily used)
+        equilibrium_temperature: Planetary equilibrium temperature (not necessarily used)
+        core_radius: Radius of the core (not necessarily used)
+        core_density: Density of the core (not necessarily used)
+        core_heat_capacity: Heat capacity of the core (not necessarily used)
 
     Attributes:
-        # TODO
+        scalings: Scalings
+        outer_boundary_condition: Outer boundary condition (flux, temperature, etc.)
+        outer_boundary_value: Value of the outer boundary condition (flux, temperature, etc.)
+        inner_boundary_condition: Inner boundary condition (flux, temperature. etc.)
+        inner_boundary_value: Value of the inner boundary condition (flux, temperature, etc.)
+        emissivity: Emissivity of the atmosphere (not necessarily used)
+        equilibrium_temperature: Planetary equilibrium temperature (not necessarily used)
+        core_radius: Radius of the core (not necessarily used)
+        core_density: Density of the core (not necessarily used)
+        core_heat_capacity: Heat capacity of the core (not necessarily used)
     """
 
     scalings: Scalings
     _: KW_ONLY
-    outer_boundary_condition: str
-    outer_boundary_value: Union[str, float]
-    inner_boundary_condition: str
-    inner_boundary_value: Union[str, float]
+    # TODO: Equivalent to SURFACE_BC in C code.
+    # case 1: grey-body atmosphere
+    # case 2: Zahnle steam atmosphere
+    # case 3: self-consistent atmosphere evolution
+    # case 4: prescribed heat flux
+    # case 5: prescribed temperature
+    outer_boundary_condition: int
+    # Equivalent to surface_bc_value in C code.
+    outer_boundary_value: float
+    # TODO: Equivalent to CORE_BC in C code.
+    # case 1: simple core cooling
+    # case 2: prescribed heat flux
+    # case 3: prescribed temperature
+    inner_boundary_condition: int
+    # Equivalent to core_bc_value in C Code.
+    inner_boundary_value: float
     emissivity: float
     equilibrium_temperature: float
     core_radius: float
@@ -60,6 +80,26 @@ class BoundaryConditions(ScaledDataclassFromConfiguration):
 
     def scale_attributes(self):
         self.equilibrium_temperature /= self.scalings.temperature
+        self.core_radius /= self.scalings.radius
+        self.core_density /= self.scalings.density
+        self.core_heat_capacity /= self.core_heat_capacity
+        # TODO: Scaling of inner and outer boundary conditions depends on whether they are
+        # fluxes or temperatures
+
+    def _scale_inner_boundary_condition(self) -> None:
+        if self.inner_boundary_condition == 1:
+            self.inner_boundary_value = 0
+        elif self.inner_boundary_condition == 2:
+            self.inner_boundary_value /= self.scalings.heat_flux
+        elif self.inner_boundary_condition == 3:
+            pass
+        else:
+            msg: str = "inner_boundary_condition = %d is unknown" % self.inner_boundary_condition
+            logger.error(msg)
+            raise ValueError(msg)
+
+    def _scale_outer_boundary_condition(self) -> None:
+        ...
 
     def grey_body(self, state: State) -> None:
         """Applies a grey body flux at the surface.
@@ -79,6 +119,7 @@ class BoundaryConditions(ScaledDataclassFromConfiguration):
         Args:
             state: The state to apply the boundary conditions to
         """
+        # TODO: Choose boundary conditions based on configuration data
         self.core_heat_flux(state)
         self.grey_body(state)
         logger.debug("temperature = %s", state.temperature_basic)
@@ -101,18 +142,18 @@ class InitialCondition(ScaledDataclassFromConfiguration):
     Args:
         scalings: Scalings
         mesh: Mesh
-        surface_temperature: TODO
-        basal_temperature: TODO
+        surface_temperature: Temperature of the "surface" (top staggered node)
+        basal_temperature: Temperature of the base of the mantle (bottom staggered node)
 
     Attributes:
         scalings: Scalings
-        mesh.Mesh
-        surface_temperature: TODO
-        basal_temperature: TODO
+        mesh: Mesh
+        surface_temperature: Temperature of the "surface" (top staggered node)
+        basal_temperature: Temperature of the base of the mantle (bottom staggered node)
     """
 
     scalings: Scalings
-    mesh: StaggeredMesh
+    mesh: SpiderMesh
     _: KW_ONLY
     surface_temperature: float
     basal_temperature: float
@@ -141,8 +182,11 @@ class InitialCondition(ScaledDataclassFromConfiguration):
 class _FixedMesh:
     """A fixed mesh
 
+    All attributes have the same units as the input argument 'radii', but 'radii' should have
+    non-dimensional units for a SPIDER model.
+
     Args:
-        radii: Radii of the mesh, which could be in non-dimensional units.
+        radii: Radii of the mesh, which could be in dimensional or non-dimensional units.
 
     Attributes:
         radii: Radii of the mesh
@@ -151,10 +195,10 @@ class _FixedMesh:
         delta_radii: Delta radii
         depth: Depth below the outer radius
         height: Height above the inner radius
-        number: Number of radii
+        number_of_nodes: Number of nodes
         area: Surface area
         volume: Volume of the spherical shells defined between neighbouring radii.
-        mixing_length: Mixing length # TODO: Constant for time being.
+        mixing_length: Mixing length
         mixing_length_squared: Mixing length squared
         mixing_length_cubed: Mixing length cubed
     """
@@ -165,7 +209,7 @@ class _FixedMesh:
     delta_radii: np.ndarray = field(init=False)
     depth: np.ndarray = field(init=False)
     height: np.ndarray = field(init=False)
-    number: int = field(init=False)
+    number_of_nodes: int = field(init=False)
     area: np.ndarray = field(init=False)
     volume: np.ndarray = field(init=False)
     total_volume: float = field(init=False)
@@ -203,13 +247,15 @@ class SpiderMesh(ScaledDataclassFromConfiguration):
     volume calculations.
 
     Args:
-        radii: Radii of the basic nodes.
-        numerical_scalings: Scalings for the numerical problem
+        scalings: Scalings
 
     Attributes:
-        radii: Radii of the basic nodes
-        basic: The basic mesh.
-        staggered: The staggered mesh.
+        scalings: Scalings
+        inner_radius: Inner radius
+        outer_radius: Outer radius
+        number_of_nodes: Number of nodes
+        basic: The basic mesh
+        staggered: The staggered mesh
     """
 
     scalings: Scalings
@@ -225,8 +271,10 @@ class SpiderMesh(ScaledDataclassFromConfiguration):
     def __post_init__(self):
         super().__post_init__()
         basic_coordinates: np.ndarray = self.get_linear()
+        logger.warning("basic_coordinates = %s", basic_coordinates)
         self.basic = _FixedMesh(basic_coordinates)
         staggered_coordinates: np.ndarray = self.basic.radii[:-1] + 0.5 * self.basic.delta_radii
+        logger.warning("staggered_coordinates = %s", staggered_coordinates)
         self.staggered = _FixedMesh(staggered_coordinates)
         self._d_dr_transform = self.d_dr_transform_matrix()
         self._quantity_transform = self.quantity_transform_matrix()
@@ -236,6 +284,11 @@ class SpiderMesh(ScaledDataclassFromConfiguration):
         self.outer_radius /= self.scalings.radius
 
     def get_linear(self) -> np.ndarray:
+        """Temperature profile with a constant linear temperature gradient across the mantle
+
+        Returns:
+            Linear temperature profile
+        """
         radii: np.ndarray = np.linspace(self.inner_radius, self.outer_radius, self.number_of_nodes)
         return radii
 
@@ -483,7 +536,7 @@ class SpiderData:
     scalings: Scalings = field(init=False)
     boundary_conditions: BoundaryConditions = field(init=False)
     initial_condition: InitialCondition = field(init=False)
-    mesh: StaggeredMesh = field(init=False)
+    mesh: SpiderMesh = field(init=False)
     phases: dict[str, PhaseEvaluator] = field(init=False, default_factory=dict)
     phase: PhaseEvaluator = field(init=False)
     radionuclides: dict[str, Radionuclide] = field(init=False, default_factory=dict)
@@ -493,7 +546,10 @@ class SpiderData:
         self.boundary_conditions = BoundaryConditions.from_configuration(
             self.scalings, section=self.config_parser["boundary_conditions"]
         )
-        self.mesh = StaggeredMesh.uniform_radii(self.scalings, **self.config_parser["mesh"])
+        # self.mesh = SpiderMesh.uniform_radii(self.scalings, **self.config_parser["mesh"])
+        self.mesh = SpiderMesh.from_configuration(
+            self.scalings, section=self.config_parser["mesh"]
+        )
         self.initial_condition = InitialCondition.from_configuration(
             self.scalings, self.mesh, section=self.config_parser["initial_condition"]
         )

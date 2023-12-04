@@ -7,10 +7,14 @@ __version__: str = "0.1.0"
 
 import importlib.resources
 import logging
+from contextlib import AbstractContextManager
 from importlib.abc import Traversable
+from importlib.resources import as_file
 from pathlib import Path
 
-DATA_ROOT_PATH: Traversable = importlib.resources.files("%s.data" % __package__)
+TEST_DATA: Traversable = importlib.resources.files("tests")
+REFERENCE_TEST_DATA: AbstractContextManager[Path] = as_file(TEST_DATA.joinpath("reference"))
+CFG_TEST_DATA: AbstractContextManager[Path] = as_file(TEST_DATA.joinpath("cfg"))
 
 # Create the package logger.
 # https://docs.python.org/3/howto/logging.html#library-config
@@ -68,8 +72,5 @@ def debug_file_logger() -> logging.Logger:
 
     return logger
 
-
-TEST_DATA = importlib.resources.files("tests")
-TEST_CFG_PATH: Path = TEST_DATA / Path("cfg")  # type: ignore
 
 from spider.solver import SpiderSolver
