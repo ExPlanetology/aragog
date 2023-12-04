@@ -175,6 +175,22 @@ class State(DataclassFromConfiguration):
     def viscous_velocity(self) -> np.ndarray:
         return self._viscous_velocity
 
+    def _set_temperature(self, temperature: np.ndarray) -> None:
+        """Sets the temperature at the basic nodes
+
+        This also ensures that the temperature profile adheres to any imposed thermal boundary
+        conditions at the top or bottom surfaces.
+
+        Args:
+            temperature: Temperature at the staggered nodes
+        """
+        logger.debug("Setting the temperature profile")
+        self._temperature_basic = self._data.mesh.quantity_at_basic_nodes(temperature)
+        # TODO: Might not be required.
+        # self._data.boundary_conditions.conform_temperature_boundary_conditions(
+        #     self._temperature_basic
+        # )
+
     def update(self, temperature: np.ndarray, pressure: np.ndarray) -> None:
         """Updates the state.
 
@@ -185,8 +201,8 @@ class State(DataclassFromConfiguration):
             pressure: Pressure at the staggered nodes
         """
         logger.debug("Updating the state")
+        self._set_temperature(temperature)
         self.phase_staggered.update(temperature, pressure)
-        self._temperature_basic = self._data.mesh.quantity_at_basic_nodes(temperature)
         pressure_basic: np.ndarray = self._data.mesh.quantity_at_basic_nodes(pressure)
         self.phase_basic.update(self._temperature_basic, pressure_basic)
         self._dTdr = self._data.mesh.d_dr_at_basic_nodes(temperature)

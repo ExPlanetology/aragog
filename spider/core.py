@@ -78,17 +78,16 @@ class BoundaryConditions(ScaledDataclassFromConfiguration):
         """Scales the inner boundary value.
 
         Equivalent to CORE_BC in C code.
-            case 1: simple core cooling
-            case 2: prescribed heat flux
-            case 3: prescribed temperature
+            1: simple core cooling
+            2: prescribed heat flux
+            3: prescribed temperature
         """
         if self.inner_boundary_condition == 1:
             self.inner_boundary_value = 0
         elif self.inner_boundary_condition == 2:
             self.inner_boundary_value /= self.scalings.heat_flux
-        # TODO: Might be able to remove condition below, but copied from C Code for completeness.
         elif self.inner_boundary_condition == 3:
-            pass
+            self.inner_boundary_value /= self.scalings.temperature
         else:
             msg: str = "inner_boundary_condition = %d is unknown" % self.inner_boundary_condition
             logger.error(msg)
@@ -98,11 +97,11 @@ class BoundaryConditions(ScaledDataclassFromConfiguration):
         """Scales the outer boundary value.
 
         Equivalent to SURFACE_BC in C code.
-            case 1: grey-body atmosphere
-            case 2: Zahnle steam atmosphere
-            case 3: self-consistent atmosphere evolution
-            case 4: prescribed heat flux
-            case 5: prescribed temperature
+            1: grey-body atmosphere
+            2: Zahnle steam atmosphere
+            3: self-consistent atmosphere evolution
+            4: prescribed heat flux
+            5: prescribed temperature
         """
         if self.outer_boundary_condition == 1:
             pass
@@ -113,7 +112,62 @@ class BoundaryConditions(ScaledDataclassFromConfiguration):
         elif self.outer_boundary_condition == 4:
             self.outer_boundary_value /= self.scalings.heat_flux
         elif self.outer_boundary_condition == 5:
-            pass
+            self.outer_boundary_value /= self.scalings.temperature
+        else:
+            msg: str = "outer_boundary_condition = %d is unknown" % self.outer_boundary_condition
+            logger.error(msg)
+            raise ValueError(msg)
+
+    def conform_temperature_boundary_conditions(self, temperature: np.ndarray) -> None:
+        """Conforms the temperature profile at the basic nodes to temperature boundary conditions.
+
+        Args:
+            temperature: Temperature at the basic nodes
+        """
+        # Core-mantle boundary
+        if self.inner_boundary_condition == 3:
+            temperature[0] = self.inner_boundary_value
+        # Surface
+        if self.outer_boundary_condition == 5:
+            temperature[-1] = self.outer_boundary_value
+
+    def apply(self, state: State) -> None:
+        """Applies the boundary conditions to the state.
+
+        Args:
+            state: The state to apply the boundary conditions to
+        """
+        # TODO: Choose boundary conditions based on configuration data
+        self.apply_inner_boundary_condition(state)
+        self.apply_outer_boundary_condition(state)
+        logger.debug("temperature = %s", state.temperature_basic)
+        logger.debug("heat_flux = %s", state.heat_flux)
+
+    def apply_outer_boundary_condition(self, state: State) -> None:
+        """Applies the outer boundary condition to the state.
+
+        Args:
+            state: The state to apply the boundary conditions to
+
+        Equivalent to SURFACE_BC in C code.
+            1: grey-body atmosphere
+            2: Zahnle steam atmosphere
+            3: self-consistent atmosphere evolution
+            4: prescribed heat flux
+            5: prescribed temperature
+        """
+        if self.outer_boundary_condition == 1:
+            self.grey_body(state)
+        elif self.outer_boundary_condition == 2:
+            raise NotImplementedError
+        elif self.outer_boundary_condition == 3:
+            msg: str = "Requires coupling to atmodeller"
+            logger.error(msg)
+            raise NotImplementedError(msg)
+        elif self.outer_boundary_condition == 4:
+            state.heat_flux[-1, :] = self.outer_boundary_value
+        elif self.outer_boundary_condition == 5:
+            raise NotImplementedError
         else:
             msg: str = "outer_boundary_condition = %d is unknown" % self.outer_boundary_condition
             logger.error(msg)
@@ -131,29 +185,27 @@ class BoundaryConditions(ScaledDataclassFromConfiguration):
             * (np.power(state.top_temperature, 4) - self.equilibrium_temperature**4)
         )
 
-    def apply(self, state: State) -> None:
-        """Applies the boundary conditions to the state.
+    def apply_inner_boundary_condition(self, state: State) -> None:
+        """Applies the inner boundary condition to the state.
 
         Args:
             state: The state to apply the boundary conditions to
+
+        Equivalent to CORE_BC in C code.
+            1: simple core cooling
+            2: prescribed heat flux
+            3: prescribed temperature
         """
-        # TODO: Choose boundary conditions based on configuration data
-        self.core_heat_flux(state)
-        self.grey_body(state)
-        logger.debug("temperature = %s", state.temperature_basic)
-        logger.debug("heat_flux = %s", state.heat_flux)
-
-    def apply_outer_boundary_condition(self, state: State) -> None:
-        ...
-
-    def core_heat_flux(self, state: State) -> None:
-        """Applies the heat flux at the core-mantle boundary.
-
-        Args:
-            state: The state to apply the boundary conditions to
-        """
-        # No heat flux from the core.
-        state.heat_flux[0, :] = 0
+        if self.inner_boundary_condition == 1:
+            raise NotImplementedError
+        elif self.inner_boundary_condition == 2:
+            state.heat_flux[0, :] = self.inner_boundary_value
+        elif self.inner_boundary_condition == 3:
+            raise NotImplementedError
+        else:
+            msg: str = "inner_boundary_condition = %d is unknown" % self.inner_boundary_condition
+            logger.error(msg)
+            raise ValueError(msg)
 
 
 @dataclass
@@ -175,6 +227,7 @@ class InitialCondition(ScaledDataclassFromConfiguration):
 
     scalings: Scalings
     mesh: SpiderMesh
+    boundary_conditions: BoundaryConditions
     _: KW_ONLY
     surface_temperature: float
     basal_temperature: float
@@ -571,7 +624,10 @@ class SpiderData:
             self.scalings, section=self.config_parser["mesh"]
         )
         self.initial_condition = InitialCondition.from_configuration(
-            self.scalings, self.mesh, section=self.config_parser["initial_condition"]
+            self.scalings,
+            self.mesh,
+            self.boundary_conditions,
+            section=self.config_parser["initial_condition"],
         )
         for phase_name, phase_section in self.config_parser.phases.items():
             phase: PhaseEvaluator = PhaseEvaluator.from_configuration(
