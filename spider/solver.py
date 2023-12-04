@@ -9,16 +9,16 @@ import logging
 from configparser import SectionProxy
 from dataclasses import KW_ONLY, dataclass, field
 from pathlib import Path
-from typing import Callable, Union
+from typing import Union
 
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.integrate import solve_ivp
 from scipy.optimize import OptimizeResult
 
-from spider.core import SpiderConfigParser, SpiderData, SpiderMesh
+from spider.core import SpiderConfigParser, SpiderData
 from spider.interfaces import DataclassFromConfiguration
-from spider.phase import PhaseEvaluator, PhaseStateBasic, PhaseStateStaggered
+from spider.phase import PhaseStateBasic, PhaseStateStaggered
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -28,8 +28,7 @@ class State(DataclassFromConfiguration):
     """Stores the state at temperature and pressure.
 
     Args:
-        _phase_evaluator: A PhaseEvaluator
-        _mesh: A SpiderMesh
+        _data: SpiderData
         conduction: Include conduction flux
         convection: Include convection flux
         gravitational_separation: Include gravitational separation flux
@@ -66,8 +65,7 @@ class State(DataclassFromConfiguration):
         viscous_velocity: Viscous velocity
     """
 
-    _phase_evaluator: PhaseEvaluator
-    _mesh: SpiderMesh
+    _data: SpiderData
     _: KW_ONLY
     conduction: bool
     convection: bool
@@ -88,16 +86,16 @@ class State(DataclassFromConfiguration):
     _inviscid_velocity: np.ndarray = field(init=False)
 
     def __post_init__(self):
-        self.phase_basic = PhaseStateBasic(self._phase_evaluator)
-        self.phase_staggered = PhaseStateStaggered(self._phase_evaluator)
+        self.phase_basic = PhaseStateBasic(self._data.phase)
+        self.phase_staggered = PhaseStateStaggered(self._data.phase)
 
     def conductive_heat_flux(self) -> np.ndarray:
-        """Conductive heat flux is only accessed once so therefore it is a property."""
+        """Conductive heat flux"""
         conductive_heat_flux: np.ndarray = -self.phase_basic.thermal_conductivity * self._dTdr
         return conductive_heat_flux
 
     def convective_heat_flux(self) -> np.ndarray:
-        """Convective heat flux is only accessed once so therefore it is a property."""
+        """Convective heat flux"""
         convective_heat_flux: np.ndarray = (
             -self.phase_basic.density
             * self.phase_basic.heat_capacity
@@ -188,10 +186,10 @@ class State(DataclassFromConfiguration):
         """
         logger.debug("Updating the state")
         self.phase_staggered.update(temperature, pressure)
-        self._temperature_basic = self._mesh.quantity_at_basic_nodes(temperature)
-        pressure_basic: np.ndarray = self._mesh.quantity_at_basic_nodes(pressure)
+        self._temperature_basic = self._data.mesh.quantity_at_basic_nodes(temperature)
+        pressure_basic: np.ndarray = self._data.mesh.quantity_at_basic_nodes(pressure)
         self.phase_basic.update(self._temperature_basic, pressure_basic)
-        self._dTdr = self._mesh.d_dr_at_basic_nodes(temperature)
+        self._dTdr = self._data.mesh.d_dr_at_basic_nodes(temperature)
         self._super_adiabatic_temperature_gradient = self._dTdr - self.phase_basic.dTdrs
         self._is_convective = self._super_adiabatic_temperature_gradient < 0
         velocity_prefactor: np.ndarray = (
@@ -200,13 +198,13 @@ class State(DataclassFromConfiguration):
             * self._super_adiabatic_temperature_gradient
         )
         # Viscous velocity
-        self._viscous_velocity = (velocity_prefactor * self._mesh.basic.mixing_length_cubed) / (
-            18 * self.phase_basic.kinematic_viscosity
-        )
+        self._viscous_velocity = (
+            velocity_prefactor * self._data.mesh.basic.mixing_length_cubed
+        ) / (18 * self.phase_basic.kinematic_viscosity)
         self._viscous_velocity[~self.is_convective] = 0  # Must be super-adiabatic
         # Inviscid velocity
         self._inviscid_velocity = (
-            velocity_prefactor * self._mesh.basic.mixing_length_squared
+            velocity_prefactor * self._data.mesh.basic.mixing_length_squared
         ) / 16
         self._inviscid_velocity[~self.is_convective] = 0  # Must be super-adiabatic
         self._inviscid_velocity[self._is_convective] = np.sqrt(
@@ -215,14 +213,14 @@ class State(DataclassFromConfiguration):
         # Reynolds number
         self._reynolds_number = (
             self._viscous_velocity
-            * self._mesh.basic.mixing_length
+            * self._data.mesh.basic.mixing_length
             / self.phase_basic.kinematic_viscosity
         )
         # Eddy diffusivity
         self._eddy_diffusivity = np.where(
             self.viscous_regime, self._viscous_velocity, self._inviscid_velocity
         )
-        self._eddy_diffusivity *= self._mesh.basic.mixing_length
+        self._eddy_diffusivity *= self._data.mesh.basic.mixing_length
         # Heat flux
         self._heat_flux: np.ndarray = np.zeros_like(self.temperature_basic)
         if self.conduction:
@@ -261,9 +259,7 @@ class SpiderSolver:
         self.root = Path(self.root_path)
         self.config = SpiderConfigParser(self.root / self.filename)
         self.data = SpiderData(self.config)
-        self.state = State.from_configuration(
-            self.data.phase, self.data.mesh, section=self.config["energy"]
-        )
+        self.state = State.from_configuration(self.data, section=self.config["energy"])
 
     @property
     def solution(self) -> OptimizeResult:

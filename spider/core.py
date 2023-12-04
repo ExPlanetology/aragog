@@ -10,7 +10,7 @@ from ast import literal_eval
 from configparser import ConfigParser, SectionProxy
 from dataclasses import KW_ONLY, dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, Union
+from typing import TYPE_CHECKING, Callable
 
 import numpy as np
 from scipy import constants
@@ -56,22 +56,10 @@ class BoundaryConditions(ScaledDataclassFromConfiguration):
 
     scalings: Scalings
     _: KW_ONLY
-    # TODO: Equivalent to SURFACE_BC in C code.
-    # case 1: grey-body atmosphere
-    # case 2: Zahnle steam atmosphere
-    # case 3: self-consistent atmosphere evolution
-    # case 4: prescribed heat flux
-    # case 5: prescribed temperature
     outer_boundary_condition: int
-    # Equivalent to surface_bc_value in C code.
-    outer_boundary_value: float
-    # TODO: Equivalent to CORE_BC in C code.
-    # case 1: simple core cooling
-    # case 2: prescribed heat flux
-    # case 3: prescribed temperature
+    outer_boundary_value: float  # Equivalent to surface_bc_value in C code.
     inner_boundary_condition: int
-    # Equivalent to core_bc_value in C Code.
-    inner_boundary_value: float
+    inner_boundary_value: float  # Equivalent to core_bc_value in C Code.
     emissivity: float
     equilibrium_temperature: float
     core_radius: float
@@ -83,14 +71,22 @@ class BoundaryConditions(ScaledDataclassFromConfiguration):
         self.core_radius /= self.scalings.radius
         self.core_density /= self.scalings.density
         self.core_heat_capacity /= self.core_heat_capacity
-        # TODO: Scaling of inner and outer boundary conditions depends on whether they are
-        # fluxes or temperatures
+        self._scale_inner_boundary_condition()
+        self._scale_outer_boundary_condition()
 
     def _scale_inner_boundary_condition(self) -> None:
+        """Scales the inner boundary value.
+
+        Equivalent to CORE_BC in C code.
+            case 1: simple core cooling
+            case 2: prescribed heat flux
+            case 3: prescribed temperature
+        """
         if self.inner_boundary_condition == 1:
             self.inner_boundary_value = 0
         elif self.inner_boundary_condition == 2:
             self.inner_boundary_value /= self.scalings.heat_flux
+        # TODO: Might be able to remove condition below, but copied from C Code for completeness.
         elif self.inner_boundary_condition == 3:
             pass
         else:
@@ -99,7 +95,29 @@ class BoundaryConditions(ScaledDataclassFromConfiguration):
             raise ValueError(msg)
 
     def _scale_outer_boundary_condition(self) -> None:
-        ...
+        """Scales the outer boundary value.
+
+        Equivalent to SURFACE_BC in C code.
+            case 1: grey-body atmosphere
+            case 2: Zahnle steam atmosphere
+            case 3: self-consistent atmosphere evolution
+            case 4: prescribed heat flux
+            case 5: prescribed temperature
+        """
+        if self.outer_boundary_condition == 1:
+            pass
+        elif self.outer_boundary_condition == 2:
+            pass
+        elif self.outer_boundary_condition == 3:
+            pass
+        elif self.outer_boundary_condition == 4:
+            self.outer_boundary_value /= self.scalings.heat_flux
+        elif self.outer_boundary_condition == 5:
+            pass
+        else:
+            msg: str = "outer_boundary_condition = %d is unknown" % self.outer_boundary_condition
+            logger.error(msg)
+            raise ValueError(msg)
 
     def grey_body(self, state: State) -> None:
         """Applies a grey body flux at the surface.
@@ -124,6 +142,9 @@ class BoundaryConditions(ScaledDataclassFromConfiguration):
         self.grey_body(state)
         logger.debug("temperature = %s", state.temperature_basic)
         logger.debug("heat_flux = %s", state.heat_flux)
+
+    def apply_outer_boundary_condition(self, state: State) -> None:
+        ...
 
     def core_heat_flux(self, state: State) -> None:
         """Applies the heat flux at the core-mantle boundary.
@@ -546,7 +567,6 @@ class SpiderData:
         self.boundary_conditions = BoundaryConditions.from_configuration(
             self.scalings, section=self.config_parser["boundary_conditions"]
         )
-        # self.mesh = SpiderMesh.uniform_radii(self.scalings, **self.config_parser["mesh"])
         self.mesh = SpiderMesh.from_configuration(
             self.scalings, section=self.config_parser["mesh"]
         )
