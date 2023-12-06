@@ -266,7 +266,7 @@ class InitialCondition(ScaledDataclassFromConfiguration):
 
     def get_linear(self) -> np.ndarray:
         temperature: np.ndarray = np.linspace(
-            self.basal_temperature, self.surface_temperature, self.mesh.staggered.number
+            self.basal_temperature, self.surface_temperature, self.mesh.staggered.number_of_nodes
         )
         return temperature
 
@@ -277,6 +277,9 @@ class _FixedMesh:
 
     All attributes have the same units as the input argument 'radii', but 'radii' should have
     non-dimensional units for a SPIDER model.
+
+    Some quantities are column vectors (2-D arrays) to allow vectorised calculations
+    (see scipy.integrate.solve_ivp)
 
     Args:
         radii: Radii of the mesh, which could be in dimensional or non-dimensional units.
@@ -317,24 +320,24 @@ class _FixedMesh:
             raise ValueError(msg)
         self.inner_radius = self.radii[0]
         self.outer_radius = self.radii[-1]
-        self.delta_radii = np.diff(self.radii)  # , axis=0)
+        self.delta_radii = np.diff(self.radii)
         self.depth = self.outer_radius - self.radii
         self.height = self.radii - self.inner_radius
-        self.number = len(self.radii)
+        self.number_of_nodes = len(self.radii)
         # Includes 4*pi factor unlike C-version of SPIDER.
-        self.area = 4 * np.pi * np.square(self.radii).reshape(-1, 1)
+        self.area = 4 * np.pi * np.square(self.radii).reshape(-1, 1)  # 2-D
         mesh_cubed: np.ndarray = np.power(self.radii, 3)
-        self.volume = 4 / 3 * np.pi * (mesh_cubed[1:] - mesh_cubed[:-1]).reshape(-1, 1)
+        self.volume = 4 / 3 * np.pi * (mesh_cubed[1:] - mesh_cubed[:-1]).reshape(-1, 1)  # 2-D
         self.total_volume = 4 / 3 * np.pi * (mesh_cubed[-1] - mesh_cubed[0])
         # Average mixing length
-        # self.mixing_length = 0.25 * (self.outer_radius - self.inner_radius)
+        self.mixing_length = 0.25 * (self.outer_radius - self.inner_radius)
         # Conventional mixing length
-        self.mixing_length = np.minimum(
-            self.outer_radius - self.radii, self.radii - self.inner_radius
-        ).reshape(-1, 1)
+        # self.mixing_length = np.minimum(
+        #     self.outer_radius - self.radii, self.radii - self.inner_radius
+        # ).reshape(-1, 1)
         # logger.debug("mixing_length = %s", self.mixing_length)
-        self.mixing_length_squared = np.square(self.mixing_length).reshape(-1, 1)
-        self.mixing_length_cubed = np.power(self.mixing_length, 3).reshape(-1, 1)
+        self.mixing_length_squared = np.square(self.mixing_length)
+        self.mixing_length_cubed = np.power(self.mixing_length, 3)
 
 
 @dataclass
@@ -394,7 +397,9 @@ class SpiderMesh(ScaledDataclassFromConfiguration):
         Returns:
             The transform matrix
         """
-        transform: np.ndarray = np.zeros((self.basic.number, self.staggered.number))
+        transform: np.ndarray = np.zeros(
+            (self.basic.number_of_nodes, self.staggered.number_of_nodes)
+        )
         transform[1:-1, :-1] += np.diag(-1 / self.staggered.delta_radii)  # k=0 diagonal.
         transform[1:-1:, 1:] += np.diag(1 / self.staggered.delta_radii)  # k=1 diagonal.
         # Backward difference at outer radius.
@@ -429,15 +434,19 @@ class SpiderMesh(ScaledDataclassFromConfiguration):
         Returns:
             The transform matrix
         """
-        transform: np.ndarray = np.zeros((self.basic.number, self.staggered.number))
+        transform: np.ndarray = np.zeros(
+            (self.basic.number_of_nodes, self.staggered.number_of_nodes)
+        )
         mesh_ratio: np.ndarray = self.basic.delta_radii[:-1] / self.staggered.delta_radii
         transform[1:-1, :-1] += np.diag(1 - 0.5 * mesh_ratio)  # k=0 diagonal.
         transform[1:-1:, 1:] += np.diag(0.5 * mesh_ratio)  # k=1 diagonal.
         # Backward difference at inner radius.
-        transform[0, :2] = np.array([1 + 0.5 * mesh_ratio[0], -0.5 * mesh_ratio[0]])
+        transform[0, :2] = np.array([1 + 0.5 * mesh_ratio[0], -0.5 * mesh_ratio[0]]).flatten()
         # Forward difference at outer radius.
         mesh_ratio_outer: np.ndarray = self.basic.delta_radii[-1] / self.staggered.delta_radii[-1]
-        transform[-1, -2:] = np.array([-0.5 * mesh_ratio_outer, 1 + 0.5 * mesh_ratio_outer])
+        transform[-1, -2:] = np.array(
+            [-0.5 * mesh_ratio_outer, 1 + 0.5 * mesh_ratio_outer]
+        ).flatten()
         logger.debug("_quantity_transform_matrix = %s", transform)
 
         return transform
