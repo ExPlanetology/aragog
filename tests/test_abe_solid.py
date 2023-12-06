@@ -57,7 +57,7 @@ def test_solid_no_heating():
     """Test Abe (1993."""
 
     with CFG_TEST_DATA as cfg_test_data:
-        spider_solver: SpiderSolver = SpiderSolver(Path("abe_solid.cfg"), cfg_test_data)
+        spider_solver: SpiderSolver = SpiderSolver(Path("abe.cfg"), cfg_test_data)
     spider_solver.config["energy"]["radionuclides"] = "False"
     spider_solver.solve()
     calculated: np.ndarray = (
