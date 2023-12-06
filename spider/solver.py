@@ -6,7 +6,6 @@ See the LICENSE file for licensing information.
 from __future__ import annotations
 
 import logging
-import sys
 from configparser import SectionProxy
 from dataclasses import KW_ONLY, dataclass, field
 from pathlib import Path
