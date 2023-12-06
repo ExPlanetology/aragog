@@ -6,6 +6,7 @@ See the LICENSE file for licensing information.
 from __future__ import annotations
 
 import logging
+import sys
 from configparser import SectionProxy
 from dataclasses import KW_ONLY, dataclass, field
 from pathlib import Path
@@ -186,10 +187,12 @@ class State(DataclassFromConfiguration):
         """
         logger.debug("Setting the temperature profile")
         self._temperature_basic = self._data.mesh.quantity_at_basic_nodes(temperature)
-        # TODO: Might not be required.
-        # self._data.boundary_conditions.conform_temperature_boundary_conditions(
-        #     self._temperature_basic
-        # )
+        self._dTdr = self._data.mesh.d_dr_at_basic_nodes(temperature)
+        self._data.boundary_conditions.conform_temperature_boundary_conditions(
+            temperature, self._temperature_basic, self._dTdr
+        )
+        logger.debug("_temperature_basic = %s", self._temperature_basic)
+        logger.debug("_dTdr = %s", self._dTdr)
 
     def update(self, temperature: np.ndarray, pressure: np.ndarray) -> None:
         """Updates the state.
@@ -205,7 +208,6 @@ class State(DataclassFromConfiguration):
         self.phase_staggered.update(temperature, pressure)
         pressure_basic: np.ndarray = self._data.mesh.quantity_at_basic_nodes(pressure)
         self.phase_basic.update(self._temperature_basic, pressure_basic)
-        self._dTdr = self._data.mesh.d_dr_at_basic_nodes(temperature)
         self._super_adiabatic_temperature_gradient = self._dTdr - self.phase_basic.dTdrs
         self._is_convective = self._super_adiabatic_temperature_gradient < 0
         velocity_prefactor: np.ndarray = (
@@ -306,14 +308,12 @@ class SpiderSolver:
         logger.debug("heat_flux = %s", heat_flux)
         logger.debug("mesh.basic.area.shape = %s", self.data.mesh.basic.area.shape)
 
-        energy_flux: np.ndarray = heat_flux * self.data.mesh.basic.area.reshape(-1, 1)
-        logger.debug("energy_flux = %s", energy_flux)
+        energy_flux: np.ndarray = heat_flux * self.data.mesh.basic.area
         logger.debug("energy_flux size = %s", energy_flux.shape)
 
         delta_energy_flux: np.ndarray = np.diff(energy_flux, axis=0)
-        logger.debug("delta_energy_flux = %s", delta_energy_flux)
         capacitance: np.ndarray = (
-            self.state.phase_staggered.capacitance * self.data.mesh.basic.volume.reshape(-1, 1)
+            self.state.phase_staggered.capacitance * self.data.mesh.basic.volume
         )
 
         dTdt: np.ndarray = -delta_energy_flux / capacitance
@@ -322,7 +322,7 @@ class SpiderSolver:
         # dTdt += (
         #     self.state.phase_staggered.density
         #     * self.radiogenic_heating(time)
-        #     * self.data.mesh.basic.volume.reshape(-1, 1)
+        #     * self.data.mesh.basic.volume
         #     / capacitance
         # )
         logger.debug("dTdt (with internal heating) = %s", dTdt)
@@ -339,10 +339,14 @@ class SpiderSolver:
 
         # Dimensionalise quantities for plotting
         radii: np.ndarray = self.data.mesh.basic.radii * self.data.scalings.radius * 1.0e-3  # km
-        temperature: np.ndarray = (
-            self.data.mesh.quantity_at_basic_nodes(self.solution.y)
-            * self.data.scalings.temperature  # K
-        )
+        # previous is below
+        # temperature: np.ndarray = (
+        #    self.data.mesh.quantity_at_basic_nodes(self.solution.y)
+        #    * self.data.scalings.temperature  # K
+        # )
+        self.state.update(self.solution.y, self.solution.y)  # FIXME: Second argument is pressure.
+        temperature: np.ndarray = self.state.temperature_basic * self.data.scalings.temperature
+
         times: np.ndarray = self.solution.t * self.data.scalings.time_years  # years
 
         plt.figure(figsize=(8, 6))

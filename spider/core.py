@@ -31,6 +31,7 @@ class BoundaryConditions(ScaledDataclassFromConfiguration):
 
     Args:
         scalings: Scalings
+        mesh: Mesh
         outer_boundary_condition: Outer boundary condition (flux, temperature, etc.)
         outer_boundary_value: Value of the outer boundary condition (flux, temperature, etc.)
         inner_boundary_condition: Inner boundary condition (flux, temperature. etc.)
@@ -43,6 +44,7 @@ class BoundaryConditions(ScaledDataclassFromConfiguration):
 
     Attributes:
         scalings: Scalings
+        mesh: Mesh
         outer_boundary_condition: Outer boundary condition (flux, temperature, etc.)
         outer_boundary_value: Value of the outer boundary condition (flux, temperature, etc.)
         inner_boundary_condition: Inner boundary condition (flux, temperature. etc.)
@@ -55,6 +57,7 @@ class BoundaryConditions(ScaledDataclassFromConfiguration):
     """
 
     scalings: Scalings
+    mesh: SpiderMesh
     _: KW_ONLY
     outer_boundary_condition: int
     outer_boundary_value: float  # Equivalent to surface_bc_value in C code.
@@ -118,18 +121,33 @@ class BoundaryConditions(ScaledDataclassFromConfiguration):
             logger.error(msg)
             raise ValueError(msg)
 
-    def conform_temperature_boundary_conditions(self, temperature: np.ndarray) -> None:
-        """Conforms the temperature profile at the basic nodes to temperature boundary conditions.
+    def conform_temperature_boundary_conditions(
+        self, temperature: np.ndarray, temperature_basic: np.ndarray, dTdr: np.ndarray
+    ) -> None:
+        """Conforms the temperature and dTdr at the basic nodes to temperature boundary conditions.
 
         Args:
-            temperature: Temperature at the basic nodes
+            temperature: Temperature at the staggered nodes
+            temperature_basic: Temperature at the basic nodes
+            dTdr: Temperature gradient at the basic nodes
         """
         # Core-mantle boundary
         if self.inner_boundary_condition == 3:
-            temperature[0] = self.inner_boundary_value
+            temperature_basic[0, :] = self.inner_boundary_value
+            logger.debug(temperature[0, :])
+            logger.debug(temperature_basic[0, :])
+            logger.debug(self.mesh.basic.delta_radii[0])
+            dTdr[0, :] = (
+                2 * (temperature[0, :] - temperature_basic[0, :]) / self.mesh.basic.delta_radii[0]
+            )
         # Surface
         if self.outer_boundary_condition == 5:
-            temperature[-1] = self.outer_boundary_value
+            temperature_basic[-1, :] = self.outer_boundary_value
+            dTdr[-1, :] = (
+                2
+                * (temperature_basic[-1, :] - temperature[-1, :])
+                / self.mesh.basic.delta_radii[-1]
+            )
 
     def apply(self, state: State) -> None:
         """Applies the boundary conditions to the state.
@@ -137,7 +155,6 @@ class BoundaryConditions(ScaledDataclassFromConfiguration):
         Args:
             state: The state to apply the boundary conditions to
         """
-        # TODO: Choose boundary conditions based on configuration data
         self.apply_inner_boundary_condition(state)
         self.apply_outer_boundary_condition(state)
         logger.debug("temperature = %s", state.temperature_basic)
@@ -167,7 +184,8 @@ class BoundaryConditions(ScaledDataclassFromConfiguration):
         elif self.outer_boundary_condition == 4:
             state.heat_flux[-1, :] = self.outer_boundary_value
         elif self.outer_boundary_condition == 5:
-            raise NotImplementedError
+            pass
+            # raise NotImplementedError
         else:
             msg: str = "outer_boundary_condition = %d is unknown" % self.outer_boundary_condition
             logger.error(msg)
@@ -201,7 +219,8 @@ class BoundaryConditions(ScaledDataclassFromConfiguration):
         elif self.inner_boundary_condition == 2:
             state.heat_flux[0, :] = self.inner_boundary_value
         elif self.inner_boundary_condition == 3:
-            raise NotImplementedError
+            pass
+            # raise NotImplementedError
         else:
             msg: str = "inner_boundary_condition = %d is unknown" % self.inner_boundary_condition
             logger.error(msg)
@@ -298,19 +317,24 @@ class _FixedMesh:
             raise ValueError(msg)
         self.inner_radius = self.radii[0]
         self.outer_radius = self.radii[-1]
-        self.delta_radii = np.diff(self.radii)
+        self.delta_radii = np.diff(self.radii)  # , axis=0)
         self.depth = self.outer_radius - self.radii
         self.height = self.radii - self.inner_radius
         self.number = len(self.radii)
         # Includes 4*pi factor unlike C-version of SPIDER.
-        self.area = 4 * np.pi * np.square(self.radii)
+        self.area = 4 * np.pi * np.square(self.radii).reshape(-1, 1)
         mesh_cubed: np.ndarray = np.power(self.radii, 3)
-        self.volume = 4 / 3 * np.pi * (mesh_cubed[1:] - mesh_cubed[:-1])
+        self.volume = 4 / 3 * np.pi * (mesh_cubed[1:] - mesh_cubed[:-1]).reshape(-1, 1)
         self.total_volume = 4 / 3 * np.pi * (mesh_cubed[-1] - mesh_cubed[0])
-        # TODO: To add conventional mixing length as well.
-        self.mixing_length = 0.25 * (self.outer_radius - self.inner_radius)
-        self.mixing_length_squared = np.square(self.mixing_length)
-        self.mixing_length_cubed = np.power(self.mixing_length, 3)
+        # Average mixing length
+        # self.mixing_length = 0.25 * (self.outer_radius - self.inner_radius)
+        # Conventional mixing length
+        self.mixing_length = np.minimum(
+            self.outer_radius - self.radii, self.radii - self.inner_radius
+        ).reshape(-1, 1)
+        # logger.debug("mixing_length = %s", self.mixing_length)
+        self.mixing_length_squared = np.square(self.mixing_length).reshape(-1, 1)
+        self.mixing_length_cubed = np.power(self.mixing_length, 3).reshape(-1, 1)
 
 
 @dataclass
@@ -345,10 +369,8 @@ class SpiderMesh(ScaledDataclassFromConfiguration):
     def __post_init__(self):
         super().__post_init__()
         basic_coordinates: np.ndarray = self.get_linear()
-        logger.warning("basic_coordinates = %s", basic_coordinates)
         self.basic = _FixedMesh(basic_coordinates)
         staggered_coordinates: np.ndarray = self.basic.radii[:-1] + 0.5 * self.basic.delta_radii
-        logger.warning("staggered_coordinates = %s", staggered_coordinates)
         self.staggered = _FixedMesh(staggered_coordinates)
         self._d_dr_transform = self.d_dr_transform_matrix()
         self._quantity_transform = self.quantity_transform_matrix()
@@ -379,7 +401,7 @@ class SpiderMesh(ScaledDataclassFromConfiguration):
         transform[0, :] = transform[1, :]
         # Forward difference at inner radius.
         transform[-1, :] = transform[-2, :]
-        logger.debug("_d_dr_transform = %s", transform)
+        logger.debug("_d_dr_transform_matrix = %s", transform)
 
         return transform
 
@@ -392,8 +414,6 @@ class SpiderMesh(ScaledDataclassFromConfiguration):
         Returns:
             d/dr at the basic nodes
         """
-        # assert np.size(staggered_quantity) == self.staggered.number
-
         d_dr_at_basic_nodes: np.ndarray = self._d_dr_transform.dot(staggered_quantity)
         logger.debug("d_dr_at_basic_nodes = %s", d_dr_at_basic_nodes)
 
@@ -401,6 +421,10 @@ class SpiderMesh(ScaledDataclassFromConfiguration):
 
     def quantity_transform_matrix(self) -> np.ndarray:
         """A transform matrix for mapping quantities on the staggered mesh to the basic mesh.
+
+        Uses backward and forward differences at the inner and outer radius, respectively, to
+        obtain the quantity values of the basic nodes at the innermost and outermost nodes. It may
+        be subsequently necessary to conform these outer boundaries to applied boundary conditions.
 
         Returns:
             The transform matrix
@@ -414,15 +438,19 @@ class SpiderMesh(ScaledDataclassFromConfiguration):
         # Forward difference at outer radius.
         mesh_ratio_outer: np.ndarray = self.basic.delta_radii[-1] / self.staggered.delta_radii[-1]
         transform[-1, -2:] = np.array([-0.5 * mesh_ratio_outer, 1 + 0.5 * mesh_ratio_outer])
-        logger.debug("_quantity_transform = %s", transform)
+        logger.debug("_quantity_transform_matrix = %s", transform)
 
         return transform
 
     def quantity_at_basic_nodes(self, staggered_quantity: np.ndarray) -> np.ndarray:
         """Determines a quantity at the basic nodes that is defined at the staggered nodes.
 
+        Uses backward and forward differences at the inner and outer radius, respectively, to
+        obtain the quantity values of the basic nodes at the innermost and outermost nodes. It may
+        be subsequently necessary to conform these outer boundaries to applied boundary conditions.
+
         Args:
-            staggered_quantity: A quantity defined at the staggered nodes.
+            staggered_quantity: A quantity defined at the staggered nodes
 
         Returns:
             The quantity at the basic nodes
@@ -617,12 +645,13 @@ class SpiderData:
 
     def __post_init__(self):
         self.scalings = Scalings.from_configuration(section=self.config_parser["scalings"])
-        self.boundary_conditions = BoundaryConditions.from_configuration(
-            self.scalings, section=self.config_parser["boundary_conditions"]
-        )
         self.mesh = SpiderMesh.from_configuration(
             self.scalings, section=self.config_parser["mesh"]
         )
+        self.boundary_conditions = BoundaryConditions.from_configuration(
+            self.scalings, self.mesh, section=self.config_parser["boundary_conditions"]
+        )
+
         self.initial_condition = InitialCondition.from_configuration(
             self.scalings,
             self.mesh,
