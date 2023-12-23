@@ -286,6 +286,7 @@ class _FixedMesh:
 
     Attributes:
         radii: Radii of the mesh
+        mixing_length_profile: Profile of the mixing length
         inner_radius: Inner radius
         outer_radius: Outer radius
         delta_radii: Delta radii
@@ -300,6 +301,7 @@ class _FixedMesh:
     """
 
     radii: np.ndarray
+    mixing_length_profile: str
     inner_radius: float = field(init=False)
     outer_radius: float = field(init=False)
     delta_radii: np.ndarray = field(init=False)
@@ -329,15 +331,28 @@ class _FixedMesh:
         mesh_cubed: np.ndarray = np.power(self.radii, 3)
         self.volume = 4 / 3 * np.pi * (mesh_cubed[1:] - mesh_cubed[:-1]).reshape(-1, 1)  # 2-D
         self.total_volume = 4 / 3 * np.pi * (mesh_cubed[-1] - mesh_cubed[0])
-        # Average mixing length
-        self.mixing_length = 0.25 * (self.outer_radius - self.inner_radius)
-        # Conventional mixing length
-        # self.mixing_length = np.minimum(
-        #     self.outer_radius - self.radii, self.radii - self.inner_radius
-        # ).reshape(-1, 1)
-        # logger.debug("mixing_length = %s", self.mixing_length)
+        self.set_mixing_length()
         self.mixing_length_squared = np.square(self.mixing_length)
         self.mixing_length_cubed = np.power(self.mixing_length, 3)
+
+    def set_mixing_length(self) -> None:
+        """Sets the mixing length"""
+        if self.mixing_length_profile == "nearest_boundary":
+            logger.debug("Set mixing length profile to nearest_boundary")
+            self.mixing_length = np.minimum(
+                self.outer_radius - self.radii, self.radii - self.inner_radius
+            )
+        elif self.mixing_length_profile == "constant":
+            logger.debug("Set mixing length profile to constant")
+            self.mixing_length = (
+                np.ones(self.radii.size) * 0.25 * (self.outer_radius - self.inner_radius)
+            )
+        else:
+            msg: str = "Mixing length profile = %s is unknown" % self.mixing_length_profile
+            logger.error(msg)
+            raise ValueError(msg)
+
+        self.mixing_length = self.mixing_length.reshape(-1, 1)  # 2-D
 
 
 @dataclass
@@ -355,6 +370,7 @@ class SpiderMesh(ScaledDataclassFromConfiguration):
         inner_radius: Inner radius
         outer_radius: Outer radius
         number_of_nodes: Number of nodes
+        mixing_length_profile: The mixing length profile
         basic: The basic mesh
         staggered: The staggered mesh
     """
@@ -364,6 +380,7 @@ class SpiderMesh(ScaledDataclassFromConfiguration):
     inner_radius: float
     outer_radius: float
     number_of_nodes: int
+    mixing_length_profile: str
     basic: _FixedMesh = field(init=False)
     staggered: _FixedMesh = field(init=False)
     _d_dr_transform: np.ndarray = field(init=False)
@@ -372,9 +389,9 @@ class SpiderMesh(ScaledDataclassFromConfiguration):
     def __post_init__(self):
         super().__post_init__()
         basic_coordinates: np.ndarray = self.get_linear()
-        self.basic = _FixedMesh(basic_coordinates)
+        self.basic = _FixedMesh(basic_coordinates, self.mixing_length_profile)
         staggered_coordinates: np.ndarray = self.basic.radii[:-1] + 0.5 * self.basic.delta_radii
-        self.staggered = _FixedMesh(staggered_coordinates)
+        self.staggered = _FixedMesh(staggered_coordinates, self.mixing_length_profile)
         self._d_dr_transform = self.d_dr_transform_matrix()
         self._quantity_transform = self.quantity_transform_matrix()
 

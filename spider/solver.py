@@ -9,7 +9,6 @@ import logging
 from configparser import SectionProxy
 from dataclasses import KW_ONLY, dataclass, field
 from pathlib import Path
-from typing import Union
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -250,31 +249,40 @@ class State(DataclassFromConfiguration):
             self._heat_flux += self.mixing_flux()
 
 
-@dataclass
 class SpiderSolver:
     """Creates the system and solves the interior dynamics
 
     Args:
         filename: Filename of a file with configuration settings
-        root_path: Root path to the flename
+        root: Root path to the flename
 
     Attributes:
         filename: Filename of a file with configuration settings
-        root_path: Root path to the filename
+        root: Root path to the filename. Defaults to empty
+        config: Configuration data
+        data: Model data
+        state: Model state
     """
 
-    filename: Union[str, Path]
-    root_path: Union[str, Path] = ""
-    root: Path = field(init=False)
-    config: SpiderConfigParser = field(init=False)
-    data: SpiderData = field(init=False)
-    state: State = field(init=False)
-    _solution: OptimizeResult = field(init=False, default_factory=OptimizeResult)
-
-    def __post_init__(self):
+    def __init__(self, filename: str | Path, root: str | Path = Path()):
         logger.info("Creating a SPIDER model")
-        self.root = Path(self.root_path)
-        self.config = SpiderConfigParser(self.root / self.filename)
+        self.filename = Path(filename)
+        self.root = Path(root)
+        self.config: SpiderConfigParser
+        self.data: SpiderData
+        self.state: State
+        self._solution: OptimizeResult
+        self.parse_configuration()
+
+    def parse_configuration(self) -> None:
+        """Parses a configuration file"""
+        configuration_file: Path = self.root / self.filename
+        logger.info("Parsing configuration file = %s", configuration_file)
+        self.config = SpiderConfigParser(configuration_file)
+
+    def initialize(self) -> None:
+        """Initializes the model using configuration data"""
+        logger.info("Initializing %s", self.__class__.__name__)
         self.data = SpiderData(self.config)
         self.state = State.from_configuration(self.data, section=self.config["energy"])
 
@@ -282,6 +290,11 @@ class SpiderSolver:
     def solution(self) -> OptimizeResult:
         """The solution."""
         return self._solution
+
+    def get_temperature(self) -> np.ndarray:
+        """Temperature in kelvin"""
+        temperature: np.ndarray = self.solution.y * self.data.scalings.temperature
+        return temperature
 
     def dTdt(
         self,
@@ -338,11 +351,6 @@ class SpiderSolver:
 
         # Dimensionalise quantities for plotting
         radii: np.ndarray = self.data.mesh.basic.radii * self.data.scalings.radius * 1.0e-3  # km
-        # previous is below
-        # temperature: np.ndarray = (
-        #    self.data.mesh.quantity_at_basic_nodes(self.solution.y)
-        #    * self.data.scalings.temperature  # K
-        # )
         self.state.update(self.solution.y, self.solution.y)  # FIXME: Second argument is pressure.
         temperature: np.ndarray = self.state.temperature_basic * self.data.scalings.temperature
 
@@ -368,7 +376,7 @@ class SpiderSolver:
         for i in range(1, num_lines - 1):
             desired_time: float = times[0] + i * time_step
             # Find the closest available time step.
-            closest_time_index: int = np.argmin(np.abs(times - desired_time))
+            closest_time_index: np.intp = np.argmin(np.abs(times - desired_time))
             time: float = times[closest_time_index]
             label: str = f"{time:.2f}"  # Create a label based on the time.
             plt.plot(temperature[:, closest_time_index], radii, label=label)

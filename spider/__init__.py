@@ -7,14 +7,15 @@ __version__: str = "0.1.0"
 
 import importlib.resources
 import logging
-from contextlib import AbstractContextManager
 from importlib.abc import Traversable
 from importlib.resources import as_file
 from pathlib import Path
 
 TEST_DATA: Traversable = importlib.resources.files("tests")
-REFERENCE_TEST_DATA: AbstractContextManager[Path] = as_file(TEST_DATA.joinpath("reference"))
-CFG_TEST_DATA: AbstractContextManager[Path] = as_file(TEST_DATA.joinpath("cfg"))
+with as_file(TEST_DATA.joinpath("reference")) as reference:
+    REFERENCE_TEST_DATA: Path = reference
+with as_file(TEST_DATA.joinpath("cfg")) as cfg:
+    CFG_TEST_DATA: Path = cfg
 
 # Create the package logger.
 # https://docs.python.org/3/howto/logging.html#library-config
