@@ -23,8 +23,8 @@ logger: logging.Logger = debug_logger()
 # Comment out for default debug logger, but this will slow down the tests
 logger.setLevel(logging.WARNING)
 
-atol: float = 1e-4
-rtol: float = 1e-4
+atol: float = 1e-8
+rtol: float = 1e-8
 
 
 def test_version():
@@ -36,16 +36,14 @@ def test_version():
 def test_liquid_no_heating():
     """Test Abe (1993."""
 
-    with CFG_TEST_DATA as cfg_test_data:
-        spider_solver: SpiderSolver = SpiderSolver(Path("abe_liquid.cfg"), cfg_test_data)
+    spider_solver: SpiderSolver = SpiderSolver("abe_liquid.cfg", CFG_TEST_DATA)
     spider_solver.config["energy"]["radionuclides"] = "False"
+    spider_solver.initialize()
     spider_solver.solve()
-    calculated: np.ndarray = (
-        spider_solver.solution.y[:, -1] * spider_solver.data.scalings.temperature
-    )
-    spider_solver.plot()
-    with REFERENCE_TEST_DATA as test_data:
-        expected: np.ndarray = np.loadtxt(test_data / Path("abe_liquid_no_heating.txt"))
+    calculated: np.ndarray = spider_solver.get_temperature()[:, -1]
+    # spider_solver.plot()
+
+    expected: np.ndarray = np.loadtxt(REFERENCE_TEST_DATA / Path("abe_liquid_no_heating.txt"))
     # print("calculated = %s" % calculated)
     # print("expected = %s" % expected)
 
@@ -56,16 +54,14 @@ def test_liquid_no_heating():
 def test_solid_no_heating():
     """Test Abe (1993."""
 
-    with CFG_TEST_DATA as cfg_test_data:
-        spider_solver: SpiderSolver = SpiderSolver(Path("abe_solid.cfg"), cfg_test_data)
+    spider_solver: SpiderSolver = SpiderSolver(Path("abe_solid.cfg"), CFG_TEST_DATA)
     spider_solver.config["energy"]["radionuclides"] = "False"
+    spider_solver.initialize()
     spider_solver.solve()
-    calculated: np.ndarray = (
-        spider_solver.solution.y[:, -1] * spider_solver.data.scalings.temperature
-    )
-    spider_solver.plot()
-    with REFERENCE_TEST_DATA as test_data:
-        expected: np.ndarray = np.loadtxt(test_data / Path("abe_liquid_no_heating.txt"))
+    calculated: np.ndarray = spider_solver.get_temperature()[:, -1]
+    # spider_solver.plot()
+
+    expected: np.ndarray = np.loadtxt(REFERENCE_TEST_DATA / Path("abe_solid_no_heating.txt"))
     # print("calculated = %s" % calculated)
     # print("expected = %s" % expected)
 
