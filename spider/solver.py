@@ -50,6 +50,7 @@ class State(DataclassFromConfiguration):
         dTdr: Temperature gradient with respect to radius at the basic nodes
         eddy_diffusivity: Eddy diffusivity at the basic nodes
         gravitational_separation: Gravitational separation at the basic nodes
+        heating: Heat generation at the staggered nodes
         heat_flux: Heat flux at the basic nodes
         inviscid_regime: Array with True if the flow is inviscid and otherwise False
         inviscid_velocity: Inviscid velocity
@@ -77,6 +78,7 @@ class State(DataclassFromConfiguration):
     _dTdr: np.ndarray = field(init=False)
     _eddy_diffusivity: np.ndarray = field(init=False)
     _heat_flux: np.ndarray = field(init=False)
+    _heating: np.ndarray = field(init=False)
     _is_convective: np.ndarray = field(init=False)
     _reynolds_number: np.ndarray = field(init=False)
     _super_adiabatic_temperature_gradient: np.ndarray = field(init=False)
@@ -103,6 +105,26 @@ class State(DataclassFromConfiguration):
         )
         return convective_heat_flux
 
+    def radiogenic_heating(self, time: np.ndarray | float) -> np.ndarray:
+        """Radiogenic heating
+
+        Args:
+            time: Time
+
+        Returns:
+            Radiogenic heating as a single column (in a 2-D array) if time is a float, otherwise a
+                2-D array with each column associated with a single time in the time array.
+        """
+        radiogenic_heating_float: np.ndarray | float = 0
+        for radionuclide in self._data.radionuclides.values():
+            radiogenic_heating_float += radionuclide.get_heating(time)
+
+        radiogenic_heating: np.ndarray = radiogenic_heating_float * (
+            self.phase_staggered.density / self.phase_staggered.capacitance
+        )
+
+        return radiogenic_heating
+
     @property
     def critical_reynolds_number(self) -> float:
         """Critical Reynolds number from Abe (1993)"""
@@ -119,6 +141,11 @@ class State(DataclassFromConfiguration):
     def gravitational_separation_flux(self) -> np.ndarray:
         """Gravitational separation"""
         raise NotImplementedError
+
+    @property
+    def heating(self) -> np.ndarray:
+        """The total heating rate according to the heat sources specified in the configuration."""
+        return self._heating
 
     @property
     def heat_flux(self) -> np.ndarray:
@@ -192,7 +219,9 @@ class State(DataclassFromConfiguration):
         logger.debug("_temperature_basic = %s", self._temperature_basic)
         logger.debug("_dTdr = %s", self._dTdr)
 
-    def update(self, temperature: np.ndarray, pressure: np.ndarray) -> None:
+    def update(
+        self, temperature: np.ndarray, pressure: np.ndarray, time: np.ndarray | float
+    ) -> None:
         """Updates the state.
 
         The evaluation order matters because we want to minimise the number of evaluations.
@@ -200,6 +229,7 @@ class State(DataclassFromConfiguration):
         Args:
             temperature: Temperature at the staggered nodes
             pressure: Pressure at the staggered nodes
+            time: Time
         """
         logger.debug("Updating the state")
         self._set_temperature(temperature)
@@ -238,7 +268,7 @@ class State(DataclassFromConfiguration):
         )
         self._eddy_diffusivity *= self._data.mesh.basic.mixing_length
         # Heat flux
-        self._heat_flux: np.ndarray = np.zeros_like(self.temperature_basic)
+        self._heat_flux = np.zeros_like(self.temperature_basic)
         if self.conduction:
             self._heat_flux += self.conductive_heat_flux()
         if self.convection:
@@ -247,6 +277,10 @@ class State(DataclassFromConfiguration):
             self._heat_flux += self.gravitational_separation_flux()
         if self.mixing:
             self._heat_flux += self.mixing_flux()
+        # Heating
+        self._heating = np.zeros_like(temperature)
+        if self.radionuclides:
+            self._heating += self.radiogenic_heating(time)
 
 
 class SpiderSolver:
@@ -298,7 +332,7 @@ class SpiderSolver:
 
     def dTdt(
         self,
-        time: float,
+        time: np.ndarray | float,
         temperature: np.ndarray,
         pressure: np.ndarray,
     ) -> np.ndarray:
@@ -313,7 +347,7 @@ class SpiderSolver:
             dT/dt at the staggered nodes
         """
         logger.debug("temperature passed into dTdt = %s", temperature)
-        self.state.update(temperature, pressure)
+        self.state.update(temperature, pressure, time)
         heat_flux: np.ndarray = self.state.heat_flux
         logger.debug("heat_flux = %s", heat_flux)
         self.data.boundary_conditions.apply(self.state)
@@ -331,12 +365,7 @@ class SpiderSolver:
         dTdt: np.ndarray = -delta_energy_flux / capacitance
         logger.debug("dTdt (fluxes only) = %s", dTdt)
 
-        # dTdt += (
-        #     self.state.phase_staggered.density
-        #     * self.radiogenic_heating(time)
-        #     * self.data.mesh.basic.volume
-        #     / capacitance
-        # )
+        dTdt += self.state.heating
         logger.debug("dTdt (with internal heating) = %s", dTdt)
 
         return dTdt
@@ -351,7 +380,9 @@ class SpiderSolver:
 
         # Dimensionalise quantities for plotting
         radii: np.ndarray = self.data.mesh.basic.radii * self.data.scalings.radius * 1.0e-3  # km
-        self.state.update(self.solution.y, self.solution.y)  # FIXME: Second argument is pressure.
+        self.state.update(
+            self.solution.y, self.solution.y, self.solution.t
+        )  # FIXME: Second argument is pressure.
         temperature: np.ndarray = self.state.temperature_basic * self.data.scalings.temperature
 
         times: np.ndarray = self.solution.t * self.data.scalings.time_years  # years
