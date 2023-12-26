@@ -494,14 +494,20 @@ class Radionuclide(ScaledDataclassFromConfiguration):
     Args:
         scalings: Scalings
         name: Name of the radionuclide
-        t0_years: TODO
-        abundance: TODO
-        concentration: TODO
-        heat_production: TODO
-        half_life_years: TODO
+        t0_years: Time at which quantities are defined
+        abundance: Abundance
+        concentration: Concentration
+        heat_production: Heat production
+        half_life_years: Half life
 
     Attributes:
-        # TODO
+        scalings: Scalings
+        name: Name of the radionuclide
+        t0_years: Time at which quantities are defined
+        abundance: Abundance
+        concentration: Concentration
+        heat_production: Heat production
+        half_life_years: Half life
     """
 
     scalings: Scalings
@@ -519,18 +525,20 @@ class Radionuclide(ScaledDataclassFromConfiguration):
         self.heat_production /= self.scalings.power_per_mass
         self.half_life_years /= self.scalings.time_years
 
-    def radiogenic_heating(self, time: float) -> float:
+    def get_heating(self, time: np.ndarray | float) -> np.ndarray | float:
         """Radiogenic heating
 
         Args:
-            time: Time in non-dimensional units
+            time: Time
 
         Returns:
-            Radiogenic heating in non-dimensional units
+            Radiogenic heating as a float if time is a float, otherwise a numpy row array where
+                each entry in the row is associated with a single time in the time array.
         """
-        arg: float = np.log(2) * (self.t0_years - time) / self.half_life_years
-        heating: float = self.heat_production * self.abundance * self.concentration * np.exp(arg)
-        logger.debug("Radiogenic heating due to %s = %f", self.name, heating)
+        arg: np.ndarray | float = np.log(2) * (self.t0_years - time) / self.half_life_years
+        heating: np.ndarray | float = (
+            self.heat_production * self.abundance * self.concentration * np.exp(arg)
+        )
 
         return heating
 
@@ -657,7 +665,14 @@ class SpiderData:
         config_parser: A SpiderConfigParser
 
     Attributes:
-        TODO
+        config_parser: A SpiderConfigParser
+        scalings: Scalings
+        boundary_conditions: Boundary conditions
+        initial_condition: Initial condition
+        mesh: Mesh
+        phases: Phases
+        phase: Active phase for evaluation
+        radionuclides: Radionuclides
     """
 
     config_parser: SpiderConfigParser
