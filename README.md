@@ -1,38 +1,9 @@
 # SPIDER
 **Simulating Planetary Interior Dynamics with Extreme Rheology**
 
-## 1. Quick start
+This is a pure Python version of the [SPIDER code](https://github.com/djbower/spider). This version does not support quadruple precision and applies conventional finite volumes to solve the system (i.e., the auxilliary variable approach outlined in Bower et al., 2018 is not invoked).
 
-Formally you don't have to use VSCode or Poetry, but using them makes it easier to develop *SPIDER* as a community. If you are a Windows or Linux user (or use a different IDE such as Spyder), please send me your installation instructions so I can update this README.
-
-1. Install [VSCode](https://code.visualstudio.com) if you don't already have it.
-1. In VSCode you are recommended to install the following extensions:
-	- Black Formatter
-	- Code Spell Checker
- 	- IntelliCode
-	- isort
-	- Jupyter
-	- Pylance
-	- Pylint
-	- Region Viewer
-	- Todo Tree
-1. Install [Poetry](https://python-poetry.org) if you don't already have it.
-1. Clone this repository (*spider*) to a local directory
-1. In VSCode, go to *File* and *Open Folder...* and select the *spider* directory
-1. We want to set up a virtual Python environment in the root directory of *spider*. An advantage of using a virtual environment is that it remains completely isolated from any other Python environments on your system (e.g. Conda or otherwise). You must have a Python interpreter available to build the virtual environment according to the dependency in `pyproject.toml`, which could be a native version on your machine or a version from a Conda environment that is currently active. You only need a Python binary so it is not required to install any packages. You can create a virtual environment by using the terminal in VSCode, where you may need to update `python` to reflect the location of the Python binary file. This will create a local Python environment in the `.venv` directory:
-	
-    ```
-    python -m venv .venv
-    ```
-1. Open a new terminal window in VSCode and VSCode should recognise that you have a virtual environment in .venv, and load this environment automatically. You should see `(.venv)` as the prefix in the terminal prompt.
-1. Install the project into the virtual environment using poetry to install all the required Python package dependencies:
-
-    ```
-    poetry install
-    ```
-
-To ensure that all developers are using the same settings for linting and formatting (e.g., using pylint, black, isort, as installed as extensions in step 2) there is a `settings.json` file in the `.vscode` directory. These settings will take precedence over your user settings for this project only.
-
+See [this setup guide] for setting up your system to develop SPIDER.
 
 ## 2. References
 
