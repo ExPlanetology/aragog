@@ -3,7 +3,7 @@
 
 This is a pure Python version of the [SPIDER code](https://github.com/djbower/spider). This version does not support quadruple precision and applies conventional finite volumes to solve the system (i.e., the auxilliary variable approach outlined in Bower et al., 2018 is not invoked). Nevertheless, this pure Python version is more convenient for future development, particularly given that the atmosphere module is now supported by a separate (and more comprehensive) Python package *atmodeller*.
 
-See [this setup guide] for setting up your system to develop SPIDER.
+See [this setup guide](https://gist.github.com/djbower/c66474000029730ac9f8b73b96071db3) for setting up your system to develop SPIDER.
 
 ## 2. References
 
