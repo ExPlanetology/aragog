@@ -55,8 +55,7 @@ class ConstantProperty(PropertyABC):
         value: The constant value
 
     Attributes:
-        name: Name of the property
-        value: The constant value
+        See Args
     """
 
     value: float
@@ -190,14 +189,7 @@ class PhaseEvaluator:
         viscosity: To evaluate viscosity
 
     Attributes:
-        scalings: Scalings
-        name: Name of the phase
-        density: To evaluate density at temperature and pressure
-        gravitational_acceleration: To evaluate gravitational acceleration
-        heat_capacity: To evaluate heat capacity
-        thermal_conductivity: To evaluate thermal conductivity
-        thermal_expansivity: To evaluate thermal expansivity
-        viscosity: To evaluate viscosity
+        See Args.
     """
 
     scalings: Scalings

@@ -43,17 +43,7 @@ class BoundaryConditions(ScaledDataclassFromConfiguration):
         core_heat_capacity: Heat capacity of the core (not necessarily used)
 
     Attributes:
-        scalings: Scalings
-        mesh: Mesh
-        outer_boundary_condition: Outer boundary condition (flux, temperature, etc.)
-        outer_boundary_value: Value of the outer boundary condition (flux, temperature, etc.)
-        inner_boundary_condition: Inner boundary condition (flux, temperature. etc.)
-        inner_boundary_value: Value of the inner boundary condition (flux, temperature, etc.)
-        emissivity: Emissivity of the atmosphere (not necessarily used)
-        equilibrium_temperature: Planetary equilibrium temperature (not necessarily used)
-        core_radius: Radius of the core (not necessarily used)
-        core_density: Density of the core (not necessarily used)
-        core_heat_capacity: Heat capacity of the core (not necessarily used)
+        See Args
     """
 
     scalings: Scalings
@@ -81,9 +71,9 @@ class BoundaryConditions(ScaledDataclassFromConfiguration):
         """Scales the inner boundary value.
 
         Equivalent to CORE_BC in C code.
-            1: simple core cooling
-            2: prescribed heat flux
-            3: prescribed temperature
+            1: Simple core cooling
+            2: Prescribed heat flux
+            3: Prescribed temperature
         """
         if self.inner_boundary_condition == 1:
             self.inner_boundary_value = 0
@@ -100,11 +90,11 @@ class BoundaryConditions(ScaledDataclassFromConfiguration):
         """Scales the outer boundary value.
 
         Equivalent to SURFACE_BC in C code.
-            1: grey-body atmosphere
+            1: Grey-body atmosphere
             2: Zahnle steam atmosphere
-            3: self-consistent atmosphere evolution
-            4: prescribed heat flux
-            5: prescribed temperature
+            3: Couple to atmodeller
+            4: Prescribed heat flux
+            5: Prescribed temperature
         """
         if self.outer_boundary_condition == 1:
             pass
@@ -134,9 +124,6 @@ class BoundaryConditions(ScaledDataclassFromConfiguration):
         # Core-mantle boundary
         if self.inner_boundary_condition == 3:
             temperature_basic[0, :] = self.inner_boundary_value
-            logger.debug(temperature[0, :])
-            logger.debug(temperature_basic[0, :])
-            logger.debug(self.mesh.basic.delta_radii[0])
             dTdr[0, :] = (
                 2 * (temperature[0, :] - temperature_basic[0, :]) / self.mesh.basic.delta_radii[0]
             )
@@ -160,6 +147,7 @@ class BoundaryConditions(ScaledDataclassFromConfiguration):
         logger.debug("temperature = %s", state.temperature_basic)
         logger.debug("heat_flux = %s", state.heat_flux)
 
+    # TODO: Rename to only be associated with flux boundary conditions
     def apply_outer_boundary_condition(self, state: State) -> None:
         """Applies the outer boundary condition to the state.
 
@@ -167,11 +155,11 @@ class BoundaryConditions(ScaledDataclassFromConfiguration):
             state: The state to apply the boundary conditions to
 
         Equivalent to SURFACE_BC in C code.
-            1: grey-body atmosphere
+            1: Grey-body atmosphere
             2: Zahnle steam atmosphere
-            3: self-consistent atmosphere evolution
-            4: prescribed heat flux
-            5: prescribed temperature
+            3: Couple to atmodeller
+            4: Prescribed heat flux
+            5: Prescribed temperature
         """
         if self.outer_boundary_condition == 1:
             self.grey_body(state)
@@ -185,7 +173,6 @@ class BoundaryConditions(ScaledDataclassFromConfiguration):
             state.heat_flux[-1, :] = self.outer_boundary_value
         elif self.outer_boundary_condition == 5:
             pass
-            # raise NotImplementedError
         else:
             msg: str = "outer_boundary_condition = %d is unknown" % self.outer_boundary_condition
             logger.error(msg)
@@ -203,6 +190,7 @@ class BoundaryConditions(ScaledDataclassFromConfiguration):
             * (np.power(state.top_temperature, 4) - self.equilibrium_temperature**4)
         )
 
+    # TODO: Rename to only be associated with flux boundary conditions
     def apply_inner_boundary_condition(self, state: State) -> None:
         """Applies the inner boundary condition to the state.
 
@@ -210,9 +198,9 @@ class BoundaryConditions(ScaledDataclassFromConfiguration):
             state: The state to apply the boundary conditions to
 
         Equivalent to CORE_BC in C code.
-            1: simple core cooling
-            2: prescribed heat flux
-            3: prescribed temperature
+            1: Simple core cooling
+            2: Prescribed heat flux
+            3: Prescribed temperature
         """
         if self.inner_boundary_condition == 1:
             raise NotImplementedError
@@ -238,10 +226,7 @@ class InitialCondition(ScaledDataclassFromConfiguration):
         basal_temperature: Temperature of the base of the mantle (bottom staggered node)
 
     Attributes:
-        scalings: Scalings
-        mesh: Mesh
-        surface_temperature: Temperature of the "surface" (top staggered node)
-        basal_temperature: Temperature of the base of the mantle (bottom staggered node)
+        See Args
     """
 
     scalings: Scalings
@@ -264,7 +249,14 @@ class InitialCondition(ScaledDataclassFromConfiguration):
     def temperature(self) -> np.ndarray:
         return self._temperature
 
+    # TODO: Clunky. Set the staggered and basic temperature together, or be clear which one is
+    # being set.
     def get_linear(self) -> np.ndarray:
+        """Gets a linear temperature profile
+
+        Returns:
+            Linear temperature profile for the staggered nodes
+        """
         temperature: np.ndarray = np.linspace(
             self.basal_temperature, self.surface_temperature, self.mesh.staggered.number_of_nodes
         )
@@ -282,7 +274,9 @@ class _FixedMesh:
     (see scipy.integrate.solve_ivp)
 
     Args:
-        radii: Radii of the mesh, which could be in dimensional or non-dimensional units.
+        radii: Radii of the mesh, which could be in dimensional or non-dimensional units
+        mixing_length_profile: Profile of the mixing length. Can be 'nearest_boundary' or
+            'constant'
 
     Attributes:
         radii: Radii of the mesh
@@ -388,7 +382,7 @@ class SpiderMesh(ScaledDataclassFromConfiguration):
 
     def __post_init__(self):
         super().__post_init__()
-        basic_coordinates: np.ndarray = self.get_linear()
+        basic_coordinates: np.ndarray = self.get_constant_spacing()
         self.basic = _FixedMesh(basic_coordinates, self.mixing_length_profile)
         staggered_coordinates: np.ndarray = self.basic.radii[:-1] + 0.5 * self.basic.delta_radii
         self.staggered = _FixedMesh(staggered_coordinates, self.mixing_length_profile)
@@ -399,11 +393,11 @@ class SpiderMesh(ScaledDataclassFromConfiguration):
         self.inner_radius /= self.scalings.radius
         self.outer_radius /= self.scalings.radius
 
-    def get_linear(self) -> np.ndarray:
-        """Temperature profile with a constant linear temperature gradient across the mantle
+    def get_constant_spacing(self) -> np.ndarray:
+        """Constant radius spacing across the mantle
 
         Returns:
-            Linear temperature profile
+            Radii with constant spacing
         """
         radii: np.ndarray = np.linspace(self.inner_radius, self.outer_radius, self.number_of_nodes)
         return radii
@@ -417,12 +411,10 @@ class SpiderMesh(ScaledDataclassFromConfiguration):
         transform: np.ndarray = np.zeros(
             (self.basic.number_of_nodes, self.staggered.number_of_nodes)
         )
-        transform[1:-1, :-1] += np.diag(-1 / self.staggered.delta_radii)  # k=0 diagonal.
-        transform[1:-1:, 1:] += np.diag(1 / self.staggered.delta_radii)  # k=1 diagonal.
-        # Backward difference at outer radius.
-        transform[0, :] = transform[1, :]
-        # Forward difference at inner radius.
-        transform[-1, :] = transform[-2, :]
+        transform[1:-1, :-1] += np.diag(-1 / self.staggered.delta_radii)  # k=0 diagonal
+        transform[1:-1:, 1:] += np.diag(1 / self.staggered.delta_radii)  # k=1 diagonal
+        transform[0, :] = transform[1, :]  # Backward difference at outer radius.
+        transform[-1, :] = transform[-2, :]  # Forward difference at inner radius.
         logger.debug("_d_dr_transform_matrix = %s", transform)
 
         return transform
@@ -441,6 +433,7 @@ class SpiderMesh(ScaledDataclassFromConfiguration):
 
         return d_dr_at_basic_nodes
 
+    # TODO: Compatibility with conforming boundary/initial conditions?
     def quantity_transform_matrix(self) -> np.ndarray:
         """A transform matrix for mapping quantities on the staggered mesh to the basic mesh.
 
@@ -468,6 +461,7 @@ class SpiderMesh(ScaledDataclassFromConfiguration):
 
         return transform
 
+    # TODO: Compatibility with conforming boundary/initial conditions?
     def quantity_at_basic_nodes(self, staggered_quantity: np.ndarray) -> np.ndarray:
         """Determines a quantity at the basic nodes that is defined at the staggered nodes.
 
@@ -501,13 +495,7 @@ class Radionuclide(ScaledDataclassFromConfiguration):
         half_life_years: Half life
 
     Attributes:
-        scalings: Scalings
-        name: Name of the radionuclide
-        t0_years: Time at which quantities are defined
-        abundance: Abundance
-        concentration: Concentration
-        heat_production: Heat production
-        half_life_years: Half life
+        See Args.
     """
 
     scalings: Scalings
@@ -579,7 +567,7 @@ class Scalings(ScaledDataclassFromConfiguration):
     temperature: float = 1
     density: float = 1
     time: float = 1
-    # Scalings (dimensional)
+    # Dimensional
     area: float = field(init=False)
     gravitational_acceleration: float = field(init=False)
     heat_capacity: float = field(init=False)
@@ -593,7 +581,7 @@ class Scalings(ScaledDataclassFromConfiguration):
     thermal_conductivity: float = field(init=False)
     velocity: float = field(init=False)
     viscosity: float = field(init=False)
-    # Scalings (non-dimensional)
+    # Non-dimensional
     stefan_boltzmann_constant: float = field(init=False)
 
     def scale_attributes(self):
@@ -611,7 +599,7 @@ class Scalings(ScaledDataclassFromConfiguration):
         self.thermal_conductivity = self.power_per_volume * self.area / self.temperature
         self.viscosity = self.pressure * self.time
         self.time_years = self.time / constants.Julian_year
-        # Useful non-dimensional constants
+        # Non-dimensional constants
         self.stefan_boltzmann_constant = codata.value("Stefan-Boltzmann constant")  # W/m^2/K^4
         self.stefan_boltzmann_constant /= (
             self.power_per_volume * self.radius / np.power(self.temperature, 4)

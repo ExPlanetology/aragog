@@ -9,7 +9,7 @@ import inspect
 import logging
 from abc import ABC, abstractmethod
 from configparser import SectionProxy
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Self
 
 import numpy as np
