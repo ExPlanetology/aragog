@@ -152,6 +152,7 @@ class State(DataclassFromConfiguration):
         """The total heat flux according to the fluxes specified in the configuration."""
         return self._heat_flux
 
+    # TODO: Check this again
     @heat_flux.setter
     def heat_flux(self, value):
         """Setter for applying boundary conditions"""
@@ -326,7 +327,11 @@ class SpiderSolver:
         return self._solution
 
     def get_temperature(self) -> np.ndarray:
-        """Temperature in kelvin"""
+        """Temperature in kelvin
+
+        Returns:
+            Temperature in kelvin at the staggered nodes
+        """
         temperature: np.ndarray = self.solution.y * self.data.scalings.temperature
         return temperature
 
