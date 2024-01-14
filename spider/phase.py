@@ -8,7 +8,7 @@ from __future__ import annotations
 import logging
 from configparser import SectionProxy
 from dataclasses import KW_ONLY, dataclass, field
-from typing import TYPE_CHECKING, Callable, Self
+from typing import TYPE_CHECKING, Callable, Protocol, Self
 
 import numpy as np
 
@@ -76,7 +76,7 @@ class PhaseStateStaggered:
     unnecessary function calls that may slow down the code.
 
     Args:
-        phase_evaluator: A PhaseEvaluator
+        phase_evaluator: A PhaseEvaluatorProtocol
 
     Attributes:
         capacitance: Thermal capacitance
@@ -84,7 +84,7 @@ class PhaseStateStaggered:
         heat_capacity: Heat capacity
     """
 
-    phase_evaluator: PhaseEvaluator
+    phase_evaluator: PhaseEvaluatorProtocol
     capacitance: np.ndarray = field(init=False)
     density: np.ndarray = field(init=False)
     heat_capacity: np.ndarray = field(init=False)
@@ -114,7 +114,7 @@ class PhaseStateBasic:
     This minimises the number of function evaluations to avoid slowing down the code.
 
     Args:
-        phase_evaluator: A PhaseEvaluator
+        phase_evaluator: A PhaseEvaluatorProtocol
 
     Attributes:
         density: Density
@@ -127,7 +127,7 @@ class PhaseStateBasic:
         viscosity: Dynamic viscosity
     """
 
-    phase_evaluator: PhaseEvaluator
+    phase_evaluator: PhaseEvaluatorProtocol
     density: np.ndarray = field(init=False)
     gravitational_acceleration: np.ndarray = field(init=False)
     heat_capacity: np.ndarray = field(init=False)
@@ -174,8 +174,30 @@ class PhaseStateBasic:
         return self._kinematic_viscosity
 
 
+class PhaseEvaluatorProtocol(Protocol):
+    def density(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        ...
+
+    def gravitational_acceleration(
+        self, temperature: np.ndarray, pressure: np.ndarray
+    ) -> np.ndarray:
+        ...
+
+    def heat_capacity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        ...
+
+    def thermal_conductivity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        ...
+
+    def thermal_expansivity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        ...
+
+    def viscosity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        ...
+
+
 @dataclass(frozen=True)
-class PhaseEvaluator:
+class PhaseEvaluator(PhaseEvaluatorProtocol):
     """Contains the objects to evaluate the EOS and transport properties of a phase.
 
     Args:
@@ -187,6 +209,7 @@ class PhaseEvaluator:
         thermal_conductivity: To evaluate thermal conductivity
         thermal_expansivity: To evaluate thermal expansivity
         viscosity: To evaluate viscosity
+        phase_boundary: To evaluate phase boundary
 
     Attributes:
         See Args.
@@ -201,6 +224,7 @@ class PhaseEvaluator:
     thermal_conductivity: PropertyABC
     thermal_expansivity: PropertyABC
     viscosity: PropertyABC
+    phase_boundary: PropertyABC
 
     @classmethod
     def from_configuration(cls, scalings: Scalings, name: str, *, section: SectionProxy) -> Self:
@@ -228,3 +252,197 @@ class PhaseEvaluator:
                 raise
 
         return cls(scalings, name, **init_dict)
+
+
+# TODO: Define properties along melting curves
+
+
+@dataclass(frozen=True)
+class CompositeMeltFraction(PropertyABC):
+    """Melt fraction for the composite"""
+
+    _liquid: PhaseEvaluator
+    _solid: PhaseEvaluator
+    name: str = field(init=False, default="melt_fraction")
+
+    def get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        liquidus: np.ndarray = self._liquid.phase_boundary.get_value(temperature, pressure)
+        solidus: np.ndarray = self._solid.phase_boundary.get_value(temperature, pressure)
+        fusion: np.ndarray = liquidus - solidus
+        melt_fraction: np.ndarray = (temperature - solidus) / fusion
+        melt_fraction = np.clip(melt_fraction, 0, 1)
+
+        return melt_fraction
+
+
+@dataclass(frozen=True)
+class CompositeDensity(PropertyABC):
+    """Density for the composite
+
+    Volume additivity
+    """
+
+    _liquid: PhaseEvaluator
+    _solid: PhaseEvaluator
+    _: KW_ONLY
+    _melt_fraction: PropertyABC
+    name: str = field(init=False, default="density")
+
+    def get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        melt_fraction: np.ndarray = self._melt_fraction.get_value(temperature, pressure)
+        density: np.ndarray = melt_fraction / self._liquid.density.get_value(temperature, pressure)
+        density += (1 - melt_fraction) / self._solid.density.get_value(temperature, pressure)
+
+        return 1 / density
+
+
+@dataclass(frozen=True)
+class CompositePorosity(PropertyABC):
+    """Porosity of the composite"""
+
+    _liquid: PhaseEvaluator
+    _solid: PhaseEvaluator
+    _: KW_ONLY
+    _density: PropertyABC
+    name: str = field(init=False, default="porosity")
+
+    def get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        density: np.ndarray = self._density.get_value(temperature, pressure)
+        solid_density: np.ndarray = self._solid.density.get_value(temperature, pressure)
+        liquid_density: np.ndarray = self._liquid.density.get_value(temperature, pressure)
+        porosity: np.ndarray = (solid_density - density) / (solid_density - liquid_density)
+
+        return porosity
+
+
+@dataclass(frozen=True)
+class CompositeThermalExpansivity(PropertyABC):
+    """Thermal expansivity of the composite
+
+    Solomatov (2007), Treatise on Geophysics, Eq. 3.3
+
+    The first term is not included because it is small compared to the latent heat term
+    """
+
+    _liquid: PhaseEvaluator
+    _solid: PhaseEvaluator
+    _: KW_ONLY
+    _density: PropertyABC
+    name: str = field(init=False, default="density")
+
+    def get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        density: np.ndarray = self._density.get_value(temperature, pressure)
+        solid_density: np.ndarray = self._solid.density.get_value(temperature, pressure)
+        liquid_density: np.ndarray = self._liquid.density.get_value(temperature, pressure)
+        liquidus: np.ndarray = self._liquid.phase_boundary.get_value(temperature, pressure)
+        solidus: np.ndarray = self._solid.phase_boundary.get_value(temperature, pressure)
+        fusion: np.ndarray = liquidus - solidus
+        thermal_expansivity: np.ndarray = (solid_density - liquid_density) / fusion / density
+
+        return thermal_expansivity
+
+
+@dataclass
+class CompositePhaseEvaluator(PhaseEvaluatorProtocol):
+    """Contains the objects to evaluate the EOS and transport properties of a two-phase mixture"""
+
+    phases: dict[str, PhaseEvaluator]
+    density: PropertyABC = field(init=False)
+    melt_fraction: PropertyABC = field(init=False)
+    porosity: PropertyABC = field(init=False)
+    name: str = field(init=False, default="composite")
+
+    def __post_init__(self):
+        self.melt_fraction = CompositeMeltFraction(self.liquid, self.solid)
+        self.density = CompositeDensity(self.liquid, self.solid, _melt_fraction=self.melt_fraction)
+        self.porosity = CompositePorosity(self.liquid, self.solid, _density=self.density)
+
+    @property
+    def liquid(self) -> PhaseEvaluator:
+        """Liquid phase evaluator"""
+        return self.phases["liquid"]
+
+    @property
+    def solid(self) -> PhaseEvaluator:
+        """Solid phase evaluator"""
+        return self.phases["solid"]
+
+
+# Copied from C SPIDER
+#   eval->P = P;
+#   eval->T = T;
+
+#   /* these are strictly only valid for the mixed phase region, and not for general P and T
+#      conditions */
+#   /* unsure what the best approach is here.  The following functions are highly modular,
+#      but I think it slows the code down a lot since many of the functions repeat the same lookups
+#      It would reduce the modularity, but for speed the better option would be to have an
+#      aggregate function that only evaluates things once.  This would be trivial to implement. */
+
+#   ierr = EOSCompositeGetTwoPhaseLiquidus(eos, P, &liquidus);
+#   CHKERRQ(ierr);
+#   ierr = EOSCompositeGetTwoPhaseSolidus(eos, P, &solidus);
+#   CHKERRQ(ierr);
+#   eval->fusion = liquidus - solidus;
+#   eval->fusion_curve = solidus + 0.5 * eval->fusion;
+#   gphi = (T - solidus) / eval->fusion;
+#   eval->phase_fraction = gphi;
+
+#   /* truncation */
+#   if (eval->phase_fraction > 1.0)
+#   {
+#     eval->phase_fraction = 1.0;
+#   }
+#   if (eval->phase_fraction < 0.0)
+#   {
+#     eval->phase_fraction = 0.0;
+#   }
+
+#   /* properties along melting curves */
+#   ierr = EOSEval(composite->eos[composite->liquidus_slot], P, liquidus, &eval_melt);
+#   CHKERRQ(ierr);
+#   ierr = EOSEval(composite->eos[composite->solidus_slot], P, solidus, &eval_solid);
+#   CHKERRQ(ierr);
+
+#   /* enthalpy of fusion */
+#   eval->enthalpy_of_fusion = eval->fusion_curve * composite->entropy_of_fusion;
+
+#   /* Cp */
+#   /* Solomatov (2007), Treatise on Geophysics, Eq. 3.4 */
+#   /* The first term is not included because it is small compared to the latent heat term */
+#   eval->Cp = eval->enthalpy_of_fusion; // enthalpy change upon melting.
+#   eval->Cp /= eval->fusion;
+
+#   /* Rho */
+#   /* Volume additivity */
+#   eval->rho = eval->phase_fraction * (1.0 / eval_melt.rho) + (1 - eval->phase_fraction) * (1.0 / eval_solid.rho);
+#   eval->rho = 1.0 / (eval->rho);
+
+#   /* porosity */
+#   /* i.e. volume fraction occupied by the melt */
+#   eval->porosity = (eval_solid.rho - eval->rho) / (eval_solid.rho - eval_melt.rho);
+
+#   /* Alpha */
+#   /* positive for MgSiO3 since solid rho > melt rho.  But may need to adjust for compositional
+#      effects */
+#   /* Solomatov (2007), Treatise on Geophysics, Eq. 3.3 */
+#   /* The first term is not included because it is small compared to the latent heat term */
+#   eval->alpha = (eval_solid.rho - eval_melt.rho) / eval->fusion / eval->rho;
+
+#   /* dTdPs */
+#   /* Solomatov (2007), Treatise on Geophysics, Eq. 3.2 */
+#   eval->dTdPs = eval->alpha * eval->T / (eval->rho * eval->Cp);
+
+#   /* Conductivity */
+#   /* Linear mixing by phase fraction, for lack of better knowledge about how conductivities could
+#     be combined */
+#   eval->cond = eval->phase_fraction * eval_melt.cond;
+#   eval->cond += (1.0 - eval->phase_fraction) * eval_solid.cond;
+
+#   /* Viscosity */
+#   ierr = EOSEvalSetViscosity(composite->eos[composite->liquidus_slot], &eval_melt);
+#   CHKERRQ(ierr);
+#   ierr = EOSEvalSetViscosity(composite->eos[composite->solidus_slot], &eval_solid);
+#   CHKERRQ(ierr);
+#   fwt = tanh_weight(eval->phase_fraction, composite->phi_critical, composite->phi_width);
+#   eval->log10visc = fwt * eval_melt.log10visc + (1.0 - fwt) * eval_solid.log10visc;

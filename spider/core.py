@@ -17,7 +17,7 @@ from scipy import constants
 from thermochem import codata
 
 from spider.interfaces import ScaledDataclassFromConfiguration
-from spider.phase import PhaseEvaluator
+from spider.phase import CompositePhaseEvaluator, PhaseEvaluator, PhaseEvaluatorProtocol
 
 if TYPE_CHECKING:
     from spider.solver import State
@@ -606,6 +606,11 @@ class Scalings(ScaledDataclassFromConfiguration):
         )
         logger.debug("scalings = %s", self)
 
+    @property
+    def phase_boundary(self) -> float:
+        """For scaling phase boundary"""
+        return self.temperature
+
 
 class SpiderConfigParser(ConfigParser):
     """Parser for SPIDER configuration files
@@ -669,7 +674,7 @@ class SpiderData:
     initial_condition: InitialCondition = field(init=False)
     mesh: SpiderMesh = field(init=False)
     phases: dict[str, PhaseEvaluator] = field(init=False, default_factory=dict)
-    phase: PhaseEvaluator = field(init=False)
+    phase: PhaseEvaluatorProtocol = field(init=False)
     radionuclides: dict[str, Radionuclide] = field(init=False, default_factory=dict)
 
     def __post_init__(self):
@@ -688,9 +693,11 @@ class SpiderData:
             section=self.config_parser["initial_condition"],
         )
         for phase_name, phase_section in self.config_parser.phases.items():
+            print("top")
             phase: PhaseEvaluator = PhaseEvaluator.from_configuration(
                 self.scalings, phase_name, section=phase_section
             )
+            print("here")
             self.phases[phase_name] = phase
         for radionuclide_name, radionuclide_section in self.config_parser.radionuclides.items():
             radionuclide: Radionuclide = Radionuclide.from_configuration(
@@ -709,7 +716,7 @@ class SpiderData:
 
         elif len(self.phases) == 2:
             logger.info("Two phases available, creating composite")
-            raise NotImplementedError
+            self.phase = CompositePhaseEvaluator(self.phases)
 
 
 def is_monotonic_increasing(some_array: np.ndarray) -> np.bool_:

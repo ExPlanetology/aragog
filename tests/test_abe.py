@@ -82,10 +82,31 @@ def test_solid_with_heating():
     calculated: np.ndarray = spider_solver.get_temperature()[:, -1]
     # spider_solver.plot()
 
-    np.savetxt("testout.dat", calculated)
+    # np.savetxt("testout.dat", calculated)
 
     expected: np.ndarray = np.loadtxt(REFERENCE_TEST_DATA / Path("abe_solid_with_heating.txt"))
     # print("calculated = %s" % calculated)
     # print("expected = %s" % expected)
 
     assert np.isclose(calculated, expected, atol=atol, rtol=rtol).all()
+
+
+# @profile_decorator
+def test_mixed():
+    """Test Abe (1993."""
+
+    spider_solver: SpiderSolver = SpiderSolver(Path("abe_mixed.cfg"), CFG_TEST_DATA)
+    spider_solver.initialize()
+    spider_solver.solve()
+    calculated: np.ndarray = spider_solver.get_temperature()[:, -1]
+    # spider_solver.plot()
+
+    # np.savetxt("testout.dat", calculated)
+
+    # expected: np.ndarray = np.loadtxt(REFERENCE_TEST_DATA / Path("abe_solid_with_heating.txt"))
+    # print("calculated = %s" % calculated)
+    # print("expected = %s" % expected)
+
+    # assert np.isclose(calculated, expected, atol=atol, rtol=rtol).all()
+
+    assert True
