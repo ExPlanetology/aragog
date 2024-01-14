@@ -8,64 +8,21 @@ from __future__ import annotations
 import logging
 from configparser import SectionProxy
 from dataclasses import KW_ONLY, dataclass, field
-from typing import TYPE_CHECKING, Callable, Protocol, Self
+from typing import TYPE_CHECKING, Protocol, Self
 
 import numpy as np
 
-from spider.interfaces import PropertyABC
+from spider.interfaces import (
+    ConstantProperty,
+    LookupProperty1D,
+    LookupProperty2D,
+    PropertyABC,
+)
 
 if TYPE_CHECKING:
     from spider.core import Scalings
 
 logger: logging.Logger = logging.getLogger(__name__)
-
-
-def ensure_size_equal_to_temperature(
-    func: Callable[[ConstantProperty, np.ndarray, np.ndarray], float]
-) -> Callable:
-    """A decorator to ensure that the returned array is the same size as the temperature array.
-
-    This is necessary when a phase is specified with constant properties that should be applied
-    across the entire temperature and pressure range.
-    """
-
-    def wrapper(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        """Wrapper
-
-        Args:
-            temperature: Temperature
-            pressure: Pressure
-
-        Returns:
-            The quantity as an array with the same length as the temperature array.
-        """
-        result: np.ndarray = func(self, temperature, pressure) * np.ones_like(temperature)
-
-        return result
-
-    return wrapper
-
-
-@dataclass(kw_only=True, frozen=True)
-class ConstantProperty(PropertyABC):
-    """A property with a constant value
-
-    Args:
-        name: Name of the property
-        value: The constant value
-
-    Attributes:
-        See Args
-    """
-
-    value: float
-
-    @ensure_size_equal_to_temperature
-    def get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> float:
-        """Returns the constant value. See base class."""
-        del temperature
-        del pressure
-        return self.value  # The decorator ensures return type is np.ndarray.
 
 
 @dataclass
@@ -246,10 +203,33 @@ class PhaseEvaluator(PhaseEvaluatorProtocol):
                 logger.debug("%s (%s) is a number = %f", key, section.name, value_float)
                 init_dict[key] = ConstantProperty(name=key, value=value_float)
 
-            # TODO: Add other tries to identify 1-D or 2-D lookup data.
+            except ValueError:
+                # try:
+                with open(value) as infile:
+                    logger.debug("%s (%s) is a file = %s", key, section.name, value)
+                    header = infile.readline()
+                    col_names = header[1:].split()
+                value_array: np.ndarray = np.loadtxt(value, ndmin=2)
+                logger.debug("before scaling, value_array = %s", value_array)
+                for nn, col_name in enumerate(col_names):
+                    logger.info("Scaling %s from %s", col_name, value)
+                    value_array[:, nn] /= getattr(scalings, key)
+                logger.debug("after scaling, value_array = %s", value_array)
+                ndim = value_array.shape[1]
+                logger.debug("ndim = %d", ndim)
+                if ndim == 2:
+                    init_dict[key] = LookupProperty1D(name=key, value=value_array)
+                elif ndim == 3:
+                    init_dict[key] = LookupProperty2D(name=key, value=value_array)
+                else:
+                    msg: str = "Lookup data cannot have %d dimensions" % ndim
+                    logger.critical(msg)
+                    # raise ValueError(msg)
 
-            except TypeError:
-                raise
+                # except ValueError:
+                #     msg = "Cannot interpret value (%s): not a float or a file" % value
+                #     logger.critical(msg)
+                #     raise ValueError(msg)
 
         return cls(scalings, name, **init_dict)
 
@@ -257,7 +237,7 @@ class PhaseEvaluator(PhaseEvaluatorProtocol):
 # TODO: Define properties along melting curves
 
 
-@dataclass(frozen=True)
+@dataclass
 class CompositeMeltFraction(PropertyABC):
     """Melt fraction for the composite"""
 
@@ -275,7 +255,7 @@ class CompositeMeltFraction(PropertyABC):
         return melt_fraction
 
 
-@dataclass(frozen=True)
+@dataclass
 class CompositeDensity(PropertyABC):
     """Density for the composite
 
@@ -296,7 +276,7 @@ class CompositeDensity(PropertyABC):
         return 1 / density
 
 
-@dataclass(frozen=True)
+@dataclass
 class CompositePorosity(PropertyABC):
     """Porosity of the composite"""
 
@@ -315,7 +295,7 @@ class CompositePorosity(PropertyABC):
         return porosity
 
 
-@dataclass(frozen=True)
+@dataclass
 class CompositeThermalExpansivity(PropertyABC):
     """Thermal expansivity of the composite
 

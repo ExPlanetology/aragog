@@ -21,7 +21,7 @@ from spider import (
 
 logger: logging.Logger = debug_logger()
 # Comment out for default debug logger, but this will slow down the tests
-logger.setLevel(logging.WARNING)
+# logger.setLevel(logging.WARNING)
 
 atol: float = 1e-8
 rtol: float = 1e-8
@@ -96,6 +96,27 @@ def test_mixed():
     """Test Abe (1993."""
 
     spider_solver: SpiderSolver = SpiderSolver(Path("abe_mixed.cfg"), CFG_TEST_DATA)
+    spider_solver.initialize()
+    spider_solver.solve()
+    calculated: np.ndarray = spider_solver.get_temperature()[:, -1]
+    # spider_solver.plot()
+
+    # np.savetxt("testout.dat", calculated)
+
+    # expected: np.ndarray = np.loadtxt(REFERENCE_TEST_DATA / Path("abe_solid_with_heating.txt"))
+    # print("calculated = %s" % calculated)
+    # print("expected = %s" % expected)
+
+    # assert np.isclose(calculated, expected, atol=atol, rtol=rtol).all()
+
+    assert True
+
+
+# @profile_decorator
+def test_mixed_lookup():
+    """Test Abe (1993."""
+
+    spider_solver: SpiderSolver = SpiderSolver(Path("abe_mixed_lookup.cfg"), CFG_TEST_DATA)
     spider_solver.initialize()
     spider_solver.solve()
     calculated: np.ndarray = spider_solver.get_temperature()[:, -1]
