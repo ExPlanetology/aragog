@@ -632,7 +632,7 @@ class SpiderConfigParser(ConfigParser):
     def __init__(self, *filenames):
         kwargs: dict = {
             "comment_prefixes": ("#",),
-            "converters": {"path": Path, "any": lambda x: literal_eval(x)},
+            "converters": {"path": Path, "any": literal_eval},
         }
         super().__init__(**kwargs)
         self.read(filenames)

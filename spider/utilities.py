@@ -20,7 +20,9 @@ from __future__ import annotations
 
 from cProfile import Profile
 from functools import wraps
+from pathlib import Path
 from pstats import SortKey, Stats
+from typing import Any
 
 
 def profile_decorator(func):
@@ -35,3 +37,33 @@ def profile_decorator(func):
         return result
 
     return wrapper
+
+
+def is_file(value: Any) -> bool:
+    """Checks if value is a file.
+
+    Args:
+        value: Object to be checked
+
+    Returns:
+        True if the value is a file, otherwise False
+    """
+    if isinstance(value, (str, Path)):
+        return Path(value).is_file()
+    return False
+
+
+def is_number(value: Any) -> bool:
+    """Checks if value is a number.
+
+    Args:
+        value: Object to be checked
+
+    Returns:
+        True if the value is a number, otherwise False
+    """
+    try:
+        float(value)
+        return True
+    except ValueError:
+        return False
