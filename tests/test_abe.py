@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License along with Spider. If not,
 # see <https://www.gnu.org/licenses/>.
 #
-"""Tests for Abe (1993) model."""
+"""Simple tests to recover the thermal structure of molten, solid, and mixed phase interiors."""
 
 from __future__ import annotations
 
@@ -35,8 +35,8 @@ from spider import (
 logger: logging.Logger = debug_logger()
 logger.setLevel(logging.INFO)
 
-atol: float = 1e-8
-rtol: float = 1e-8
+ATOL: float = 1e-8
+RTOL: float = 1e-8
 
 
 def test_version():
@@ -45,7 +45,7 @@ def test_version():
 
 
 def test_liquid_no_heating():
-    """Test Abe (1993."""
+    """Cooling of a purely molten magma ocean."""
 
     spider_solver: SpiderSolver = SpiderSolver("abe_liquid.cfg", CFG_TEST_DATA)
     spider_solver.config["energy"]["radionuclides"] = "False"
@@ -59,43 +59,43 @@ def test_liquid_no_heating():
     logger.info("calculated = %s", calculated)
     logger.info("expected = %s", expected)
 
-    assert np.isclose(calculated, expected, atol=atol, rtol=rtol).all()
+    assert np.isclose(calculated, expected, atol=ATOL, rtol=RTOL).all()
 
 
 def test_solid_no_heating():
-    """Test Abe (1993."""
+    """Cooling of a purely solid mantle."""
 
     spider_solver: SpiderSolver = SpiderSolver(Path("abe_solid.cfg"), CFG_TEST_DATA)
     spider_solver.config["energy"]["radionuclides"] = "False"
     spider_solver.initialize()
     spider_solver.solve()
     calculated: np.ndarray = spider_solver.get_temperature()[:, -1]
-    spider_solver.plot()
+    # spider_solver.plot()
     # np.savetxt("testout.dat", calculated)
 
     expected: np.ndarray = np.loadtxt(REFERENCE_TEST_DATA / Path("abe_solid_no_heating.txt"))
     logger.info("calculated = %s", calculated)
     logger.info("expected = %s", expected)
 
-    assert np.isclose(calculated, expected, atol=atol, rtol=rtol).all()
+    assert np.isclose(calculated, expected, atol=ATOL, rtol=RTOL).all()
 
 
 def test_solid_with_heating():
-    """Test Abe (1993."""
+    """Cooling of a purely solid mantle with radiogenic heating."""
 
     spider_solver: SpiderSolver = SpiderSolver(Path("abe_solid.cfg"), CFG_TEST_DATA)
     spider_solver.config["energy"]["radionuclides"] = "True"
     spider_solver.initialize()
     spider_solver.solve()
     calculated: np.ndarray = spider_solver.get_temperature()[:, -1]
-    spider_solver.plot()
+    # spider_solver.plot()
     # np.savetxt("testout.dat", calculated)
 
     expected: np.ndarray = np.loadtxt(REFERENCE_TEST_DATA / Path("abe_solid_with_heating.txt"))
     logger.info("calculated = %s", calculated)
     logger.info("expected = %s", expected)
 
-    assert np.isclose(calculated, expected, atol=atol, rtol=rtol).all()
+    assert np.isclose(calculated, expected, atol=ATOL, rtol=RTOL).all()
 
 
 @pytest.mark.skip(reason="mixed phases not yet implemented")
@@ -113,7 +113,7 @@ def test_mixed():
     logger.info("calculated = %s", calculated)
     logger.info("expected = %s", expected)
 
-    assert np.isclose(calculated, expected, atol=atol, rtol=rtol).all()
+    assert np.isclose(calculated, expected, atol=ATOL, rtol=RTOL).all()
 
 
 @pytest.mark.skip(reason="mixed phases not yet implemented")
@@ -131,4 +131,4 @@ def test_mixed_lookup():
     logger.info("calculated = %s", calculated)
     logger.info("expected = %s", expected)
 
-    assert np.isclose(calculated, expected, atol=atol, rtol=rtol).all()
+    assert np.isclose(calculated, expected, atol=ATOL, rtol=RTOL).all()

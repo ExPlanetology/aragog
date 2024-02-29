@@ -82,6 +82,7 @@ disable=R,
         import-star-module-level,
         input-builtin,
         intern-builtin,
+        invalid-name, # DJB added
         invalid-str-codec,
         locally-disabled,
         long-builtin,

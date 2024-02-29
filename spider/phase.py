@@ -14,14 +14,15 @@
 # You should have received a copy of the GNU General Public License along with Spider. If not,
 # see <https://www.gnu.org/licenses/>.
 #
-"""A phase defines EOS and transport properties."""
+"""A phase defines the equation of state (EOS) and transport properties."""
 
 from __future__ import annotations
 
 import logging
+import sys
 from configparser import SectionProxy
 from dataclasses import KW_ONLY, dataclass, field
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -29,8 +30,20 @@ from spider.interfaces import (
     ConstantProperty,
     LookupProperty1D,
     LookupProperty2D,
+    PhaseEvaluatorProtocol,
     PropertyABC,
 )
+from spider.utilities import is_file, is_number
+
+if sys.version_info < (3, 11):
+    from typing_extensions import Self
+else:
+    from typing import Self
+
+if sys.version_info < (3, 12):
+    from typing_extensions import override
+else:
+    from typing import override
 
 if TYPE_CHECKING:
     from spider.core import Scalings
@@ -41,9 +54,6 @@ logger: logging.Logger = logging.getLogger(__name__)
 @dataclass
 class PhaseStateStaggered:
     """Stores the state (material properties) of a phase at the staggered nodes.
-
-    This only evaluates the necessary quantities to solve the system of equations to avoid
-    unnecessary function calls that may slow down the code.
 
     Args:
         phase_evaluator: A PhaseEvaluatorProtocol
@@ -81,8 +91,6 @@ class PhaseStateStaggered:
 class PhaseStateBasic:
     """Stores the state (material properties) of a phase at the basic nodes.
 
-    This minimises the number of function evaluations to avoid slowing down the code.
-
     Args:
         phase_evaluator: A PhaseEvaluatorProtocol
 
@@ -104,13 +112,14 @@ class PhaseStateBasic:
     thermal_conductivity: np.ndarray = field(init=False)
     thermal_expansivity: np.ndarray = field(init=False)
     viscosity: np.ndarray = field(init=False)
-    _dTdrs: np.ndarray = field(init=False)
-    _kinematic_viscosity: np.ndarray = field(init=False)
+    dTdrs: np.ndarray = field(init=False)
+    kinematic_viscosity: np.ndarray = field(init=False)
 
     def update(self, temperature: np.ndarray, pressure: np.ndarray) -> None:
         """Updates the state.
 
-        The order of evaluation matters.
+        This minimises the number of function evaluations to avoid slowing down the code, hence the
+        order of evaluation matters.
 
         Args:
             temperature: Temperature at the basic nodes
@@ -127,58 +136,40 @@ class PhaseStateBasic:
         )
         self.thermal_expansivity = self.phase_evaluator.thermal_expansivity(temperature, pressure)
         self.viscosity = self.phase_evaluator.viscosity(temperature, pressure)
-        self._dTdrs = (
+        self.dTdrs = (
             -self.gravitational_acceleration
             * self.thermal_expansivity
             * temperature
             / self.heat_capacity
         )
-        self._kinematic_viscosity = self.viscosity / self.density
-
-    @property
-    def dTdrs(self) -> np.ndarray:
-        return self._dTdrs
-
-    @property
-    def kinematic_viscosity(self) -> np.ndarray:
-        return self._kinematic_viscosity
-
-
-class PhaseEvaluatorProtocol(Protocol):
-    def density(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray: ...
-
-    def gravitational_acceleration(
-        self, temperature: np.ndarray, pressure: np.ndarray
-    ) -> np.ndarray: ...
-
-    def heat_capacity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray: ...
-
-    def thermal_conductivity(
-        self, temperature: np.ndarray, pressure: np.ndarray
-    ) -> np.ndarray: ...
-
-    def thermal_expansivity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray: ...
-
-    def viscosity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray: ...
+        self.kinematic_viscosity = self.viscosity / self.density
 
 
 @dataclass(frozen=True)
-class PhaseEvaluator(PhaseEvaluatorProtocol):
+class PhaseEvaluator:
     """Contains the objects to evaluate the EOS and transport properties of a phase.
 
     Args:
         scalings: Scalings
         name: Name of the phase
-        density: To evaluate density at temperature and pressure
-        gravitational_acceleration: To evaluate gravitational acceleration
-        heat_capacity: To evaluate heat capacity
-        thermal_conductivity: To evaluate thermal conductivity
-        thermal_expansivity: To evaluate thermal expansivity
-        viscosity: To evaluate viscosity
-        phase_boundary: To evaluate phase boundary
+        density: Object to evaluate density
+        gravitational_acceleration: Object to evaluate gravitational acceleration
+        heat_capacity: Object to evaluate heat capacity
+        thermal_conductivity: Object to evaluate thermal conductivity
+        thermal_expansivity: Object to evaluate thermal expansivity
+        viscosity: Object to evaluate viscosity
+        phase_boundary: Object to evaluate phase boundary
 
     Attributes:
-        See Args.
+        scalings: Scalings
+        name: Name of the phase
+        density: Object to evaluate density at temperature and pressure
+        gravitational_acceleration: Object to evaluate gravitational acceleration
+        heat_capacity: Object to evaluate heat capacity
+        thermal_conductivity: Object to evaluate thermal conductivity
+        thermal_expansivity: Object to evaluate thermal expansivity
+        viscosity: Object to evaluate viscosity
+        phase_boundary: Object to evaluate phase boundary
     """
 
     scalings: Scalings
@@ -193,14 +184,12 @@ class PhaseEvaluator(PhaseEvaluatorProtocol):
     phase_boundary: PropertyABC
 
     @classmethod
-    def from_configuration(
-        cls, scalings: Scalings, name: str, *, section: SectionProxy
-    ) -> PhaseEvaluator:
+    def from_configuration(cls, scalings: Scalings, name: str, *, section: SectionProxy) -> Self:
         """Creates a class instance from a configuration section.
 
         Args:
             name: Name of the phase
-            scalings: Scalings for the numerical problem
+            scalings: Scalings
             config: A configuration section with phase data
 
         Returns:
@@ -208,15 +197,15 @@ class PhaseEvaluator(PhaseEvaluatorProtocol):
         """
         init_dict: dict[str, PropertyABC] = {}
         for key, value in section.items():
-            try:
+
+            if is_number(value):
                 value_float: float = float(value)
                 value_float /= getattr(scalings, key)
                 logger.debug("%s (%s) is a number = %f", key, section.name, value_float)
                 init_dict[key] = ConstantProperty(name=key, value=value_float)
 
-            except ValueError:
-                # try:
-                with open(value) as infile:
+            elif is_file(value):
+                with open(value, encoding="utf-8") as infile:
                     logger.debug("%s (%s) is a file = %s", key, section.name, value)
                     header = infile.readline()
                     col_names = header[1:].split()
@@ -233,19 +222,15 @@ class PhaseEvaluator(PhaseEvaluatorProtocol):
                 elif ndim == 3:
                     init_dict[key] = LookupProperty2D(name=key, value=value_array)
                 else:
-                    msg: str = "Lookup data cannot have %d dimensions" % ndim
-                    logger.critical(msg)
-                    # raise ValueError(msg)
-
-                # except ValueError:
-                #     msg = "Cannot interpret value (%s): not a float or a file" % value
-                #     logger.critical(msg)
-                #     raise ValueError(msg)
+                    raise ValueError(f"Lookup data must have 2 or 3 dimensions, not {ndim}")
+            else:
+                msg: str = f"Cannot interpret value ({value}): not a number or a file"
+                raise ValueError(msg)
 
         return cls(scalings, name, **init_dict)
 
 
-# TODO: Define properties along melting curves
+# region Composite phase
 
 
 @dataclass
@@ -256,9 +241,10 @@ class CompositeMeltFraction(PropertyABC):
     _solid: PhaseEvaluator
     name: str = field(init=False, default="melt_fraction")
 
-    def get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        liquidus: np.ndarray = self._liquid.phase_boundary.get_value(temperature, pressure)
-        solidus: np.ndarray = self._solid.phase_boundary.get_value(temperature, pressure)
+    @override
+    def _get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        liquidus: np.ndarray = self._liquid.phase_boundary(temperature, pressure)
+        solidus: np.ndarray = self._solid.phase_boundary(temperature, pressure)
         fusion: np.ndarray = liquidus - solidus
         melt_fraction: np.ndarray = (temperature - solidus) / fusion
         melt_fraction = np.clip(melt_fraction, 0, 1)
@@ -279,12 +265,15 @@ class CompositeDensity(PropertyABC):
     _melt_fraction: PropertyABC
     name: str = field(init=False, default="density")
 
-    def get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        melt_fraction: np.ndarray = self._melt_fraction.get_value(temperature, pressure)
-        density: np.ndarray = melt_fraction / self._liquid.density.get_value(temperature, pressure)
-        density += (1 - melt_fraction) / self._solid.density.get_value(temperature, pressure)
+    @override
+    def _get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        # FIXME: Compute based on properties along the melting curves
+        melt_fraction: np.ndarray = self._melt_fraction(temperature, pressure)
+        density_inverse: np.ndarray = melt_fraction / self._liquid.density(temperature, pressure)
+        density_inverse += (1 - melt_fraction) / self._solid.density(temperature, pressure)
+        density: np.ndarray = 1 / density_inverse
 
-        return 1 / density
+        return density
 
 
 @dataclass
@@ -297,10 +286,12 @@ class CompositePorosity(PropertyABC):
     _density: PropertyABC
     name: str = field(init=False, default="porosity")
 
-    def get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        density: np.ndarray = self._density.get_value(temperature, pressure)
-        solid_density: np.ndarray = self._solid.density.get_value(temperature, pressure)
-        liquid_density: np.ndarray = self._liquid.density.get_value(temperature, pressure)
+    @override
+    def _get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        # FIXME: Cmpute based on properties along the melting curves
+        density: np.ndarray = self._density(temperature, pressure)
+        solid_density: np.ndarray = self._solid.density(temperature, pressure)
+        liquid_density: np.ndarray = self._liquid.density(temperature, pressure)
         porosity: np.ndarray = (solid_density - density) / (solid_density - liquid_density)
 
         return porosity
@@ -321,12 +312,14 @@ class CompositeThermalExpansivity(PropertyABC):
     _density: PropertyABC
     name: str = field(init=False, default="density")
 
-    def get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        density: np.ndarray = self._density.get_value(temperature, pressure)
-        solid_density: np.ndarray = self._solid.density.get_value(temperature, pressure)
-        liquid_density: np.ndarray = self._liquid.density.get_value(temperature, pressure)
-        liquidus: np.ndarray = self._liquid.phase_boundary.get_value(temperature, pressure)
-        solidus: np.ndarray = self._solid.phase_boundary.get_value(temperature, pressure)
+    @override
+    def _get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        # FIXME: Cmpute based on properties along the melting curves
+        density: np.ndarray = self._density(temperature, pressure)
+        solid_density: np.ndarray = self._solid.density(temperature, pressure)
+        liquid_density: np.ndarray = self._liquid.density(temperature, pressure)
+        liquidus: np.ndarray = self._liquid.phase_boundary(temperature, pressure)
+        solidus: np.ndarray = self._solid.phase_boundary(temperature, pressure)
         fusion: np.ndarray = liquidus - solidus
         thermal_expansivity: np.ndarray = (solid_density - liquid_density) / fusion / density
 
@@ -334,8 +327,11 @@ class CompositeThermalExpansivity(PropertyABC):
 
 
 @dataclass
-class CompositePhaseEvaluator(PhaseEvaluatorProtocol):
-    """Contains the objects to evaluate the EOS and transport properties of a two-phase mixture"""
+class CompositePhaseEvaluator:
+    """Contains the objects to evaluate the EOS and transport properties of a two-phase mixture
+
+    TODO: Need to finish this.
+    """
 
     phases: dict[str, PhaseEvaluator]
     density: PropertyABC = field(init=False)
@@ -358,6 +354,8 @@ class CompositePhaseEvaluator(PhaseEvaluatorProtocol):
         """Solid phase evaluator"""
         return self.phases["solid"]
 
+
+# endregion
 
 # Copied from C SPIDER
 #   eval->P = P;
@@ -406,7 +404,8 @@ class CompositePhaseEvaluator(PhaseEvaluatorProtocol):
 
 #   /* Rho */
 #   /* Volume additivity */
-#   eval->rho = eval->phase_fraction * (1.0 / eval_melt.rho) + (1 - eval->phase_fraction) * (1.0 / eval_solid.rho);
+#   eval->rho = eval->phase_fraction * (1.0 / eval_melt.rho) + (1 - eval->phase_fraction) *
+#    (1.0 / eval_solid.rho);
 #   eval->rho = 1.0 / (eval->rho);
 
 #   /* porosity */

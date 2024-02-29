@@ -20,13 +20,24 @@ from __future__ import annotations
 
 import inspect
 import logging
+import sys
 from abc import ABC, abstractmethod
 from configparser import SectionProxy
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any, Protocol
 
 import numpy as np
 from scipy.interpolate import RectBivariateSpline, interp1d
+
+if sys.version_info < (3, 11):
+    from typing_extensions import Self
+else:
+    from typing import Self
+
+if sys.version_info < (3, 12):
+    from typing_extensions import override
+else:
+    from typing import override
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -36,11 +47,11 @@ class DataclassFromConfiguration:
     """A dataclass that can source its attributes from a configuration section"""
 
     @classmethod
-    def from_configuration(cls, *args, section: SectionProxy) -> DataclassFromConfiguration:
-        """Creates an instance from a configuration section.
+    def from_configuration(cls, *args, section: SectionProxy) -> Self:
+        """Creates a dataclass instance from a configuration section.
 
-        This reads the configuration data and sources the attributes from this data and performs
-        type conversations.
+        This reads the configuration data and sources the attributes from this data as well as
+        performing type conversations.
 
         Args:
             *args: Positional arguments to pass through to the constructor
@@ -56,7 +67,7 @@ class DataclassFromConfiguration:
 
 
 @dataclass
-class ScaledDataclassFromConfiguration(DataclassFromConfiguration):
+class ScaledDataclassFromConfiguration(ABC, DataclassFromConfiguration):
     """A dataclass that requires its attributes to be scaled."""
 
     def __post_init__(self):
@@ -67,21 +78,21 @@ class ScaledDataclassFromConfiguration(DataclassFromConfiguration):
         """Scales the attributes"""
 
 
-@dataclass(kw_only=True)
+@dataclass
 class PropertyABC(ABC):
-    """A property whose value can be evaluated at temperature and pressure.
+    """A property whose value is to be evaluated at temperature and pressure.
 
     Args:
         name: Name of the property
 
     Attributes:
-        See Args.
+        name: Name of the property
     """
 
     name: str
 
     @abstractmethod
-    def get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+    def _get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray | float:
         """Computes the property value at temperature and pressure.
 
         Args:
@@ -93,33 +104,10 @@ class PropertyABC(ABC):
         """
 
     def __call__(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        return self.get_value(temperature, pressure)
-
-
-def ensure_size_equal_to_temperature(
-    func: Callable[[ConstantProperty, np.ndarray, np.ndarray], float]
-) -> Callable:
-    """A decorator to ensure that the returned array is the same size as the temperature array.
-
-    This is necessary when a phase is specified with constant properties that should be applied
-    across the entire temperature and pressure range.
-    """
-
-    def wrapper(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        """Wrapper
-
-        Args:
-            temperature: Temperature
-            pressure: Pressure
-
-        Returns:
-            The quantity as an array with the same length as the temperature array.
-        """
-        result: np.ndarray = func(self, temperature, pressure) * np.ones_like(temperature)
-
-        return result
-
-    return wrapper
+        """Returns an array with the same size as pressure"""
+        # TODO: Would be more natural to use pressure, but using pressure breaks the code further
+        # down the workflow.
+        return self._get_value(temperature, pressure) * np.ones_like(temperature)
 
 
 @dataclass(kw_only=True)
@@ -131,19 +119,19 @@ class ConstantProperty(PropertyABC):
         value: The constant value
 
     Attributes:
-        See Args
-        ndim: Number of dimensions (0)
+        name: Name of the property
+        value: The constant value
+        ndim: Number of dimensions, which is equal to zero
     """
 
     value: float
-    ndim: float = field(init=False, default=0)
+    ndim: int = field(init=False, default=0)
 
-    @ensure_size_equal_to_temperature
-    def get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> float:
-        """Returns the constant value. See base class."""
-        del temperature
+    @override
+    def _get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        """See base class."""
         del pressure
-        return self.value  # The decorator ensures return type is np.ndarray.
+        return self.value * np.ones_like(temperature)
 
 
 @dataclass(kw_only=True)
@@ -155,8 +143,9 @@ class LookupProperty1D(PropertyABC):
         value: The 1-D array
 
     Attributes:
-        See Args
-        ndim: Number of dimensions (1)
+        name: Name of the property
+        value: The 1-D array
+        ndim: Number of dimensions, which is equal to one
     """
 
     value: np.ndarray
@@ -164,11 +153,13 @@ class LookupProperty1D(PropertyABC):
     _lookup: interp1d = field(init=False)
 
     def __post_init__(self):
-        # Sort data to ensure x is increasing
+        # Sort the data to ensure x is increasing
         data: np.ndarray = self.value[self.value[:, 0].argsort()]
         self._lookup = interp1d(data[:, 0], data[:, 1])
 
-    def get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+    @override
+    def _get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        """See base class."""
         del temperature
         return self._lookup(pressure)
 
@@ -182,8 +173,9 @@ class LookupProperty2D(PropertyABC):
         value: The 2-D array
 
     Attributes:
-        See Args
-        ndim: Number of dimensions (2)
+        name: Name of the property
+        value: The 2-D array
+        ndim: Number of dimensions, which is equal to two
     """
 
     value: np.ndarray
@@ -203,5 +195,35 @@ class LookupProperty2D(PropertyABC):
         z_values = z_values.reshape((x_values.size, y_values.size), order="F")
         self._lookup = RectBivariateSpline(x_values, y_values, z_values, kx=1, ky=1, s=0)
 
-    def get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+    @override
+    def _get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        """See base class."""
         return self._lookup(pressure, temperature, grid=False)
+
+
+class PhaseEvaluatorProtocol(Protocol):
+    """Phase evaluator protocol
+
+    raise NotImplementedError() is to prevent pylint from reporting assignment-from-no-return /
+    E1111.
+    """
+
+    def density(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        raise NotImplementedError()
+
+    def gravitational_acceleration(
+        self, temperature: np.ndarray, pressure: np.ndarray
+    ) -> np.ndarray:
+        raise NotImplementedError()
+
+    def heat_capacity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        raise NotImplementedError()
+
+    def thermal_conductivity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        raise NotImplementedError()
+
+    def thermal_expansivity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        raise NotImplementedError()
+
+    def viscosity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        raise NotImplementedError()
