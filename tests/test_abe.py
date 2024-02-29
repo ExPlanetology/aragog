@@ -1,13 +1,28 @@
-"""Tests for Abe (1993) model.
+#
+# Copyright 2024 Dan J. Bower
+#
+# This file is part of Spider.
+#
+# Spider is free software: you can redistribute it and/or modify it under the terms of the GNU
+# General Public License as published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# Spider is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
+# even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along with Spider. If not,
+# see <https://www.gnu.org/licenses/>.
+#
+"""Tests for Abe (1993) model."""
 
-See the LICENSE file for licensing information.
-
-"""
+from __future__ import annotations
 
 import logging
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from spider import (
     CFG_TEST_DATA,
@@ -17,11 +32,8 @@ from spider import (
     debug_logger,
 )
 
-# from tests.conftest import profile_decorator
-
 logger: logging.Logger = debug_logger()
-# Comment out for default debug logger, but this will slow down the tests
-# logger.setLevel(logging.WARNING)
+logger.setLevel(logging.INFO)
 
 atol: float = 1e-8
 rtol: float = 1e-8
@@ -32,7 +44,6 @@ def test_version():
     assert __version__ == "0.1.0"
 
 
-# @profile_decorator
 def test_liquid_no_heating():
     """Test Abe (1993."""
 
@@ -42,17 +53,15 @@ def test_liquid_no_heating():
     spider_solver.solve()
     calculated: np.ndarray = spider_solver.get_temperature()[:, -1]
     # spider_solver.plot()
-
     # np.savetxt("testout.dat", calculated)
 
     expected: np.ndarray = np.loadtxt(REFERENCE_TEST_DATA / Path("abe_liquid_no_heating.txt"))
-    # print("calculated = %s" % calculated)
-    # print("expected = %s" % expected)
+    logger.info("calculated = %s", calculated)
+    logger.info("expected = %s", expected)
 
     assert np.isclose(calculated, expected, atol=atol, rtol=rtol).all()
 
 
-# @profile_decorator
 def test_solid_no_heating():
     """Test Abe (1993."""
 
@@ -61,37 +70,35 @@ def test_solid_no_heating():
     spider_solver.initialize()
     spider_solver.solve()
     calculated: np.ndarray = spider_solver.get_temperature()[:, -1]
-    # spider_solver.plot()
-
+    spider_solver.plot()
     # np.savetxt("testout.dat", calculated)
 
     expected: np.ndarray = np.loadtxt(REFERENCE_TEST_DATA / Path("abe_solid_no_heating.txt"))
-    # print("calculated = %s" % calculated)
-    # print("expected = %s" % expected)
+    logger.info("calculated = %s", calculated)
+    logger.info("expected = %s", expected)
 
     assert np.isclose(calculated, expected, atol=atol, rtol=rtol).all()
 
 
-# @profile_decorator
 def test_solid_with_heating():
     """Test Abe (1993."""
 
     spider_solver: SpiderSolver = SpiderSolver(Path("abe_solid.cfg"), CFG_TEST_DATA)
+    spider_solver.config["energy"]["radionuclides"] = "True"
     spider_solver.initialize()
     spider_solver.solve()
     calculated: np.ndarray = spider_solver.get_temperature()[:, -1]
-    # spider_solver.plot()
-
+    spider_solver.plot()
     # np.savetxt("testout.dat", calculated)
 
     expected: np.ndarray = np.loadtxt(REFERENCE_TEST_DATA / Path("abe_solid_with_heating.txt"))
-    # print("calculated = %s" % calculated)
-    # print("expected = %s" % expected)
+    logger.info("calculated = %s", calculated)
+    logger.info("expected = %s", expected)
 
     assert np.isclose(calculated, expected, atol=atol, rtol=rtol).all()
 
 
-# @profile_decorator
+@pytest.mark.skip(reason="mixed phases not yet implemented")
 def test_mixed():
     """Test Abe (1993."""
 
@@ -100,19 +107,16 @@ def test_mixed():
     spider_solver.solve()
     calculated: np.ndarray = spider_solver.get_temperature()[:, -1]
     # spider_solver.plot()
-
     # np.savetxt("testout.dat", calculated)
 
-    # expected: np.ndarray = np.loadtxt(REFERENCE_TEST_DATA / Path("abe_solid_with_heating.txt"))
-    # print("calculated = %s" % calculated)
-    # print("expected = %s" % expected)
+    expected: np.ndarray = np.loadtxt(REFERENCE_TEST_DATA / Path("abe_solid_with_heating.txt"))
+    logger.info("calculated = %s", calculated)
+    logger.info("expected = %s", expected)
 
-    # assert np.isclose(calculated, expected, atol=atol, rtol=rtol).all()
-
-    assert True
+    assert np.isclose(calculated, expected, atol=atol, rtol=rtol).all()
 
 
-# @profile_decorator
+@pytest.mark.skip(reason="mixed phases not yet implemented")
 def test_mixed_lookup():
     """Test Abe (1993."""
 
@@ -121,13 +125,10 @@ def test_mixed_lookup():
     spider_solver.solve()
     calculated: np.ndarray = spider_solver.get_temperature()[:, -1]
     # spider_solver.plot()
-
     # np.savetxt("testout.dat", calculated)
 
-    # expected: np.ndarray = np.loadtxt(REFERENCE_TEST_DATA / Path("abe_solid_with_heating.txt"))
-    # print("calculated = %s" % calculated)
-    # print("expected = %s" % expected)
+    expected: np.ndarray = np.loadtxt(REFERENCE_TEST_DATA / Path("abe_solid_with_heating.txt"))
+    logger.info("calculated = %s", calculated)
+    logger.info("expected = %s", expected)
 
-    # assert np.isclose(calculated, expected, atol=atol, rtol=rtol).all()
-
-    assert True
+    assert np.isclose(calculated, expected, atol=atol, rtol=rtol).all()

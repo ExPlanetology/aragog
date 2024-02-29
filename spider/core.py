@@ -1,7 +1,20 @@
-"""Core classes and functions
-
-See the LICENSE file for licensing information.
-"""
+#
+# Copyright 2024 Dan J. Bower
+#
+# This file is part of Spider.
+#
+# Spider is free software: you can redistribute it and/or modify it under the terms of the GNU
+# General Public License as published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# Spider is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
+# even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along with Spider. If not,
+# see <https://www.gnu.org/licenses/>.
+#
+"""Core classes and functions"""
 
 from __future__ import annotations
 
@@ -82,8 +95,7 @@ class BoundaryConditions(ScaledDataclassFromConfiguration):
         elif self.inner_boundary_condition == 3:
             self.inner_boundary_value /= self.scalings.temperature
         else:
-            msg: str = "inner_boundary_condition = %d is unknown" % self.inner_boundary_condition
-            logger.error(msg)
+            msg: str = f"inner_boundary_condition = {self.inner_boundary_condition} is unknown"
             raise ValueError(msg)
 
     def _scale_outer_boundary_condition(self) -> None:
@@ -107,8 +119,7 @@ class BoundaryConditions(ScaledDataclassFromConfiguration):
         elif self.outer_boundary_condition == 5:
             self.outer_boundary_value /= self.scalings.temperature
         else:
-            msg: str = "outer_boundary_condition = %d is unknown" % self.outer_boundary_condition
-            logger.error(msg)
+            msg: str = f"outer_boundary_condition = {self.outer_boundary_condition} is unknown"
             raise ValueError(msg)
 
     def conform_temperature_boundary_conditions(
@@ -174,8 +185,7 @@ class BoundaryConditions(ScaledDataclassFromConfiguration):
         elif self.outer_boundary_condition == 5:
             pass
         else:
-            msg: str = "outer_boundary_condition = %d is unknown" % self.outer_boundary_condition
-            logger.error(msg)
+            msg: str = f"outer_boundary_condition = {self.outer_boundary_condition} is unknown"
             raise ValueError(msg)
 
     def grey_body(self, state: State) -> None:
@@ -210,8 +220,7 @@ class BoundaryConditions(ScaledDataclassFromConfiguration):
             pass
             # raise NotImplementedError
         else:
-            msg: str = "inner_boundary_condition = %d is unknown" % self.inner_boundary_condition
-            logger.error(msg)
+            msg: str = f"inner_boundary_condition = {self.inner_boundary_condition} is unknown"
             raise ValueError(msg)
 
 
@@ -342,8 +351,7 @@ class _FixedMesh:
                 np.ones(self.radii.size) * 0.25 * (self.outer_radius - self.inner_radius)
             )
         else:
-            msg: str = "Mixing length profile = %s is unknown" % self.mixing_length_profile
-            logger.error(msg)
+            msg: str = f"Mixing length profile = {self.mixing_length_profile} is unknown"
             raise ValueError(msg)
 
         self.mixing_length = self.mixing_length.reshape(-1, 1)  # 2-D
@@ -693,11 +701,9 @@ class SpiderData:
             section=self.config_parser["initial_condition"],
         )
         for phase_name, phase_section in self.config_parser.phases.items():
-            print("top")
             phase: PhaseEvaluator = PhaseEvaluator.from_configuration(
                 self.scalings, phase_name, section=phase_section
             )
-            print("here")
             self.phases[phase_name] = phase
         for radionuclide_name, radionuclide_section in self.config_parser.radionuclides.items():
             radionuclide: Radionuclide = Radionuclide.from_configuration(

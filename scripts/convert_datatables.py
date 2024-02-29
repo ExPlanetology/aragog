@@ -14,7 +14,6 @@ from __future__ import annotations
 import logging
 from dataclasses import KW_ONLY, dataclass, field
 from pathlib import Path
-from typing import Self
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -175,7 +174,7 @@ class DataFile:
         coordinate_scaling: float = 1,
         quantity_scaling: float = 1,
         **kwargs,
-    ) -> Self:
+    ) -> DataFile:
         logger.info("Loading data from %s", file_path)
         xs, ys, zs = np.loadtxt(file_path, unpack=True)
         reshape: tuple[int, int] = (number_coordinate_points, number_pressure_points)
@@ -424,118 +423,118 @@ if __name__ == "__main__":
     main()
 
 
-def plot(DataFile: DataFile):
-    fig, axes = plt.subplots()
+# def plot(DataFile: DataFile):
+#     fig, axes = plt.subplots()
 
-    # Solid temperature.
-    xs, ys, zs = np.loadtxt("temperature_solid.dat", unpack=True)
-    xs *= pressure_scale
-    ys *= entropy_scale_solid
-    zs *= 1.0
-    xs2 = xs.reshape((nrows, ncols))
-    ys2 = ys.reshape((nrows, ncols))
-    grids = zs.reshape((nrows, ncols))
-    # print(np.min(ys2), np.max(ys2), np.max(grids))
-    ax1.pcolor(xs2, ys2, grids, cmap="RdBu", vmin=500, vmax=13000)
-    ax1.axis([xs.min(), xs.max(), ys.min(), ys.max()])
-    ax1.set_title("Temperature, K")
-    ax1.set_xlabel("Pressure, Pa")
-    ax1.set_ylabel("Entropy, J/kg/K")
-    # Interpolation.
-    xgs = np.unique(xs2[0, :])
-    ygs = np.unique(ys2[:, 0])
-    # NOTE: y before x.
-    fms = interpolate.RectBivariateSpline(ygs, xgs, grids)
+#     # Solid temperature.
+#     xs, ys, zs = np.loadtxt("temperature_solid.dat", unpack=True)
+#     xs *= pressure_scale
+#     ys *= entropy_scale_solid
+#     zs *= 1.0
+#     xs2 = xs.reshape((nrows, ncols))
+#     ys2 = ys.reshape((nrows, ncols))
+#     grids = zs.reshape((nrows, ncols))
+#     # print(np.min(ys2), np.max(ys2), np.max(grids))
+#     ax1.pcolor(xs2, ys2, grids, cmap="RdBu", vmin=500, vmax=13000)
+#     ax1.axis([xs.min(), xs.max(), ys.min(), ys.max()])
+#     ax1.set_title("Temperature, K")
+#     ax1.set_xlabel("Pressure, Pa")
+#     ax1.set_ylabel("Entropy, J/kg/K")
+#     # Interpolation.
+#     xgs = np.unique(xs2[0, :])
+#     ygs = np.unique(ys2[:, 0])
+#     # NOTE: y before x.
+#     fms = interpolate.RectBivariateSpline(ygs, xgs, grids)
 
-    # Read in some other quantity and interpolate to P, T, quantity from P, S, quantity.
-    # Uncomment for solid.
-    # in_quantities = {'adiabat_temp_grad': 1.0E-9,'density':1000.0,'heat_capacity': entropy_scale_solid,'thermal_exp':1.0}
-    # Uncomment for liquid.
-    # in_quantities = {'adiabat_temp_grad': 1.0E-9,'density':1000.0,'heat_capacity': entropy_scale_liquid,'thermal_exp':1.0}
+# Read in some other quantity and interpolate to P, T, quantity from P, S, quantity.
+# Uncomment for solid.
+# in_quantities = {'adiabat_temp_grad': 1.0E-9,'density':1000.0,'heat_capacity': entropy_scale_solid,'thermal_exp':1.0}
+# Uncomment for liquid.
+# in_quantities = {'adiabat_temp_grad': 1.0E-9,'density':1000.0,'heat_capacity': entropy_scale_liquid,'thermal_exp':1.0}
 
-    # for quantity, quantity_scale in in_quantities.items():
-    #     filename = quantity + '_melt.dat'
-    #     # filename = quantity + '_solid.dat'
-    #     xq,yq,zq = np.loadtxt(filename,unpack=True)
-    #     xq *= pressure_scale
-    #     yq *= entropy_scale_liquid
-    #     zq *= quantity_scale
-    #     quantity_T = fms.ev(yq, xq)
-    #     out_data = np.column_stack((xq, quantity_T, zq))
-    #     np.savetxt(Path('temperature',filename), out_data)
+# for quantity, quantity_scale in in_quantities.items():
+#     filename = quantity + '_melt.dat'
+#     # filename = quantity + '_solid.dat'
+#     xq,yq,zq = np.loadtxt(filename,unpack=True)
+#     xq *= pressure_scale
+#     yq *= entropy_scale_liquid
+#     zq *= quantity_scale
+#     quantity_T = fms.ev(yq, xq)
+#     out_data = np.column_stack((xq, quantity_T, zq))
+#     np.savetxt(Path('temperature',filename), out_data)
 
-    # xs, ys = np.loadtxt("solidus_A11_H13.dat", unpack=True)
-    # xs *= 1000000000.0
-    # ys *= 4824266.84604467
-    # vms = fms.ev(ys, xs)
-    # out_data = np.column_stack((xs, vms))
-    # filename = "solidus_A11_H13.dat"
-    # np.savetxt(Path("temperature", filename), out_data)
+# xs, ys = np.loadtxt("solidus_A11_H13.dat", unpack=True)
+# xs *= 1000000000.0
+# ys *= 4824266.84604467
+# vms = fms.ev(ys, xs)
+# out_data = np.column_stack((xs, vms))
+# filename = "solidus_A11_H13.dat"
+# np.savetxt(Path("temperature", filename), out_data)
 
-    # xm,ym,zm = np.loadtxt('temperature_melt.dat',unpack=True)
-    # xm *= 1000000000.0*1.0E-9
-    # ym *= 4805046.659407042
-    # zm *= 1.0
-    # nrows = 95
-    # ncols = 2020
-    # xm2 = xm.reshape((nrows,ncols))#[:,:290]
-    # ym2 = ym.reshape((nrows,ncols))#[:,:290]
-    # gridm = zm.reshape((nrows,ncols))#[:,:290]
+# xm,ym,zm = np.loadtxt('temperature_melt.dat',unpack=True)
+# xm *= 1000000000.0*1.0E-9
+# ym *= 4805046.659407042
+# zm *= 1.0
+# nrows = 95
+# ncols = 2020
+# xm2 = xm.reshape((nrows,ncols))#[:,:290]
+# ym2 = ym.reshape((nrows,ncols))#[:,:290]
+# gridm = zm.reshape((nrows,ncols))#[:,:290]
 
-    # im = ax2.pcolor(xm2,ym2,gridm,cmap='RdBu', vmin=500, vmax=13000)
-    # ax2.axis([xm.min(), xm.max(), ym.min(), ym.max()])
+# im = ax2.pcolor(xm2,ym2,gridm,cmap='RdBu', vmin=500, vmax=13000)
+# ax2.axis([xm.min(), xm.max(), ym.min(), ym.max()])
 
-    # x,y = np.loadtxt('liquidus_A11_H13.dat',unpack=True)
-    # x *= 1000000000.0*1.0E-9
-    # y *= 4805046.659407042
-    # ax2.plot(x,y,'k-')
+# x,y = np.loadtxt('liquidus_A11_H13.dat',unpack=True)
+# x *= 1000000000.0*1.0E-9
+# y *= 4805046.659407042
+# ax2.plot(x,y,'k-')
 
-    # ax2.set_title('Melt')
-    # ax2.set_xlabel('Pressure, GPa')
-    # ax2.set_ylabel('Entropy, J/kg/K')
+# ax2.set_title('Melt')
+# ax2.set_xlabel('Pressure, GPa')
+# ax2.set_ylabel('Entropy, J/kg/K')
 
-    # fig.subplots_adjust(right=0.8)
-    # cbar_ax = fig.add_axes([0.85,0.15,0.05,0.7])
-    # fig.colorbar(im, cax=cbar_ax)
+# fig.subplots_adjust(right=0.8)
+# cbar_ax = fig.add_axes([0.85,0.15,0.05,0.7])
+# fig.colorbar(im, cax=cbar_ax)
 
-    # # # test interpolation
-    # # xgs = np.unique(xs2[0,:])
-    # # ygs = np.unique(ys2[:,0])
-    # # fms = interpolate.RectBivariateSpline(ygs,xgs,grids)
-    # # vms = fms.ev(ys,xs)
+# # # test interpolation
+# # xgs = np.unique(xs2[0,:])
+# # ygs = np.unique(ys2[:,0])
+# # fms = interpolate.RectBivariateSpline(ygs,xgs,grids)
+# # vms = fms.ev(ys,xs)
 
-    # # test interpolation
-    # xg = np.unique(xm2[0,:])
-    # yg = np.unique(ym2[:,0])
-    # fm = interpolate.RectBivariateSpline(yg,xg,gridm)
-    # vm = fm.ev(y,x)
+# # test interpolation
+# xg = np.unique(xm2[0,:])
+# yg = np.unique(ym2[:,0])
+# fm = interpolate.RectBivariateSpline(yg,xg,gridm)
+# vm = fm.ev(y,x)
 
-    # ax3.plot( x, vm )
-    # ax3.plot( xs, vms )
-    # ax3.set_title( 'Temperature' )
-    # ax3.set_xlabel('Pressure, GPa')
-    # ax3.set_ylabel('Temperature, K')
-    # ax3.set_xlim( [0,1000])
-    # ax3.set_ylim( [1200,13000] )
+# ax3.plot( x, vm )
+# ax3.plot( xs, vms )
+# ax3.set_title( 'Temperature' )
+# ax3.set_xlabel('Pressure, GPa')
+# ax3.set_ylabel('Temperature, K')
+# ax3.set_xlim( [0,1000])
+# ax3.set_ylim( [1200,13000] )
 
-    # # Fei et al. (2021) MgSiO3 melting curve
-    # P_lin = np.linspace(0,1E4,1000)
-    # # lower bound
-    # T_lower = 6000*(P_lin/140)**0.26
-    # ax3.plot( P_lin, T_lower )
-    # # upper bound
-    # T_upper = 6295*(P_lin/140)**0.317
-    # ax3.plot( P_lin, T_upper )
+# # Fei et al. (2021) MgSiO3 melting curve
+# P_lin = np.linspace(0,1E4,1000)
+# # lower bound
+# T_lower = 6000*(P_lin/140)**0.26
+# ax3.plot( P_lin, T_lower )
+# # upper bound
+# T_upper = 6295*(P_lin/140)**0.317
+# ax3.plot( P_lin, T_upper )
 
-    # # now get temperature along 0.4 melt fraction contour
-    # #phi = 0.4
-    # #vmphi = vm * phi + vms * (1.0-phi)
-    # #ax3.plot( x, vmphi )
+# # now get temperature along 0.4 melt fraction contour
+# #phi = 0.4
+# #vmphi = vm * phi + vms * (1.0-phi)
+# #ax3.plot( x, vmphi )
 
-    # # Pr and Tr
-    # #tp, Pr = np.loadtxt('Pr.dat', unpack=True )
-    # #tt, Tr = np.loadtxt('Tr.dat', unpack=True )
-    # #ax3.plot( Pr, Tr, 'r--' )
+# # Pr and Tr
+# #tp, Pr = np.loadtxt('Pr.dat', unpack=True )
+# #tt, Tr = np.loadtxt('Tr.dat', unpack=True )
+# #ax3.plot( Pr, Tr, 'r--' )
 
-    # plt.colorbar()
-    # plt.show()
+# plt.colorbar()
+# plt.show()
