@@ -1,14 +1,27 @@
-"""A phase defines EOS and transport properties.
-
-See the LICENSE file for licensing information.
-"""
+#
+# Copyright 2024 Dan J. Bower
+#
+# This file is part of Spider.
+#
+# Spider is free software: you can redistribute it and/or modify it under the terms of the GNU
+# General Public License as published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# Spider is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
+# even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along with Spider. If not,
+# see <https://www.gnu.org/licenses/>.
+#
+"""A phase defines EOS and transport properties."""
 
 from __future__ import annotations
 
 import logging
 from configparser import SectionProxy
 from dataclasses import KW_ONLY, dataclass, field
-from typing import TYPE_CHECKING, Protocol, Self
+from typing import TYPE_CHECKING, Protocol
 
 import numpy as np
 
@@ -132,25 +145,21 @@ class PhaseStateBasic:
 
 
 class PhaseEvaluatorProtocol(Protocol):
-    def density(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        ...
+    def density(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray: ...
 
     def gravitational_acceleration(
         self, temperature: np.ndarray, pressure: np.ndarray
-    ) -> np.ndarray:
-        ...
+    ) -> np.ndarray: ...
 
-    def heat_capacity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        ...
+    def heat_capacity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray: ...
 
-    def thermal_conductivity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        ...
+    def thermal_conductivity(
+        self, temperature: np.ndarray, pressure: np.ndarray
+    ) -> np.ndarray: ...
 
-    def thermal_expansivity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        ...
+    def thermal_expansivity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray: ...
 
-    def viscosity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        ...
+    def viscosity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray: ...
 
 
 @dataclass(frozen=True)
@@ -184,7 +193,9 @@ class PhaseEvaluator(PhaseEvaluatorProtocol):
     phase_boundary: PropertyABC
 
     @classmethod
-    def from_configuration(cls, scalings: Scalings, name: str, *, section: SectionProxy) -> Self:
+    def from_configuration(
+        cls, scalings: Scalings, name: str, *, section: SectionProxy
+    ) -> PhaseEvaluator:
         """Creates a class instance from a configuration section.
 
         Args:

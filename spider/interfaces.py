@@ -1,7 +1,20 @@
-"""Interfaces
-
-See the LICENSE file for licensing information.
-"""
+#
+# Copyright 2024 Dan J. Bower
+#
+# This file is part of Spider.
+#
+# Spider is free software: you can redistribute it and/or modify it under the terms of the GNU
+# General Public License as published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# Spider is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
+# even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along with Spider. If not,
+# see <https://www.gnu.org/licenses/>.
+#
+"""Interfaces"""
 
 from __future__ import annotations
 
@@ -10,7 +23,7 @@ import logging
 from abc import ABC, abstractmethod
 from configparser import SectionProxy
 from dataclasses import dataclass, field
-from typing import Any, Callable, Self
+from typing import Any, Callable
 
 import numpy as np
 from scipy.interpolate import RectBivariateSpline, interp1d
@@ -23,7 +36,7 @@ class DataclassFromConfiguration:
     """A dataclass that can source its attributes from a configuration section"""
 
     @classmethod
-    def from_configuration(cls, *args, section: SectionProxy) -> Self:
+    def from_configuration(cls, *args, section: SectionProxy) -> DataclassFromConfiguration:
         """Creates an instance from a configuration section.
 
         This reads the configuration data and sources the attributes from this data and performs
