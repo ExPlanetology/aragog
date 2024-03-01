@@ -235,7 +235,10 @@ class PhaseEvaluator:
 
 @dataclass
 class CompositeMeltFraction(PropertyABC):
-    """Melt fraction for the composite"""
+    """Melt fraction of the composite
+
+    The melt fraction is always between zero and one.
+    """
 
     _liquid: PhaseEvaluator
     _solid: PhaseEvaluator
@@ -243,21 +246,41 @@ class CompositeMeltFraction(PropertyABC):
 
     @override
     def _get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        liquidus: np.ndarray = self._liquid.phase_boundary(temperature, pressure)
-        solidus: np.ndarray = self._solid.phase_boundary(temperature, pressure)
-        fusion: np.ndarray = liquidus - solidus
-        melt_fraction: np.ndarray = (temperature - solidus) / fusion
+        liquidus_temperature: np.ndarray = self._liquid.phase_boundary(temperature, pressure)
+        solidus_temperature: np.ndarray = self._solid.phase_boundary(temperature, pressure)
+        delta_fusion_temperature: np.ndarray = liquidus_temperature - solidus_temperature
+        melt_fraction: np.ndarray = (temperature - solidus_temperature) / delta_fusion_temperature
         melt_fraction = np.clip(melt_fraction, 0, 1)
 
         return melt_fraction
 
 
 @dataclass
-class CompositeDensity(PropertyABC):
-    """Density for the composite
+class CompositeConductivity(PropertyABC):
+    """Thermal conductivity of the composite by linear mixing"""
 
-    Volume additivity
-    """
+    _liquid: PhaseEvaluator
+    _solid: PhaseEvaluator
+    _: KW_ONLY
+    _melt_fraction: PropertyABC
+    name: str = field(init=False, default="conductivity")
+
+    @override
+    def _get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        melt_fraction: np.ndarray = self._melt_fraction(temperature, pressure)
+        conductivity: np.ndarray = melt_fraction * self._liquid.thermal_conductivity(
+            temperature, pressure
+        )
+        conductivity += (1 - melt_fraction) * self._solid.thermal_conductivity(
+            temperature, pressure
+        )
+
+        return conductivity
+
+
+@dataclass
+class CompositeDensity(PropertyABC):
+    """Density of the composite computed by volume additivity"""
 
     _liquid: PhaseEvaluator
     _solid: PhaseEvaluator
@@ -267,10 +290,13 @@ class CompositeDensity(PropertyABC):
 
     @override
     def _get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        # FIXME: Compute based on properties along the melting curves
+        liquidus_temperature: np.ndarray = self._liquid.phase_boundary(temperature, pressure)
+        solidus_temperature: np.ndarray = self._solid.phase_boundary(temperature, pressure)
         melt_fraction: np.ndarray = self._melt_fraction(temperature, pressure)
-        density_inverse: np.ndarray = melt_fraction / self._liquid.density(temperature, pressure)
-        density_inverse += (1 - melt_fraction) / self._solid.density(temperature, pressure)
+        density_inverse: np.ndarray = melt_fraction / self._liquid.density(
+            liquidus_temperature, pressure
+        )
+        density_inverse += (1 - melt_fraction) / self._solid.density(solidus_temperature, pressure)
         density: np.ndarray = 1 / density_inverse
 
         return density
@@ -278,7 +304,7 @@ class CompositeDensity(PropertyABC):
 
 @dataclass
 class CompositePorosity(PropertyABC):
-    """Porosity of the composite"""
+    """Porosity of the composite, that is the volume fraction occupied by the melt"""
 
     _liquid: PhaseEvaluator
     _solid: PhaseEvaluator
@@ -288,11 +314,12 @@ class CompositePorosity(PropertyABC):
 
     @override
     def _get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        # FIXME: Cmpute based on properties along the melting curves
+        liquidus_temperature: np.ndarray = self._liquid.phase_boundary(temperature, pressure)
+        solidus_temperature: np.ndarray = self._solid.phase_boundary(temperature, pressure)
         density: np.ndarray = self._density(temperature, pressure)
-        solid_density: np.ndarray = self._solid.density(temperature, pressure)
-        liquid_density: np.ndarray = self._liquid.density(temperature, pressure)
-        porosity: np.ndarray = (solid_density - density) / (solid_density - liquid_density)
+        liquidus_density: np.ndarray = self._liquid.density(liquidus_temperature, pressure)
+        solidus_density: np.ndarray = self._solid.density(solidus_temperature, pressure)
+        porosity: np.ndarray = (solidus_density - density) / (solidus_density - liquidus_density)
 
         return porosity
 
@@ -301,7 +328,7 @@ class CompositePorosity(PropertyABC):
 class CompositeThermalExpansivity(PropertyABC):
     """Thermal expansivity of the composite
 
-    Solomatov (2007), Treatise on Geophysics, Eq. 3.3
+    TODO: Update reference, Solomatov (2007), Treatise on Geophysics, Eq. 3.3
 
     The first term is not included because it is small compared to the latent heat term
     """
@@ -314,14 +341,15 @@ class CompositeThermalExpansivity(PropertyABC):
 
     @override
     def _get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        # FIXME: Cmpute based on properties along the melting curves
+        liquidus_temperature: np.ndarray = self._liquid.phase_boundary(temperature, pressure)
+        solidus_temperature: np.ndarray = self._solid.phase_boundary(temperature, pressure)
         density: np.ndarray = self._density(temperature, pressure)
-        solid_density: np.ndarray = self._solid.density(temperature, pressure)
-        liquid_density: np.ndarray = self._liquid.density(temperature, pressure)
-        liquidus: np.ndarray = self._liquid.phase_boundary(temperature, pressure)
-        solidus: np.ndarray = self._solid.phase_boundary(temperature, pressure)
-        fusion: np.ndarray = liquidus - solidus
-        thermal_expansivity: np.ndarray = (solid_density - liquid_density) / fusion / density
+        liquidus_density: np.ndarray = self._liquid.density(liquidus_temperature, pressure)
+        solidus_density: np.ndarray = self._solid.density(solidus_temperature, pressure)
+        delta_fusion_temperature: np.ndarray = liquidus_temperature - solidus_temperature
+        thermal_expansivity: np.ndarray = (
+            (solidus_density - liquidus_density) / delta_fusion_temperature / density
+        )
 
         return thermal_expansivity
 
@@ -375,17 +403,7 @@ class CompositePhaseEvaluator:
 #   eval->fusion = liquidus - solidus;
 #   eval->fusion_curve = solidus + 0.5 * eval->fusion;
 #   gphi = (T - solidus) / eval->fusion;
-#   eval->phase_fraction = gphi;
 
-#   /* truncation */
-#   if (eval->phase_fraction > 1.0)
-#   {
-#     eval->phase_fraction = 1.0;
-#   }
-#   if (eval->phase_fraction < 0.0)
-#   {
-#     eval->phase_fraction = 0.0;
-#   }
 
 #   /* properties along melting curves */
 #   ierr = EOSEval(composite->eos[composite->liquidus_slot], P, liquidus, &eval_melt);
@@ -402,32 +420,9 @@ class CompositePhaseEvaluator:
 #   eval->Cp = eval->enthalpy_of_fusion; // enthalpy change upon melting.
 #   eval->Cp /= eval->fusion;
 
-#   /* Rho */
-#   /* Volume additivity */
-#   eval->rho = eval->phase_fraction * (1.0 / eval_melt.rho) + (1 - eval->phase_fraction) *
-#    (1.0 / eval_solid.rho);
-#   eval->rho = 1.0 / (eval->rho);
-
-#   /* porosity */
-#   /* i.e. volume fraction occupied by the melt */
-#   eval->porosity = (eval_solid.rho - eval->rho) / (eval_solid.rho - eval_melt.rho);
-
-#   /* Alpha */
-#   /* positive for MgSiO3 since solid rho > melt rho.  But may need to adjust for compositional
-#      effects */
-#   /* Solomatov (2007), Treatise on Geophysics, Eq. 3.3 */
-#   /* The first term is not included because it is small compared to the latent heat term */
-#   eval->alpha = (eval_solid.rho - eval_melt.rho) / eval->fusion / eval->rho;
-
 #   /* dTdPs */
 #   /* Solomatov (2007), Treatise on Geophysics, Eq. 3.2 */
 #   eval->dTdPs = eval->alpha * eval->T / (eval->rho * eval->Cp);
-
-#   /* Conductivity */
-#   /* Linear mixing by phase fraction, for lack of better knowledge about how conductivities could
-#     be combined */
-#   eval->cond = eval->phase_fraction * eval_melt.cond;
-#   eval->cond += (1.0 - eval->phase_fraction) * eval_solid.cond;
 
 #   /* Viscosity */
 #   ierr = EOSEvalSetViscosity(composite->eos[composite->liquidus_slot], &eval_melt);
