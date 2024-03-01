@@ -261,9 +261,9 @@ class MixedPhaseDensity(PropertyABC):
 
     _liquid: PhaseEvaluator
     _solid: PhaseEvaluator
+    name: str = field(init=False, default="density")
     _: KW_ONLY
     _melt_fraction: PropertyABC
-    name: str = field(init=False, default="density")
 
     @override
     def _get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
@@ -280,14 +280,32 @@ class MixedPhaseDensity(PropertyABC):
 
 
 @dataclass
+class MixedPhaseFusionCurve(PropertyABC):
+    """Temperature of the fusion curve"""
+
+    _liquid: PhaseEvaluator
+    _solid: PhaseEvaluator
+    name: str = field(init=False, default="fusion_curve")
+
+    @override
+    def _get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        liquidus_temperature: np.ndarray = self._liquid.phase_boundary(temperature, pressure)
+        solidus_temperature: np.ndarray = self._solid.phase_boundary(temperature, pressure)
+        delta_fusion_temperature: np.ndarray = liquidus_temperature - solidus_temperature
+        fusion_curve_temperature: np.ndarray = solidus_temperature + 0.5 * delta_fusion_temperature
+
+        return fusion_curve_temperature
+
+
+@dataclass
 class MixedPhasePorosity(PropertyABC):
     """Porosity of the mixed phase, that is the volume fraction occupied by the melt"""
 
     _liquid: PhaseEvaluator
     _solid: PhaseEvaluator
+    name: str = field(init=False, default="porosity")
     _: KW_ONLY
     _density: PropertyABC
-    name: str = field(init=False, default="porosity")
 
     @override
     def _get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
@@ -307,9 +325,9 @@ class MixedPhaseThermalConductivity(PropertyABC):
 
     _liquid: PhaseEvaluator
     _solid: PhaseEvaluator
+    name: str = field(init=False, default="conductivity")
     _: KW_ONLY
     _melt_fraction: PropertyABC
-    name: str = field(init=False, default="conductivity")
 
     @override
     def _get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
@@ -334,9 +352,9 @@ class MixedPhaseThermalExpansivity(PropertyABC):
 
     _liquid: PhaseEvaluator
     _solid: PhaseEvaluator
+    name: str = field(init=False, default="density")
     _: KW_ONLY
     _density: PropertyABC
-    name: str = field(init=False, default="density")
 
     @override
     def _get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
@@ -368,6 +386,7 @@ class MixedPhaseEvaluator:
         self.density: PropertyABC = MixedPhaseDensity(
             self.liquid, self.solid, _melt_fraction=self.melt_fraction
         )
+        self.fusion_curve: PropertyABC = MixedPhaseFusionCurve(self.liquid, self.solid)
         # gravitational_acceleration is the same for the liquid and solid, so use either
         self.gravitational_acceleration: PropertyABC = self.solid.gravitational_acceleration
         self.porosity: PropertyABC = MixedPhasePorosity(
