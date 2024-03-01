@@ -230,12 +230,12 @@ class PhaseEvaluator:
         return cls(scalings, name, **init_dict)
 
 
-# region Composite phase
+# region Mixed phase
 
 
 @dataclass
-class CompositeMeltFraction(PropertyABC):
-    """Melt fraction of the composite
+class MixedPhaseMeltFraction(PropertyABC):
+    """Melt fraction of the mixed phase
 
     The melt fraction is always between zero and one.
     """
@@ -256,31 +256,8 @@ class CompositeMeltFraction(PropertyABC):
 
 
 @dataclass
-class CompositeConductivity(PropertyABC):
-    """Thermal conductivity of the composite by linear mixing"""
-
-    _liquid: PhaseEvaluator
-    _solid: PhaseEvaluator
-    _: KW_ONLY
-    _melt_fraction: PropertyABC
-    name: str = field(init=False, default="conductivity")
-
-    @override
-    def _get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        melt_fraction: np.ndarray = self._melt_fraction(temperature, pressure)
-        conductivity: np.ndarray = melt_fraction * self._liquid.thermal_conductivity(
-            temperature, pressure
-        )
-        conductivity += (1 - melt_fraction) * self._solid.thermal_conductivity(
-            temperature, pressure
-        )
-
-        return conductivity
-
-
-@dataclass
-class CompositeDensity(PropertyABC):
-    """Density of the composite computed by volume additivity"""
+class MixedPhaseDensity(PropertyABC):
+    """Density of the mixed phase computed by volume additivity"""
 
     _liquid: PhaseEvaluator
     _solid: PhaseEvaluator
@@ -303,8 +280,8 @@ class CompositeDensity(PropertyABC):
 
 
 @dataclass
-class CompositePorosity(PropertyABC):
-    """Porosity of the composite, that is the volume fraction occupied by the melt"""
+class MixedPhasePorosity(PropertyABC):
+    """Porosity of the mixed phase, that is the volume fraction occupied by the melt"""
 
     _liquid: PhaseEvaluator
     _solid: PhaseEvaluator
@@ -325,10 +302,34 @@ class CompositePorosity(PropertyABC):
 
 
 @dataclass
-class CompositeThermalExpansivity(PropertyABC):
-    """Thermal expansivity of the composite :cite:p:`{Equation 3.3,}SOLO07`
+class MixedPhaseThermalConductivity(PropertyABC):
+    """Thermal conductivity of the mixed phase by linear mixing"""
 
-    The first term is not included because it is small compared to the latent heat term
+    _liquid: PhaseEvaluator
+    _solid: PhaseEvaluator
+    _: KW_ONLY
+    _melt_fraction: PropertyABC
+    name: str = field(init=False, default="conductivity")
+
+    @override
+    def _get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        melt_fraction: np.ndarray = self._melt_fraction(temperature, pressure)
+        conductivity: np.ndarray = melt_fraction * self._liquid.thermal_conductivity(
+            temperature, pressure
+        )
+        conductivity += (1 - melt_fraction) * self._solid.thermal_conductivity(
+            temperature, pressure
+        )
+
+        return conductivity
+
+
+@dataclass
+class MixedPhaseThermalExpansivity(PropertyABC):
+    """Thermal expansivity of the mixed phase :cite:p:`{Equation 3.3,}SOLO07`
+
+    The first term in :cite:t:`{Equation 3.3,}SOLO07` is not included because it is small compared
+    to the latent heat term.
     """
 
     _liquid: PhaseEvaluator
@@ -353,22 +354,31 @@ class CompositeThermalExpansivity(PropertyABC):
 
 
 @dataclass
-class CompositePhaseEvaluator:
-    """Contains the objects to evaluate the EOS and transport properties of a two-phase mixture
+class MixedPhaseEvaluator:
+    """Contains the objects to evaluate the EOS and transport properties of a mixed phase.
 
     TODO: Need to finish this.
     """
 
     phases: dict[str, PhaseEvaluator]
-    density: PropertyABC = field(init=False)
-    melt_fraction: PropertyABC = field(init=False)
-    porosity: PropertyABC = field(init=False)
-    name: str = field(init=False, default="composite")
+    name: str = field(init=False, default="mixed_phase")
 
     def __post_init__(self):
-        self.melt_fraction = CompositeMeltFraction(self.liquid, self.solid)
-        self.density = CompositeDensity(self.liquid, self.solid, _melt_fraction=self.melt_fraction)
-        self.porosity = CompositePorosity(self.liquid, self.solid, _density=self.density)
+        self.melt_fraction: PropertyABC = MixedPhaseMeltFraction(self.liquid, self.solid)
+        self.density: PropertyABC = MixedPhaseDensity(
+            self.liquid, self.solid, _melt_fraction=self.melt_fraction
+        )
+        # gravitational_acceleration is the same for the liquid and solid, so use either
+        self.gravitational_acceleration: PropertyABC = self.solid.gravitational_acceleration
+        self.porosity: PropertyABC = MixedPhasePorosity(
+            self.liquid, self.solid, _density=self.density
+        )
+        self.thermal_conductivity: PropertyABC = MixedPhaseThermalConductivity(
+            self.liquid, self.solid, _melt_fraction=self.melt_fraction
+        )
+        self.thermal_expansivity: PropertyABC = MixedPhaseThermalExpansivity(
+            self.liquid, self.solid, _density=self.density
+        )
 
     @property
     def liquid(self) -> PhaseEvaluator:
