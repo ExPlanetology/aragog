@@ -19,6 +19,7 @@
 from __future__ import annotations
 
 import logging
+import sys
 from ast import literal_eval
 from configparser import ConfigParser, SectionProxy
 from dataclasses import KW_ONLY, dataclass, field
@@ -31,6 +32,11 @@ from thermochem import codata
 
 from spider.interfaces import ScaledDataclassFromConfiguration
 from spider.phase import MixedPhaseEvaluator, PhaseEvaluator, PhaseEvaluatorProtocol
+
+if sys.version_info < (3, 12):
+    from typing_extensions import override
+else:
+    from typing import override
 
 if TYPE_CHECKING:
     from spider.solver import State
@@ -72,7 +78,9 @@ class BoundaryConditions(ScaledDataclassFromConfiguration):
     core_density: float
     core_heat_capacity: float
 
-    def scale_attributes(self):
+    @override
+    def scale_attributes(self) -> None:
+        """See base class."""
         self.equilibrium_temperature /= self.scalings.temperature
         self.core_radius /= self.scalings.radius
         self.core_density /= self.scalings.density
@@ -250,7 +258,9 @@ class InitialCondition(ScaledDataclassFromConfiguration):
         super().__post_init__()
         self._temperature = self.get_linear()
 
+    @override
     def scale_attributes(self) -> None:
+        """See base class."""
         self.surface_temperature /= self.scalings.temperature
         self.basal_temperature /= self.scalings.temperature
 
@@ -397,7 +407,9 @@ class SpiderMesh(ScaledDataclassFromConfiguration):
         self._d_dr_transform = self.d_dr_transform_matrix()
         self._quantity_transform = self.quantity_transform_matrix()
 
+    @override
     def scale_attributes(self) -> None:
+        """See base class."""
         self.inner_radius /= self.scalings.radius
         self.outer_radius /= self.scalings.radius
 
@@ -515,7 +527,8 @@ class Radionuclide(ScaledDataclassFromConfiguration):
     heat_production: float
     half_life_years: float
 
-    def scale_attributes(self):
+    @override
+    def scale_attributes(self) -> None:
         self.t0_years /= self.scalings.time_years
         self.concentration *= 1e-6  # to mass fraction
         self.heat_production /= self.scalings.power_per_mass
@@ -559,10 +572,12 @@ class Scalings(ScaledDataclassFromConfiguration):
         gravitational_acceleration, m/s^2
         heat_capacity, J/kg/K
         heat_flux, W/m^2
+        latent_heat_per_mass, J/kg
         power_per_mass, W/kg
         power_per_volume, W/m^3
         pressure, Pa
         temperature_gradient, K/m
+        thermal_expansivity, 1/K
         thermal_conductivity, W/m/K
         velocity, m/s
         viscosity, Pa s
@@ -570,45 +585,34 @@ class Scalings(ScaledDataclassFromConfiguration):
         stefan_boltzmann_constant (non-dimensional)
     """
 
-    # Default scalings
     radius: float = 1
     temperature: float = 1
     density: float = 1
     time: float = 1
-    # Dimensional
-    area: float = field(init=False)
-    gravitational_acceleration: float = field(init=False)
-    heat_capacity: float = field(init=False)
-    heat_flux: float = field(init=False)
-    kinetic_energy_per_volume: float = field(init=False)
-    power_per_mass: float = field(init=False)
-    power_per_volume: float = field(init=False)
-    pressure: float = field(init=False)
-    temperature_gradient: float = field(init=False)
-    time_years: float = field(init=False)  # Equivalent to TIMEYRS in C code version
-    thermal_conductivity: float = field(init=False)
-    velocity: float = field(init=False)
-    viscosity: float = field(init=False)
-    # Non-dimensional
-    stefan_boltzmann_constant: float = field(init=False)
 
-    def scale_attributes(self):
-        self.area = np.square(self.radius)
-        self.gravitational_acceleration = self.radius / np.square(self.time)
-        self.temperature_gradient = self.temperature / self.radius
-        self.thermal_expansivity = 1 / self.temperature
-        self.pressure = self.density * self.gravitational_acceleration * self.radius
-        self.velocity = self.radius / self.time
-        self.kinetic_energy_per_volume = self.density * np.square(self.velocity)
-        self.heat_capacity = self.kinetic_energy_per_volume / self.density / self.temperature
-        self.power_per_volume = self.kinetic_energy_per_volume / self.time
-        self.power_per_mass = self.power_per_volume / self.density
-        self.heat_flux = self.power_per_volume * self.radius
-        self.thermal_conductivity = self.power_per_volume * self.area / self.temperature
-        self.viscosity = self.pressure * self.time
-        self.time_years = self.time / constants.Julian_year
+    @override
+    def scale_attributes(self) -> None:
+        self.area: float = np.square(self.radius)
+        self.gravitational_acceleration: float = self.radius / np.square(self.time)
+        self.temperature_gradient: float = self.temperature / self.radius
+        self.thermal_expansivity: float = 1 / self.temperature
+        self.pressure: float = self.density * self.gravitational_acceleration * self.radius
+        self.velocity: float = self.radius / self.time
+        self.kinetic_energy_per_volume: float = self.density * np.square(self.velocity)
+        self.heat_capacity: float = (
+            self.kinetic_energy_per_volume / self.density / self.temperature
+        )
+        self.latent_heat_per_mass: float = self.heat_capacity * self.temperature
+        self.power_per_volume: float = self.kinetic_energy_per_volume / self.time
+        self.power_per_mass: float = self.power_per_volume / self.density
+        self.heat_flux: float = self.power_per_volume * self.radius
+        self.thermal_conductivity: float = self.power_per_volume * self.area / self.temperature
+        self.viscosity: float = self.pressure * self.time
+        self.time_years: float = self.time / constants.Julian_year  # Equivalent to TIMEYRS C code
         # Non-dimensional constants
-        self.stefan_boltzmann_constant = codata.value("Stefan-Boltzmann constant")  # W/m^2/K^4
+        self.stefan_boltzmann_constant: float = codata.value(
+            "Stefan-Boltzmann constant"
+        )  # W/m^2/K^4
         self.stefan_boltzmann_constant /= (
             self.power_per_volume * self.radius / np.power(self.temperature, 4)
         )
@@ -721,8 +725,10 @@ class SpiderData:
             self.phase = phase
 
         elif len(self.phases) == 2:
-            logger.info("Two phases available, creating composite")
-            self.phase = MixedPhaseEvaluator(self.phases)
+            logger.info("Two phases found so creating a composite")
+            self.phase = MixedPhaseEvaluator.from_configuration(
+                self.scalings, self.phases, section=self.config_parser["mixed_phase"]
+            )
 
 
 def is_monotonic_increasing(some_array: np.ndarray) -> np.bool_:

@@ -32,6 +32,7 @@ from spider.interfaces import (
     LookupProperty2D,
     PhaseEvaluatorProtocol,
     PropertyABC,
+    ScaledDataclassFromConfiguration,
 )
 from spider.utilities import is_file, is_number
 
@@ -234,7 +235,7 @@ class PhaseEvaluator:
 
 
 @dataclass
-class MixedPhaseMeltFraction(PropertyABC):
+class _MixedPhaseMeltFraction(PropertyABC):
     """Melt fraction of the mixed phase
 
     The melt fraction is always between zero and one.
@@ -256,7 +257,7 @@ class MixedPhaseMeltFraction(PropertyABC):
 
 
 @dataclass
-class MixedPhaseDensity(PropertyABC):
+class _MixedPhaseDensity(PropertyABC):
     """Density of the mixed phase computed by volume additivity"""
 
     _liquid: PhaseEvaluator
@@ -280,25 +281,27 @@ class MixedPhaseDensity(PropertyABC):
 
 
 @dataclass
-class MixedPhaseFusionCurve(PropertyABC):
-    """Temperature of the fusion curve"""
+class _MixedPhaseHeatCapacity(PropertyABC):
+    """Heat capacity of the mixed phase :cite:p:`{Equation 4,}SOLO07`"""
 
     _liquid: PhaseEvaluator
     _solid: PhaseEvaluator
-    name: str = field(init=False, default="fusion_curve")
+    name: str = field(init=False, default="heat_capacity")
+    _: KW_ONLY
+    _latent_heat_of_fusion: float
 
     @override
     def _get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
         liquidus_temperature: np.ndarray = self._liquid.phase_boundary(temperature, pressure)
         solidus_temperature: np.ndarray = self._solid.phase_boundary(temperature, pressure)
         delta_fusion_temperature: np.ndarray = liquidus_temperature - solidus_temperature
-        fusion_curve_temperature: np.ndarray = solidus_temperature + 0.5 * delta_fusion_temperature
+        heat_capacity: np.ndarray = self._latent_heat_of_fusion / delta_fusion_temperature
 
-        return fusion_curve_temperature
+        return heat_capacity
 
 
 @dataclass
-class MixedPhasePorosity(PropertyABC):
+class _MixedPhasePorosity(PropertyABC):
     """Porosity of the mixed phase, that is the volume fraction occupied by the melt"""
 
     _liquid: PhaseEvaluator
@@ -320,7 +323,7 @@ class MixedPhasePorosity(PropertyABC):
 
 
 @dataclass
-class MixedPhaseThermalConductivity(PropertyABC):
+class _MixedPhaseThermalConductivity(PropertyABC):
     """Thermal conductivity of the mixed phase by linear mixing"""
 
     _liquid: PhaseEvaluator
@@ -343,11 +346,11 @@ class MixedPhaseThermalConductivity(PropertyABC):
 
 
 @dataclass
-class MixedPhaseThermalExpansivity(PropertyABC):
-    """Thermal expansivity of the mixed phase :cite:p:`{Equation 3.3,}SOLO07`
+class _MixedPhaseThermalExpansivity(PropertyABC):
+    """Thermal expansivity of the mixed phase :cite:p:`{Equation 3,}SOLO07`
 
-    The first term in :cite:t:`{Equation 3.3,}SOLO07` is not included because it is small compared
-    to the latent heat term.
+    The first term in :cite:t:`{Equation 3,}SOLO07` is not included because it is small compared
+    to the latent heat term :cite:p:`{Equation 33,}SS93`.
     """
 
     _liquid: PhaseEvaluator
@@ -371,72 +374,64 @@ class MixedPhaseThermalExpansivity(PropertyABC):
         return thermal_expansivity
 
 
+# TODO: Add _MixedPhaseViscosity
+
+
 @dataclass
-class MixedPhaseEvaluator:
+class MixedPhaseEvaluator(ScaledDataclassFromConfiguration):
     """Contains the objects to evaluate the EOS and transport properties of a mixed phase.
 
     TODO: Need to finish this.
     """
 
-    phases: dict[str, PhaseEvaluator]
+    _scalings: Scalings
+    _phases: dict[str, PhaseEvaluator]
     name: str = field(init=False, default="mixed_phase")
+    _: KW_ONLY
+    latent_heat_of_fusion: float
+    rheological_transition_melt_fraction: float
+    rheological_transition_width_melt_fraction: float
 
     def __post_init__(self):
-        self.melt_fraction: PropertyABC = MixedPhaseMeltFraction(self.liquid, self.solid)
-        self.density: PropertyABC = MixedPhaseDensity(
+        super().__post_init__()
+        self.melt_fraction: PropertyABC = _MixedPhaseMeltFraction(self.liquid, self.solid)
+        self.density: PropertyABC = _MixedPhaseDensity(
             self.liquid, self.solid, _melt_fraction=self.melt_fraction
         )
-        self.fusion_curve: PropertyABC = MixedPhaseFusionCurve(self.liquid, self.solid)
         # gravitational_acceleration is the same for the liquid and solid, so use either
         self.gravitational_acceleration: PropertyABC = self.solid.gravitational_acceleration
-        self.porosity: PropertyABC = MixedPhasePorosity(
+        self.heat_capacity: PropertyABC = _MixedPhaseHeatCapacity(
+            self.liquid, self.solid, _latent_heat_of_fusion=self.latent_heat_of_fusion
+        )
+        self.porosity: PropertyABC = _MixedPhasePorosity(
             self.liquid, self.solid, _density=self.density
         )
-        self.thermal_conductivity: PropertyABC = MixedPhaseThermalConductivity(
+        self.thermal_conductivity: PropertyABC = _MixedPhaseThermalConductivity(
             self.liquid, self.solid, _melt_fraction=self.melt_fraction
         )
-        self.thermal_expansivity: PropertyABC = MixedPhaseThermalExpansivity(
+        self.thermal_expansivity: PropertyABC = _MixedPhaseThermalExpansivity(
             self.liquid, self.solid, _density=self.density
         )
+
+    @override
+    def scale_attributes(self) -> None:
+        """See base class."""
+        self.latent_heat_of_fusion /= self._scalings.latent_heat_per_mass
 
     @property
     def liquid(self) -> PhaseEvaluator:
         """Liquid phase evaluator"""
-        return self.phases["liquid"]
+        return self._phases["liquid"]
 
     @property
     def solid(self) -> PhaseEvaluator:
         """Solid phase evaluator"""
-        return self.phases["solid"]
+        return self._phases["solid"]
 
 
 # endregion
 
 # Copied from C SPIDER
-
-#   ierr = EOSCompositeGetTwoPhaseLiquidus(eos, P, &liquidus);
-#   CHKERRQ(ierr);
-#   ierr = EOSCompositeGetTwoPhaseSolidus(eos, P, &solidus);
-#   CHKERRQ(ierr);
-#   eval->fusion = liquidus - solidus;
-#   eval->fusion_curve = solidus + 0.5 * eval->fusion;
-#   gphi = (T - solidus) / eval->fusion;
-
-
-#   /* properties along melting curves */
-#   ierr = EOSEval(composite->eos[composite->liquidus_slot], P, liquidus, &eval_melt);
-#   CHKERRQ(ierr);
-#   ierr = EOSEval(composite->eos[composite->solidus_slot], P, solidus, &eval_solid);
-#   CHKERRQ(ierr);
-
-#   /* enthalpy of fusion */
-#   eval->enthalpy_of_fusion = eval->fusion_curve * composite->entropy_of_fusion;
-
-#   /* Cp */
-#   /* Solomatov (2007), Treatise on Geophysics, Eq. 3.4 */
-#   /* The first term is not included because it is small compared to the latent heat term */
-#   eval->Cp = eval->enthalpy_of_fusion; // enthalpy change upon melting.
-#   eval->Cp /= eval->fusion;
 
 #   /* dTdPs */
 #   /* Solomatov (2007), Treatise on Geophysics, Eq. 3.2 */
