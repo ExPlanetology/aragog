@@ -30,7 +30,7 @@ from scipy import constants
 from thermochem import codata
 
 from spider.interfaces import ScaledDataclassFromConfiguration
-from spider.phase import CompositePhaseEvaluator, PhaseEvaluator, PhaseEvaluatorProtocol
+from spider.phase import MixedPhaseEvaluator, PhaseEvaluator, PhaseEvaluatorProtocol
 
 if TYPE_CHECKING:
     from spider.solver import State
@@ -722,7 +722,7 @@ class SpiderData:
 
         elif len(self.phases) == 2:
             logger.info("Two phases available, creating composite")
-            self.phase = CompositePhaseEvaluator(self.phases)
+            self.phase = MixedPhaseEvaluator(self.phases)
 
 
 def is_monotonic_increasing(some_array: np.ndarray) -> np.bool_:

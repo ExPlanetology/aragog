@@ -1,8 +1,9 @@
-# Configuration file for the Sphinx documentation builder.
-#
-# This file only contains a selection of the most common options. For a full
-# list see the documentation:
-# https://www.sphinx-doc.org/en/master/usage/configuration.html
+"""Configuration file for the Sphinx documentation builder.
+
+This file only contains a selection of the most common options. For a full
+list see the documentation:
+https://www.sphinx-doc.org/en/master/usage/configuration.html
+"""
 
 # -- Path setup --------------------------------------------------------------
 
@@ -14,11 +15,12 @@
 # import sys
 # sys.path.insert(0, os.path.abspath('.'))
 
+import sphinx.builders.latex.transforms
 
 # -- Project information -----------------------------------------------------
 
-project = "spider"
-copyright = "2024, Dan J. Bower"
+project = "Spider"
+copyright = "2024, Dan J. Bower"  # Created by Sphinx, so pylint: disable=W0622
 author = "Dan J. Bower"
 
 # The full version, including alpha/beta/rc tags
@@ -80,7 +82,6 @@ napoleon_type_aliases = None
 napoleon_attr_annotations = True
 
 # https://sphinxcontrib-bibtex.readthedocs.io/en/latest/usage.html#known-issues-and-workarounds
-import sphinx.builders.latex.transforms
 
 
 class DummyTransform(sphinx.builders.latex.transforms.BibliographyTransform):
