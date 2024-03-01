@@ -1,0 +1,6 @@
+# Defining the exact version will make sure things don't break
+sphinx-rtd-theme
+sphinx
+sphinxcontrib-bibtex
+setuptools
+#readthedocs-sphinx-search==0.1.1

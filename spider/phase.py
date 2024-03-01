@@ -326,9 +326,7 @@ class CompositePorosity(PropertyABC):
 
 @dataclass
 class CompositeThermalExpansivity(PropertyABC):
-    """Thermal expansivity of the composite
-
-    TODO: Update reference, Solomatov (2007), Treatise on Geophysics, Eq. 3.3
+    """Thermal expansivity of the composite :cite:p:`{Equation 3.3,}SOLO07`
 
     The first term is not included because it is small compared to the latent heat term
     """
@@ -386,15 +384,6 @@ class CompositePhaseEvaluator:
 # endregion
 
 # Copied from C SPIDER
-#   eval->P = P;
-#   eval->T = T;
-
-#   /* these are strictly only valid for the mixed phase region, and not for general P and T
-#      conditions */
-#   /* unsure what the best approach is here.  The following functions are highly modular,
-#      but I think it slows the code down a lot since many of the functions repeat the same lookups
-#      It would reduce the modularity, but for speed the better option would be to have an
-#      aggregate function that only evaluates things once.  This would be trivial to implement. */
 
 #   ierr = EOSCompositeGetTwoPhaseLiquidus(eos, P, &liquidus);
 #   CHKERRQ(ierr);
