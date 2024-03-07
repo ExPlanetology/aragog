@@ -282,7 +282,7 @@ class State(DataclassFromConfiguration):
         )
         self._eddy_diffusivity *= self._data.mesh.basic.mixing_length
         # Heat flux
-        self._heat_flux = np.zeros_like(self.temperature_basic)
+        self._heat_flux = 0  # np.zeros_like(self.temperature_basic)
         if self.conduction:
             self._heat_flux += self.conductive_heat_flux()
         if self.convection:
@@ -292,7 +292,7 @@ class State(DataclassFromConfiguration):
         if self.mixing:
             self._heat_flux += self.mixing_flux()
         # Heating
-        self._heating = np.zeros_like(temperature)
+        self._heating = 0  # np.zeros_like(temperature)
         if self.radionuclides:
             self._heating += self.radiogenic_heating(time)
 
@@ -417,6 +417,10 @@ class SpiderSolver:
         # Calculate the time step based on the total number of lines.
         time_step: float = time_range / (num_lines - 1)
 
+        # TODO: Plot the melting curves
+        # liquidus_temperature: np.ndarray = self.data.phase.liquid.phase_boundary()
+        # solidus_temperature: np.ndarray = self.data.phase.solid.phase_boundary()
+
         # Plot the first line.
         label_first: str = f"{times[0]:.2f}"
         ax.plot(temperature[:, 0], radii, label=label_first)
@@ -460,13 +464,18 @@ class SpiderSolver:
         atol: float = config_solver.getfloat("atol")
         rtol: float = config_solver.getfloat("rtol")
 
+        # FIXME: This is a dummy variable for pressure, which I think must be a 2-D array to work
+        # because temperature is also a 2-D array, and functions evaluated at pressure and
+        # temperature should return an array the same size and shape as temperature and pressure.
+        pressure: np.ndarray = self.data.initial_condition.temperature.reshape(-1, 1)
+
         self._solution = solve_ivp(
             self.dTdt,
             (start_time, end_time),
             self.data.initial_condition.temperature,
             method="BDF",
             vectorized=True,
-            args=(self.data.initial_condition.temperature,),  # FIXME: Should be pressure.
+            args=(pressure,),
             atol=atol,
             rtol=rtol,
         )
