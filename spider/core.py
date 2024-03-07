@@ -313,6 +313,8 @@ class _FixedMesh:
         mixing_length_cubed: Mixing length cubed
     """
 
+    # TODO: Pass in initialised EOS object to compute the pressure radius relationship?
+
     radii: np.ndarray
     mixing_length_profile: str
     inner_radius: float = field(init=False)
@@ -374,6 +376,8 @@ class SpiderMesh(ScaledDataclassFromConfiguration):
     The 'basic' mesh is used for the flux calculations and the 'staggered' mesh is used for the
     volume calculations.
 
+    # TODO Update with Adams williamson EOS
+
     Args:
         scalings: Scalings
 
@@ -393,19 +397,18 @@ class SpiderMesh(ScaledDataclassFromConfiguration):
     outer_radius: float
     number_of_nodes: int
     mixing_length_profile: str
-    basic: _FixedMesh = field(init=False)
-    staggered: _FixedMesh = field(init=False)
-    _d_dr_transform: np.ndarray = field(init=False)
-    _quantity_transform: np.ndarray = field(init=False)
+    gravitational_acceleration: float
+    adams_williamson_surface_density: float
+    adams_williamson_beta: float
 
     def __post_init__(self):
         super().__post_init__()
         basic_coordinates: np.ndarray = self.get_constant_spacing()
-        self.basic = _FixedMesh(basic_coordinates, self.mixing_length_profile)
+        self.basic: _FixedMesh = _FixedMesh(basic_coordinates, self.mixing_length_profile)
         staggered_coordinates: np.ndarray = self.basic.radii[:-1] + 0.5 * self.basic.delta_radii
-        self.staggered = _FixedMesh(staggered_coordinates, self.mixing_length_profile)
-        self._d_dr_transform = self.d_dr_transform_matrix()
-        self._quantity_transform = self.quantity_transform_matrix()
+        self.staggered: _FixedMesh = _FixedMesh(staggered_coordinates, self.mixing_length_profile)
+        self._d_dr_transform: np.ndarray = self.d_dr_transform_matrix()
+        self._quantity_transform: np.ndarray = self.quantity_transform_matrix()
 
     @override
     def scale_attributes(self) -> None:
@@ -734,3 +737,119 @@ class SpiderData:
 def is_monotonic_increasing(some_array: np.ndarray) -> np.bool_:
     """Returns True if an array is monotonically increasing, otherwise returns False."""
     return np.all(np.diff(some_array) > 0)
+
+
+@dataclass
+class AdamsWilliamsonEOS(ScaledDataclassFromConfiguration):
+    """Adams-Williamson equation of state
+
+    Args:
+        scalings: Scalings
+        mesh: Mesh
+        surface_density: Surface density
+        beta: Beta parameter
+        gravitational_acceleration: Gravitational acceleration
+
+    Attributes:
+        TODO
+    """
+
+    scalings: Scalings
+    mesh: _FixedMesh
+    _: KW_ONLY
+    surface_density: float
+    beta: float
+    gravitational_acceleration: float
+
+    @override
+    def scale_attributes(self) -> None:
+        """See base class."""
+        self.surface_density /= self.scalings.density
+        self.beta *= self.scalings.radius
+        self.gravitational_acceleration /= self.scalings.gravitational_acceleration
+
+    def density(self) -> np.ndarray:
+        """Density
+
+        TODO: Convert math to rst
+
+        Adams-Williamson density is a simple function of depth (radius)
+        Sketch derivation:
+            dP/dr = dP/drho * drho/dr = -rho g
+            dP/drho \sim (dP/drho)_s (adiabatic)
+            drho/dr = -rho g / Si
+            then integrate to give the form rho(r) = k * exp(-(g*r)/c)
+            (g is positive)
+            apply the limit that rho = rhos at r=R
+            gives:
+            rho(z) = rhos * exp( beta * z )
+        where z = R-r
+
+        this is arguably the simplest relation to get rho directly from r, but other
+        EOSs can be envisaged
+        """
+        # using pressure, expression is simpler than sketch derivation above
+        density: np.ndarray = (
+            self.surface_density + self.pressure() * self.beta / self.gravitational_acceleration
+        )
+
+        return density
+
+    def mass_element(self) -> np.ndarray:
+        """Mass element"""
+        # TODO: Check because C Spider does not include 4*pi scaling
+        mass_element: np.ndarray = self.mesh.area * self.density()
+
+        return mass_element
+
+    def mass_within_radius(self) -> np.ndarray:
+        """Mass contained within radii
+
+        Returns:
+            Mass within a radius
+        """
+        mass: np.ndarray = (
+            -2 / self.beta**3
+            - np.square(self.mesh.radii) / self.beta
+            - 2 * self.mesh.radii / np.square(self.beta)
+        )
+        # TODO: Check because C Spider does not include 4*pi scaling
+        mass *= 4 * np.pi * self.density()
+
+        return mass
+
+    def mass_within_shell(self) -> np.ndarray:
+        """Mass within a spherical shell
+
+        Returns:
+            Mass within a spherical shell
+        """
+        # From outer radius to inner
+        mass_within_radius: np.ndarray = np.flip(self.mass_within_radius())
+        # Return same order as radii
+        delta_mass: np.ndarray = np.flip(mass_within_radius[:-1] - mass_within_radius[1:])
+
+        return delta_mass
+
+    def pressure(self) -> np.ndarray:
+        """Pressure
+
+        Returns:
+            Pressure
+        """
+        factor: float = self.surface_density * self.gravitational_acceleration / self.beta
+        pressure: np.ndarray = factor * (
+            np.exp(self.beta * (self.mesh.outer_radius - self.mesh.radii)) - 1
+        )
+
+        return pressure
+
+    def pressure_gradient(self) -> np.ndarray:
+        """Pressure gradient
+
+        Returns:
+            Pressure gradient
+        """
+        dPdr: np.ndarray = -self.gravitational_acceleration * self.density()
+
+        return dPdr
