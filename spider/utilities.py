@@ -24,6 +24,8 @@ from pathlib import Path
 from pstats import SortKey, Stats
 from typing import Any
 
+import numpy as np
+
 
 def profile_decorator(func):
     """Decorator to profile a function"""
@@ -67,3 +69,21 @@ def is_number(value: Any) -> bool:
         return True
     except ValueError:
         return False
+
+
+def tanh_weight(value: np.ndarray, threshold: float, width: float) -> np.ndarray:
+    """Computes the tanh weight for viscosity profile and smoothing.
+
+    Args:
+        value: Value
+        threshold: Threshold
+        width: Width of smoothing
+
+    Returns:
+        weight
+    """
+
+    arg: float | np.ndarray = (value - threshold) / width
+    weight: float | np.ndarray = 0.5 * (1.0 + np.tanh(arg))
+
+    return weight
