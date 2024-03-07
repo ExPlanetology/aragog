@@ -34,7 +34,7 @@ from spider.interfaces import (
     PropertyABC,
     ScaledDataclassFromConfiguration,
 )
-from spider.utilities import is_file, is_number
+from spider.utilities import is_file, is_number, tanh_weight
 
 if sys.version_info < (3, 11):
     from typing_extensions import Self
@@ -374,15 +374,41 @@ class _MixedPhaseThermalExpansivity(PropertyABC):
         return thermal_expansivity
 
 
-# TODO: Add _MixedPhaseViscosity
+@dataclass
+class _MixedPhaseViscosity(PropertyABC):
+    """Viscosity of the mixed phase"""
+
+    _liquid: PhaseEvaluator
+    _solid: PhaseEvaluator
+    name: str = field(init=False, default="viscosity")
+    _: KW_ONLY
+    _melt_fraction: PropertyABC
+    _rheological_transition_melt_fraction: float
+    _rheological_transition_width: float
+
+    @override
+    def _get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        liquidus_temperature: np.ndarray = self._liquid.phase_boundary(temperature, pressure)
+        solidus_temperature: np.ndarray = self._solid.phase_boundary(temperature, pressure)
+        melt_fraction: np.ndarray = self._melt_fraction(temperature, pressure)
+        weight: np.ndarray = tanh_weight(
+            melt_fraction,
+            self._rheological_transition_melt_fraction,
+            self._rheological_transition_width,
+        )
+        liquidus_viscosity: np.ndarray = self._liquid.viscosity(liquidus_temperature, pressure)
+        solidus_viscosity: np.ndarray = self._solid.viscosity(solidus_temperature, pressure)
+        log10_viscosity: np.ndarray = weight * np.log10(liquidus_viscosity) + (
+            1 - weight
+        ) * np.log10(solidus_viscosity)
+        viscosity: np.ndarray = 10**log10_viscosity
+
+        return viscosity
 
 
 @dataclass
 class MixedPhaseEvaluator(ScaledDataclassFromConfiguration):
-    """Contains the objects to evaluate the EOS and transport properties of a mixed phase.
-
-    TODO: Need to finish this.
-    """
+    """Contains the objects to evaluate the EOS and transport properties of a mixed phase."""
 
     _scalings: Scalings
     _phases: dict[str, PhaseEvaluator]
@@ -390,7 +416,7 @@ class MixedPhaseEvaluator(ScaledDataclassFromConfiguration):
     _: KW_ONLY
     latent_heat_of_fusion: float
     rheological_transition_melt_fraction: float
-    rheological_transition_width_melt_fraction: float
+    rheological_transition_width: float
 
     def __post_init__(self):
         super().__post_init__()
@@ -411,6 +437,13 @@ class MixedPhaseEvaluator(ScaledDataclassFromConfiguration):
         )
         self.thermal_expansivity: PropertyABC = _MixedPhaseThermalExpansivity(
             self.liquid, self.solid, _density=self.density
+        )
+        self.viscosity: PropertyABC = _MixedPhaseViscosity(
+            self.liquid,
+            self.solid,
+            _melt_fraction=self.melt_fraction,
+            _rheological_transition_melt_fraction=self.rheological_transition_melt_fraction,
+            _rheological_transition_width=self.rheological_transition_width,
         )
 
     @override
@@ -436,11 +469,3 @@ class MixedPhaseEvaluator(ScaledDataclassFromConfiguration):
 #   /* dTdPs */
 #   /* Solomatov (2007), Treatise on Geophysics, Eq. 3.2 */
 #   eval->dTdPs = eval->alpha * eval->T / (eval->rho * eval->Cp);
-
-#   /* Viscosity */
-#   ierr = EOSEvalSetViscosity(composite->eos[composite->liquidus_slot], &eval_melt);
-#   CHKERRQ(ierr);
-#   ierr = EOSEvalSetViscosity(composite->eos[composite->solidus_slot], &eval_solid);
-#   CHKERRQ(ierr);
-#   fwt = tanh_weight(eval->phase_fraction, composite->phi_critical, composite->phi_width);
-#   eval->log10visc = fwt * eval_melt.log10visc + (1.0 - fwt) * eval_solid.log10visc;
