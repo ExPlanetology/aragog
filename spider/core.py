@@ -317,38 +317,28 @@ class _FixedMesh:
 
     radii: np.ndarray
     mixing_length_profile: str
-    inner_radius: float = field(init=False)
-    outer_radius: float = field(init=False)
-    delta_radii: np.ndarray = field(init=False)
-    depth: np.ndarray = field(init=False)
-    height: np.ndarray = field(init=False)
-    number_of_nodes: int = field(init=False)
-    area: np.ndarray = field(init=False)
-    volume: np.ndarray = field(init=False)
-    total_volume: float = field(init=False)
-    mixing_length: np.ndarray = field(init=False)
-    mixing_length_squared: np.ndarray = field(init=False)
-    mixing_length_cubed: np.ndarray = field(init=False)
 
     def __post_init__(self):
         if not is_monotonic_increasing(self.radii):
             msg: str = "Mesh must be monotonically increasing"
             logger.error(msg)
             raise ValueError(msg)
-        self.inner_radius = self.radii[0]
-        self.outer_radius = self.radii[-1]
-        self.delta_radii = np.diff(self.radii)
-        self.depth = self.outer_radius - self.radii
-        self.height = self.radii - self.inner_radius
-        self.number_of_nodes = len(self.radii)
+        self.inner_radius: float = self.radii[0]
+        self.outer_radius: float = self.radii[-1]
+        self.delta_radii: np.ndarray = np.diff(self.radii)
+        self.depth: np.ndarray = self.outer_radius - self.radii
+        self.height: np.ndarray = self.radii - self.inner_radius
+        self.number_of_nodes: int = len(self.radii)
         # Includes 4*pi factor unlike C-version of SPIDER.
-        self.area = 4 * np.pi * np.square(self.radii).reshape(-1, 1)  # 2-D
+        self.area: np.ndarray = 4 * np.pi * np.square(self.radii).reshape(-1, 1)  # 2-D
         mesh_cubed: np.ndarray = np.power(self.radii, 3)
-        self.volume = 4 / 3 * np.pi * (mesh_cubed[1:] - mesh_cubed[:-1]).reshape(-1, 1)  # 2-D
-        self.total_volume = 4 / 3 * np.pi * (mesh_cubed[-1] - mesh_cubed[0])
+        self.volume: np.ndarray = (
+            4 / 3 * np.pi * (mesh_cubed[1:] - mesh_cubed[:-1]).reshape(-1, 1)
+        )  # 2-D
+        self.total_volume: float = 4 / 3 * np.pi * (mesh_cubed[-1] - mesh_cubed[0])
         self.set_mixing_length()
-        self.mixing_length_squared = np.square(self.mixing_length)
-        self.mixing_length_cubed = np.power(self.mixing_length, 3)
+        self.mixing_length_squared: np.ndarray = np.square(self.mixing_length)
+        self.mixing_length_cubed: np.ndarray = np.power(self.mixing_length, 3)
 
     def set_mixing_length(self) -> None:
         """Sets the mixing length"""
@@ -740,7 +730,7 @@ def is_monotonic_increasing(some_array: np.ndarray) -> np.bool_:
 
 
 @dataclass
-class AdamsWilliamsonEOS(ScaledDataclassFromConfiguration):
+class AdamsWilliamsonEOS:
     """Adams-Williamson equation of state
 
     Args:
@@ -754,19 +744,10 @@ class AdamsWilliamsonEOS(ScaledDataclassFromConfiguration):
         TODO
     """
 
-    scalings: Scalings
-    mesh: _FixedMesh
-    _: KW_ONLY
+    outer_radius: float
     surface_density: float
     beta: float
     gravitational_acceleration: float
-
-    @override
-    def scale_attributes(self) -> None:
-        """See base class."""
-        self.surface_density /= self.scalings.density
-        self.beta *= self.scalings.radius
-        self.gravitational_acceleration /= self.scalings.gravitational_acceleration
 
     def density(self) -> np.ndarray:
         """Density
