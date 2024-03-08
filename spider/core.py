@@ -544,77 +544,77 @@ class Radionuclide(ScaledDataclassFromConfiguration):
 
         return heating
 
+    # TODO: Remove eventually, now moved into parser.py
+    # @dataclass(kw_only=True)
+    # class Scalings(ScaledDataclassFromConfiguration):
+    #     """Scalings for the numerical problem.
 
-@dataclass(kw_only=True)
-class Scalings(ScaledDataclassFromConfiguration):
-    """Scalings for the numerical problem.
+    #     Args:
+    #         radius: Radius in metres. Defaults to 1.
+    #         temperature: Temperature in Kelvin. Defaults to 1.
+    #         density: Density in kg/m^3. Defaults to 1.
+    #         time: Time in seconds. Defaults to 1.
 
-    Args:
-        radius: Radius in metres. Defaults to 1.
-        temperature: Temperature in Kelvin. Defaults to 1.
-        density: Density in kg/m^3. Defaults to 1.
-        time: Time in seconds. Defaults to 1.
+    #     Attributes:
+    #         radius, m
+    #         temperature, K
+    #         density, kg/m^3
+    #         time, s
+    #         area, m^2
+    #         kinetic_energy_per_volume, J/m^3
+    #         gravitational_acceleration, m/s^2
+    #         heat_capacity, J/kg/K
+    #         heat_flux, W/m^2
+    #         latent_heat_per_mass, J/kg
+    #         power_per_mass, W/kg
+    #         power_per_volume, W/m^3
+    #         pressure, Pa
+    #         temperature_gradient, K/m
+    #         thermal_expansivity, 1/K
+    #         thermal_conductivity, W/m/K
+    #         velocity, m/s
+    #         viscosity, Pa s
+    #         time_years, years
+    #         stefan_boltzmann_constant (non-dimensional)
+    #     """
 
-    Attributes:
-        radius, m
-        temperature, K
-        density, kg/m^3
-        time, s
-        area, m^2
-        kinetic_energy_per_volume, J/m^3
-        gravitational_acceleration, m/s^2
-        heat_capacity, J/kg/K
-        heat_flux, W/m^2
-        latent_heat_per_mass, J/kg
-        power_per_mass, W/kg
-        power_per_volume, W/m^3
-        pressure, Pa
-        temperature_gradient, K/m
-        thermal_expansivity, 1/K
-        thermal_conductivity, W/m/K
-        velocity, m/s
-        viscosity, Pa s
-        time_years, years
-        stefan_boltzmann_constant (non-dimensional)
-    """
+    #     radius: float = 1
+    #     temperature: float = 1
+    #     density: float = 1
+    #     time: float = 1
 
-    radius: float = 1
-    temperature: float = 1
-    density: float = 1
-    time: float = 1
+    #     @override
+    #     def scale_attributes(self) -> None:
+    #         self.area: float = np.square(self.radius)
+    #         self.gravitational_acceleration: float = self.radius / np.square(self.time)
+    #         self.temperature_gradient: float = self.temperature / self.radius
+    #         self.thermal_expansivity: float = 1 / self.temperature
+    #         self.pressure: float = self.density * self.gravitational_acceleration * self.radius
+    #         self.velocity: float = self.radius / self.time
+    #         self.kinetic_energy_per_volume: float = self.density * np.square(self.velocity)
+    #         self.heat_capacity: float = (
+    #             self.kinetic_energy_per_volume / self.density / self.temperature
+    #         )
+    #         self.latent_heat_per_mass: float = self.heat_capacity * self.temperature
+    #         self.power_per_volume: float = self.kinetic_energy_per_volume / self.time
+    #         self.power_per_mass: float = self.power_per_volume / self.density
+    #         self.heat_flux: float = self.power_per_volume * self.radius
+    #         self.thermal_conductivity: float = self.power_per_volume * self.area / self.temperature
+    #         self.viscosity: float = self.pressure * self.time
+    #         self.time_years: float = self.time / constants.Julian_year  # Equivalent to TIMEYRS C code
+    #         # Non-dimensional constants
+    #         self.stefan_boltzmann_constant: float = codata.value(
+    #             "Stefan-Boltzmann constant"
+    #         )  # W/m^2/K^4
+    #         self.stefan_boltzmann_constant /= (
+    #             self.power_per_volume * self.radius / np.power(self.temperature, 4)
+    #         )
+    #         logger.debug("scalings = %s", self)
 
-    @override
-    def scale_attributes(self) -> None:
-        self.area: float = np.square(self.radius)
-        self.gravitational_acceleration: float = self.radius / np.square(self.time)
-        self.temperature_gradient: float = self.temperature / self.radius
-        self.thermal_expansivity: float = 1 / self.temperature
-        self.pressure: float = self.density * self.gravitational_acceleration * self.radius
-        self.velocity: float = self.radius / self.time
-        self.kinetic_energy_per_volume: float = self.density * np.square(self.velocity)
-        self.heat_capacity: float = (
-            self.kinetic_energy_per_volume / self.density / self.temperature
-        )
-        self.latent_heat_per_mass: float = self.heat_capacity * self.temperature
-        self.power_per_volume: float = self.kinetic_energy_per_volume / self.time
-        self.power_per_mass: float = self.power_per_volume / self.density
-        self.heat_flux: float = self.power_per_volume * self.radius
-        self.thermal_conductivity: float = self.power_per_volume * self.area / self.temperature
-        self.viscosity: float = self.pressure * self.time
-        self.time_years: float = self.time / constants.Julian_year  # Equivalent to TIMEYRS C code
-        # Non-dimensional constants
-        self.stefan_boltzmann_constant: float = codata.value(
-            "Stefan-Boltzmann constant"
-        )  # W/m^2/K^4
-        self.stefan_boltzmann_constant /= (
-            self.power_per_volume * self.radius / np.power(self.temperature, 4)
-        )
-        logger.debug("scalings = %s", self)
-
-    @property
-    def phase_boundary(self) -> float:
-        """For scaling phase boundary"""
-        return self.temperature
+    # @property
+    # def phase_boundary(self) -> float:
+    #     """For scaling phase boundary"""
+    #     return self.temperature
 
 
 class SpiderConfigParser(ConfigParser):

@@ -1289,19 +1289,15 @@ version = "0.8.2"
 description = "Python utilities for thermodynamics and thermochemistry"
 optional = false
 python-versions = "*"
-files = []
-develop = false
+files = [
+    {file = "thermochem-0.8.2-py2.py3-none-any.whl", hash = "sha256:f574b0844ac566c26c66f868231f64a9b90e4cc6256b6d383918cf9852e49b38"},
+    {file = "thermochem-0.8.2.tar.gz", hash = "sha256:28bc164a7c32c3f4adf6dd5daf548c48d8d0fb702c2d8f5cdfbd27258764b461"},
+]
 
 [package.dependencies]
 numpy = ">=1.2.1"
 pandas = ">=0.17.0"
 scipy = ">=0.6.0"
-
-[package.source]
-type = "git"
-url = "https://github.com/ExPlanetology/thermochem.git"
-reference = "HEAD"
-resolved_reference = "c43a817df8d58b6f7e1d9ba044c769e92f0678f2"
 
 [[package]]
 name = "tomli"
@@ -1312,6 +1308,17 @@ python-versions = ">=3.7"
 files = [
     {file = "tomli-2.0.1-py3-none-any.whl", hash = "sha256:939de3e7a6161af0c887ef91b7d41a53e7c5a1ca976325f429cb46ea9bc30ecc"},
     {file = "tomli-2.0.1.tar.gz", hash = "sha256:de526c12914f0c550d15924c62d72abc48d6fe7364aa87328337a31007fe8a4f"},
+]
+
+[[package]]
+name = "typed-configparser"
+version = "1.0.2"
+description = "A typed configparser"
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "typed_configparser-1.0.2-py3-none-any.whl", hash = "sha256:6de6b948b058bc82feaba747d60d19f688efe4bd9bd35f2641f9651bf4d41f60"},
+    {file = "typed_configparser-1.0.2.tar.gz", hash = "sha256:f845d9d5b134ca1fa90060e73c4ac79503bc99a406333a1198eb05bee79fff8e"},
 ]
 
 [[package]]
@@ -1345,4 +1352,4 @@ zstd = ["zstandard (>=0.18.0)"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10,<3.13"
-content-hash = "1c143570085fa895daa313a7504a394b211f11a243930d42901a0cc3744849ca"
+content-hash = "336d2efee3ba49f0d02e47328d88b6518379f0bd768544d25ca9f96eb5399b76"
