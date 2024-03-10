@@ -19,10 +19,8 @@
 from __future__ import annotations
 
 import logging
-import sys
-from configparser import SectionProxy
-from dataclasses import KW_ONLY, dataclass, field
-from typing import TYPE_CHECKING
+from dataclasses import Field, dataclass, field, fields
+from typing import Protocol
 
 import numpy as np
 
@@ -30,24 +28,10 @@ from spider.interfaces import (
     ConstantProperty,
     LookupProperty1D,
     LookupProperty2D,
-    PhaseEvaluatorProtocol,
     PropertyABC,
-    ScaledDataclassFromConfiguration,
 )
+from spider.parser import mesh, phase, phase_mixed
 from spider.utilities import is_file, is_number, tanh_weight
-
-if sys.version_info < (3, 11):
-    from typing_extensions import Self
-else:
-    from typing import Self
-
-if sys.version_info < (3, 12):
-    from typing_extensions import override
-else:
-    from typing import override
-
-if TYPE_CHECKING:
-    from spider.core import Scalings
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -108,7 +92,7 @@ class PhaseStateBasic:
 
     phase_evaluator: PhaseEvaluatorProtocol
     density: np.ndarray = field(init=False)
-    gravitational_acceleration: np.ndarray = field(init=False)
+    gravitational_acceleration: float = field(init=False)
     heat_capacity: np.ndarray = field(init=False)
     thermal_conductivity: np.ndarray = field(init=False)
     thermal_expansivity: np.ndarray = field(init=False)
@@ -146,226 +130,239 @@ class PhaseStateBasic:
         self.kinematic_viscosity = self.viscosity / self.density
 
 
-@dataclass(frozen=True)
-class PhaseEvaluator:
+class PhaseEvaluatorProtocol(Protocol):
+    """Phase evaluator protocol
+
+    raise NotImplementedError() is to prevent pylint from reporting assignment-from-no-return /
+    E1111.
+    """
+
+    def density(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        raise NotImplementedError()
+
+    def dTdPs(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        raise NotImplementedError()
+
+    def gravitational_acceleration(self, temperature: np.ndarray, pressure: np.ndarray) -> float:
+        """To compute dT/dr at constant entropy."""
+        raise NotImplementedError()
+
+    def heat_capacity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        raise NotImplementedError()
+
+    def thermal_conductivity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        raise NotImplementedError()
+
+    def thermal_expansivity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        raise NotImplementedError()
+
+    def viscosity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        raise NotImplementedError()
+
+
+class SinglePhaseEvaluator(PhaseEvaluatorProtocol):
     """Contains the objects to evaluate the EOS and transport properties of a phase.
 
     Args:
-        scalings: Scalings
-        name: Name of the phase
-        density: Object to evaluate density
-        gravitational_acceleration: Object to evaluate gravitational acceleration
-        heat_capacity: Object to evaluate heat capacity
-        thermal_conductivity: Object to evaluate thermal conductivity
-        thermal_expansivity: Object to evaluate thermal expansivity
-        viscosity: Object to evaluate viscosity
-        phase_boundary: Object to evaluate phase boundary
-
-    Attributes:
-        scalings: Scalings
-        name: Name of the phase
-        density: Object to evaluate density at temperature and pressure
-        gravitational_acceleration: Object to evaluate gravitational acceleration
-        heat_capacity: Object to evaluate heat capacity
-        thermal_conductivity: Object to evaluate thermal conductivity
-        thermal_expansivity: Object to evaluate thermal expansivity
-        viscosity: Object to evaluate viscosity
-        phase_boundary: Object to evaluate phase boundary
+        settings: phase
+        mesh: mesh
     """
 
-    scalings: Scalings
-    name: str
-    _: KW_ONLY
-    density: PropertyABC
-    gravitational_acceleration: PropertyABC
-    heat_capacity: PropertyABC
-    thermal_conductivity: PropertyABC
-    thermal_expansivity: PropertyABC
-    viscosity: PropertyABC
-    phase_boundary: PropertyABC
+    # For typing
+    _density: PropertyABC
+    _gravitational_acceleration: PropertyABC
+    _heat_capacity: PropertyABC
+    _thermal_conductivity: PropertyABC
+    _thermal_expansivity: PropertyABC
+    _viscosity: PropertyABC
 
-    @classmethod
-    def from_configuration(cls, scalings: Scalings, name: str, *, section: SectionProxy) -> Self:
-        """Creates a class instance from a configuration section.
-
-        Args:
-            name: Name of the phase
-            scalings: Scalings
-            config: A configuration section with phase data
-
-        Returns:
-            A PhaseEvaluator
-        """
-        init_dict: dict[str, PropertyABC] = {}
-        for key, value in section.items():
+    def __init__(self, settings: phase, mesh_: mesh):
+        self._settings: phase = settings
+        self._mesh: mesh = mesh_
+        cls_fields: tuple[Field, ...] = fields(self._settings)
+        for field_ in cls_fields:
+            name: str = field_.name
+            private_name: str = f"_{name}"
+            value = getattr(self, field_.name)
 
             if is_number(value):
-                value_float: float = float(value)
-                value_float /= getattr(scalings, key)
-                logger.debug("%s (%s) is a number = %f", key, section.name, value_float)
-                init_dict[key] = ConstantProperty(name=key, value=value_float)
+                # Numbers have already been scaled
+                setattr(self, private_name, ConstantProperty(name=name, value=value))
 
             elif is_file(value):
                 with open(value, encoding="utf-8") as infile:
-                    logger.debug("%s (%s) is a file = %s", key, section.name, value)
+                    logger.debug("%s is a file = %s", name, value)
                     header = infile.readline()
                     col_names = header[1:].split()
                 value_array: np.ndarray = np.loadtxt(value, ndmin=2)
                 logger.debug("before scaling, value_array = %s", value_array)
+                # Must scale lookup data
                 for nn, col_name in enumerate(col_names):
                     logger.info("Scaling %s from %s", col_name, value)
-                    value_array[:, nn] /= getattr(scalings, key)
+                    value_array[:, nn] /= getattr(self._settings.scalings, col_name)
                 logger.debug("after scaling, value_array = %s", value_array)
                 ndim = value_array.shape[1]
                 logger.debug("ndim = %d", ndim)
                 if ndim == 2:
-                    init_dict[key] = LookupProperty1D(name=key, value=value_array)
+                    setattr(self, private_name, LookupProperty1D(name=name, value=value_array))
                 elif ndim == 3:
-                    init_dict[key] = LookupProperty2D(name=key, value=value_array)
+                    setattr(self, private_name, LookupProperty2D(name=name, value=value_array))
                 else:
                     raise ValueError(f"Lookup data must have 2 or 3 dimensions, not {ndim}")
             else:
                 msg: str = f"Cannot interpret value ({value}): not a number or a file"
                 raise ValueError(msg)
 
-        return cls(scalings, name, **init_dict)
+        self._gravitational_acceleration = ConstantProperty(
+            "gravitational_acceleration", value=self._mesh.gravitational_acceleration
+        )
+
+    def density(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        return self._density(temperature, pressure)
+
+    def dTdPs(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        """TODO: Update reference to sphinx: Solomatov (2007), Treatise on Geophysics, Eq. 3.2"""
+        dTdPs: np.ndarray = (
+            self.thermal_expansivity(temperature, pressure)
+            * temperature
+            / (self.density(temperature, pressure) * self.heat_capacity(temperature, pressure))
+        )
+
+        return dTdPs
+
+    def gravitational_acceleration(
+        self, temperature: np.ndarray, pressure: np.ndarray
+    ) -> np.ndarray:
+        return self._gravitational_acceleration(temperature, pressure)
+
+    def heat_capacity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        return self._heat_capacity(temperature, pressure)
+
+    def thermal_conductivity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        return self._thermal_conductivity(temperature, pressure)
+
+    def thermal_expansivity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        return self._thermal_expansivity(temperature, pressure)
+
+    def viscosity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        return self._viscosity(temperature, pressure)
 
 
-# region Mixed phase
+class MixedPhaseEvaluator(PhaseEvaluatorProtocol):
+    """Evaluates the EOS and transport properties of a mixed phase.
 
+    TODO: This is only correct for the mixed phase region, since properties are evaluated at the
+    liquidus and solidus values. Need a composite phase evaluator to correctly merge liquid, solid,
+    and mixed at all temperature and pressure conditions.
 
-@dataclass
-class _MixedPhaseMeltFraction(PropertyABC):
-    """Melt fraction of the mixed phase
-
-    The melt fraction is always between zero and one.
+    Args:
+        settings: Mixed phase settings
+        solid: Solid phase evaluator
+        liquid: Liquid phase evaluator
     """
 
-    _liquid: PhaseEvaluator
-    _solid: PhaseEvaluator
-    name: str = field(init=False, default="melt_fraction")
+    def __init__(
+        self,
+        settings: phase_mixed,
+        solid: PhaseEvaluatorProtocol,
+        liquid: PhaseEvaluatorProtocol,
+    ):
+        self._settings: phase_mixed = settings
+        self.solid: PhaseEvaluatorProtocol = solid
+        self.liquid: PhaseEvaluatorProtocol = liquid
+        self.solidus: LookupProperty1D = self._get_melting_curve_lookup(
+            "solidus", self._settings.solidus
+        )
+        self.liquidus: LookupProperty1D = self._get_melting_curve_lookup(
+            "liquidus", self._settings.liquidus
+        )
 
-    @override
-    def _get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        liquidus_temperature: np.ndarray = self._liquid.phase_boundary(temperature, pressure)
-        solidus_temperature: np.ndarray = self._solid.phase_boundary(temperature, pressure)
+    def density(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        """Density of the mixed phase computed by volume additivity"""
+        liquidus_temperature: np.ndarray = self.liquidus(temperature, pressure)
+        solidus_temperature: np.ndarray = self.solidus(temperature, pressure)
+        melt_fraction: np.ndarray = self.melt_fraction(temperature, pressure)
+        density_inverse: np.ndarray = melt_fraction / self.liquid.density(
+            liquidus_temperature, pressure
+        )
+        density_inverse += (1 - melt_fraction) / self.solid.density(solidus_temperature, pressure)
+        density: np.ndarray = 1 / density_inverse
+
+        return density
+
+    def dTdPs(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        """TODO: Update reference to sphinx: Solomatov (2007), Treatise on Geophysics, Eq. 3.2"""
+        dTdPs: np.ndarray = (
+            self.thermal_expansivity(temperature, pressure)
+            * temperature
+            / (self.density(temperature, pressure) * self.heat_capacity(temperature, pressure))
+        )
+
+        return dTdPs
+
+    def gravitational_acceleration(self, temperature: np.ndarray, pressure: np.ndarray) -> float:
+        """Gravitational acceleration
+
+        Same for both the solid and liquid phase so just pick one.
+        """
+        return self.solid.gravitational_acceleration(temperature, pressure)
+
+    def heat_capacity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        """Heat capacity of the mixed phase :cite:p:`{Equation 4,}SOLO07`"""
+        liquidus_temperature: np.ndarray = self.liquidus(temperature, pressure)
+        solidus_temperature: np.ndarray = self.solidus(temperature, pressure)
+        delta_fusion_temperature: np.ndarray = liquidus_temperature - solidus_temperature
+        heat_capacity: np.ndarray = self._settings.latent_heat_of_fusion / delta_fusion_temperature
+
+        return heat_capacity
+
+    def melt_fraction(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        """Melt fraction of the mixed phase
+
+        The melt fraction is always between zero and one.
+        """
+        liquidus_temperature: np.ndarray = self.liquidus(temperature, pressure)
+        solidus_temperature: np.ndarray = self.solidus(temperature, pressure)
         delta_fusion_temperature: np.ndarray = liquidus_temperature - solidus_temperature
         melt_fraction: np.ndarray = (temperature - solidus_temperature) / delta_fusion_temperature
         melt_fraction = np.clip(melt_fraction, 0, 1)
 
         return melt_fraction
 
-
-@dataclass
-class _MixedPhaseDensity(PropertyABC):
-    """Density of the mixed phase computed by volume additivity"""
-
-    _liquid: PhaseEvaluator
-    _solid: PhaseEvaluator
-    name: str = field(init=False, default="density")
-    _: KW_ONLY
-    _melt_fraction: PropertyABC
-
-    @override
-    def _get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        liquidus_temperature: np.ndarray = self._liquid.phase_boundary(temperature, pressure)
-        solidus_temperature: np.ndarray = self._solid.phase_boundary(temperature, pressure)
-        melt_fraction: np.ndarray = self._melt_fraction(temperature, pressure)
-        density_inverse: np.ndarray = melt_fraction / self._liquid.density(
-            liquidus_temperature, pressure
-        )
-        density_inverse += (1 - melt_fraction) / self._solid.density(solidus_temperature, pressure)
-        density: np.ndarray = 1 / density_inverse
-
-        return density
-
-
-@dataclass
-class _MixedPhaseHeatCapacity(PropertyABC):
-    """Heat capacity of the mixed phase :cite:p:`{Equation 4,}SOLO07`"""
-
-    _liquid: PhaseEvaluator
-    _solid: PhaseEvaluator
-    name: str = field(init=False, default="heat_capacity")
-    _: KW_ONLY
-    _latent_heat_of_fusion: float
-
-    @override
-    def _get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        liquidus_temperature: np.ndarray = self._liquid.phase_boundary(temperature, pressure)
-        solidus_temperature: np.ndarray = self._solid.phase_boundary(temperature, pressure)
-        delta_fusion_temperature: np.ndarray = liquidus_temperature - solidus_temperature
-        heat_capacity: np.ndarray = self._latent_heat_of_fusion / delta_fusion_temperature
-
-        return heat_capacity
-
-
-@dataclass
-class _MixedPhasePorosity(PropertyABC):
-    """Porosity of the mixed phase, that is the volume fraction occupied by the melt"""
-
-    _liquid: PhaseEvaluator
-    _solid: PhaseEvaluator
-    name: str = field(init=False, default="porosity")
-    _: KW_ONLY
-    _density: PropertyABC
-
-    @override
-    def _get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        liquidus_temperature: np.ndarray = self._liquid.phase_boundary(temperature, pressure)
-        solidus_temperature: np.ndarray = self._solid.phase_boundary(temperature, pressure)
-        density: np.ndarray = self._density(temperature, pressure)
-        liquidus_density: np.ndarray = self._liquid.density(liquidus_temperature, pressure)
-        solidus_density: np.ndarray = self._solid.density(solidus_temperature, pressure)
+    def porosity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        """Porosity of the mixed phase, that is the volume fraction occupied by the melt"""
+        liquidus_temperature: np.ndarray = self.liquidus(temperature, pressure)
+        solidus_temperature: np.ndarray = self.solidus(temperature, pressure)
+        density: np.ndarray = self.density(temperature, pressure)
+        liquidus_density: np.ndarray = self.liquid.density(liquidus_temperature, pressure)
+        solidus_density: np.ndarray = self.solid.density(solidus_temperature, pressure)
         porosity: np.ndarray = (solidus_density - density) / (solidus_density - liquidus_density)
 
         return porosity
 
-
-@dataclass
-class _MixedPhaseThermalConductivity(PropertyABC):
-    """Thermal conductivity of the mixed phase by linear mixing"""
-
-    _liquid: PhaseEvaluator
-    _solid: PhaseEvaluator
-    name: str = field(init=False, default="conductivity")
-    _: KW_ONLY
-    _melt_fraction: PropertyABC
-
-    @override
-    def _get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        melt_fraction: np.ndarray = self._melt_fraction(temperature, pressure)
-        conductivity: np.ndarray = melt_fraction * self._liquid.thermal_conductivity(
+    def thermal_conductivity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        """Thermal conductivity of the mixed phase by linear mixing"""
+        melt_fraction: np.ndarray = self.melt_fraction(temperature, pressure)
+        conductivity: np.ndarray = melt_fraction * self.liquid.thermal_conductivity(
             temperature, pressure
         )
-        conductivity += (1 - melt_fraction) * self._solid.thermal_conductivity(
+        conductivity += (1 - melt_fraction) * self.solid.thermal_conductivity(
             temperature, pressure
         )
 
         return conductivity
 
+    def thermal_expansivity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        """Thermal expansivity of the mixed phase :cite:p:`{Equation 3,}SOLO07`
 
-@dataclass
-class _MixedPhaseThermalExpansivity(PropertyABC):
-    """Thermal expansivity of the mixed phase :cite:p:`{Equation 3,}SOLO07`
-
-    The first term in :cite:t:`{Equation 3,}SOLO07` is not included because it is small compared
-    to the latent heat term :cite:p:`{Equation 33,}SS93`.
-    """
-
-    _liquid: PhaseEvaluator
-    _solid: PhaseEvaluator
-    name: str = field(init=False, default="density")
-    _: KW_ONLY
-    _density: PropertyABC
-
-    @override
-    def _get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        liquidus_temperature: np.ndarray = self._liquid.phase_boundary(temperature, pressure)
-        solidus_temperature: np.ndarray = self._solid.phase_boundary(temperature, pressure)
-        density: np.ndarray = self._density(temperature, pressure)
-        liquidus_density: np.ndarray = self._liquid.density(liquidus_temperature, pressure)
-        solidus_density: np.ndarray = self._solid.density(solidus_temperature, pressure)
+        The first term in :cite:t:`{Equation 3,}SOLO07` is not included because it is small
+        compared to the latent heat term :cite:p:`{Equation 33,}SS93`.
+        """
+        liquidus_temperature: np.ndarray = self.liquidus(temperature, pressure)
+        solidus_temperature: np.ndarray = self.solidus(temperature, pressure)
+        density: np.ndarray = self.density(temperature, pressure)
+        liquidus_density: np.ndarray = self.liquid.density(liquidus_temperature, pressure)
+        solidus_density: np.ndarray = self.solid.density(solidus_temperature, pressure)
         delta_fusion_temperature: np.ndarray = liquidus_temperature - solidus_temperature
         thermal_expansivity: np.ndarray = (
             (solidus_density - liquidus_density) / delta_fusion_temperature / density
@@ -373,31 +370,18 @@ class _MixedPhaseThermalExpansivity(PropertyABC):
 
         return thermal_expansivity
 
-
-@dataclass
-class _MixedPhaseViscosity(PropertyABC):
-    """Viscosity of the mixed phase"""
-
-    _liquid: PhaseEvaluator
-    _solid: PhaseEvaluator
-    name: str = field(init=False, default="viscosity")
-    _: KW_ONLY
-    _melt_fraction: PropertyABC
-    _rheological_transition_melt_fraction: float
-    _rheological_transition_width: float
-
-    @override
-    def _get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        liquidus_temperature: np.ndarray = self._liquid.phase_boundary(temperature, pressure)
-        solidus_temperature: np.ndarray = self._solid.phase_boundary(temperature, pressure)
-        melt_fraction: np.ndarray = self._melt_fraction(temperature, pressure)
+    def viscosity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        """Viscosity of the mixed phase"""
+        liquidus_temperature: np.ndarray = self.liquidus(temperature, pressure)
+        solidus_temperature: np.ndarray = self.solidus(temperature, pressure)
+        melt_fraction: np.ndarray = self.melt_fraction(temperature, pressure)
         weight: np.ndarray = tanh_weight(
             melt_fraction,
-            self._rheological_transition_melt_fraction,
-            self._rheological_transition_width,
+            self._settings.rheological_transition_melt_fraction,
+            self._settings.rheological_transition_width,
         )
-        liquidus_viscosity: np.ndarray = self._liquid.viscosity(liquidus_temperature, pressure)
-        solidus_viscosity: np.ndarray = self._solid.viscosity(solidus_temperature, pressure)
+        liquidus_viscosity: np.ndarray = self.liquid.viscosity(liquidus_temperature, pressure)
+        solidus_viscosity: np.ndarray = self.solid.viscosity(solidus_temperature, pressure)
         log10_viscosity: np.ndarray = weight * np.log10(liquidus_viscosity) + (
             1 - weight
         ) * np.log10(solidus_viscosity)
@@ -405,67 +389,14 @@ class _MixedPhaseViscosity(PropertyABC):
 
         return viscosity
 
+    def _get_melting_curve_lookup(self, name: str, value: str) -> LookupProperty1D:
+        with open(value, encoding="utf-8") as infile:
+            header = infile.readline()
+            col_names = header[1:].split()
+        value_array: np.ndarray = np.loadtxt(value, ndmin=2)
+        logger.debug("before scaling, value_array = %s", value_array)
+        for nn, col_name in enumerate(col_names):
+            logger.info("Scaling %s from %s", col_name, value)
+            value_array[:, nn] /= getattr(self._settings.scalings, col_name)
 
-@dataclass
-class MixedPhaseEvaluator(ScaledDataclassFromConfiguration):
-    """Contains the objects to evaluate the EOS and transport properties of a mixed phase."""
-
-    _scalings: Scalings
-    _phases: dict[str, PhaseEvaluator]
-    name: str = field(init=False, default="mixed_phase")
-    _: KW_ONLY
-    latent_heat_of_fusion: float
-    rheological_transition_melt_fraction: float
-    rheological_transition_width: float
-
-    def __post_init__(self):
-        super().__post_init__()
-        self.melt_fraction: PropertyABC = _MixedPhaseMeltFraction(self.liquid, self.solid)
-        self.density: PropertyABC = _MixedPhaseDensity(
-            self.liquid, self.solid, _melt_fraction=self.melt_fraction
-        )
-        # gravitational_acceleration is the same for the liquid and solid, so use either
-        self.gravitational_acceleration: PropertyABC = self.solid.gravitational_acceleration
-        self.heat_capacity: PropertyABC = _MixedPhaseHeatCapacity(
-            self.liquid, self.solid, _latent_heat_of_fusion=self.latent_heat_of_fusion
-        )
-        self.porosity: PropertyABC = _MixedPhasePorosity(
-            self.liquid, self.solid, _density=self.density
-        )
-        self.thermal_conductivity: PropertyABC = _MixedPhaseThermalConductivity(
-            self.liquid, self.solid, _melt_fraction=self.melt_fraction
-        )
-        self.thermal_expansivity: PropertyABC = _MixedPhaseThermalExpansivity(
-            self.liquid, self.solid, _density=self.density
-        )
-        self.viscosity: PropertyABC = _MixedPhaseViscosity(
-            self.liquid,
-            self.solid,
-            _melt_fraction=self.melt_fraction,
-            _rheological_transition_melt_fraction=self.rheological_transition_melt_fraction,
-            _rheological_transition_width=self.rheological_transition_width,
-        )
-
-    @override
-    def scale_attributes(self) -> None:
-        """See base class."""
-        self.latent_heat_of_fusion /= self._scalings.latent_heat_per_mass
-
-    @property
-    def liquid(self) -> PhaseEvaluator:
-        """Liquid phase evaluator"""
-        return self._phases["liquid"]
-
-    @property
-    def solid(self) -> PhaseEvaluator:
-        """Solid phase evaluator"""
-        return self._phases["solid"]
-
-
-# endregion
-
-# Copied from C SPIDER
-
-#   /* dTdPs */
-#   /* Solomatov (2007), Treatise on Geophysics, Eq. 3.2 */
-#   eval->dTdPs = eval->alpha * eval->T / (eval->rho * eval->Cp);
+        return LookupProperty1D(name=name, value=value_array)

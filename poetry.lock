@@ -1312,13 +1312,13 @@ files = [
 
 [[package]]
 name = "typed-configparser"
-version = "1.0.2"
+version = "1.1.0"
 description = "A typed configparser"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "typed_configparser-1.0.2-py3-none-any.whl", hash = "sha256:6de6b948b058bc82feaba747d60d19f688efe4bd9bd35f2641f9651bf4d41f60"},
-    {file = "typed_configparser-1.0.2.tar.gz", hash = "sha256:f845d9d5b134ca1fa90060e73c4ac79503bc99a406333a1198eb05bee79fff8e"},
+    {file = "typed_configparser-1.1.0-py3-none-any.whl", hash = "sha256:07ac120849267129c9228e3bbcb458113a5c3efddb771f7c930b8902ce185acc"},
+    {file = "typed_configparser-1.1.0.tar.gz", hash = "sha256:0a0ab47965151d095e0ad5f00aeb59a7ef95a5f9b6f045ac8d4417d91ba46d4d"},
 ]
 
 [[package]]
@@ -1352,4 +1352,4 @@ zstd = ["zstandard (>=0.18.0)"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10,<3.13"
-content-hash = "336d2efee3ba49f0d02e47328d88b6518379f0bd768544d25ca9f96eb5399b76"
+content-hash = "de49fd9db9987d8f22fd3ea44d55d6d086d1c645d4e73333f0f3ec7bf67b1a2f"
