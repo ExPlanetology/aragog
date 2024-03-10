@@ -17,7 +17,7 @@
 """Dataclasses to scale and store the data in a Spider configuration file"""
 
 import logging
-from dataclasses import Field, dataclass, fields
+from dataclasses import Field, dataclass, field, fields
 
 import numpy as np
 from scipy import constants
@@ -64,25 +64,24 @@ class scalings:
     temperature: float = 1
     density: float = 1
     time: float = 1
-    area: float = 0
-    gravitational_acceleration: float = 0
-    temperature_gradient: float = 0
-    thermal_expansivity: float = 0
-    pressure: float = 0
-    velocity: float = 0
-    kinetic_energy_per_volume: float = 0
-    heat_capacity: float = 0
-    latent_heat_per_mass: float = 0
-    power_per_volume: float = 0
-    power_per_mass: float = 0
-    heat_flux: float = 0
-    thermal_conductivity: float = 0
-    viscosity: float = 0
-    time_years: float = 0
-    stefan_boltzmann_constant: float = 0
+    area: float = field(init=False)
+    gravitational_acceleration: float = field(init=False)
+    temperature_gradient: float = field(init=False)
+    thermal_expansivity: float = field(init=False)
+    pressure: float = field(init=False)
+    velocity: float = field(init=False)
+    kinetic_energy_per_volume: float = field(init=False)
+    heat_capacity: float = field(init=False)
+    latent_heat_per_mass: float = field(init=False)
+    power_per_volume: float = field(init=False)
+    power_per_mass: float = field(init=False)
+    heat_flux: float = field(init=False)
+    thermal_conductivity: float = field(init=False)
+    viscosity: float = field(init=False)
+    time_years: float = field(init=False)
+    stefan_boltzmann_constant: float = field(init=False)
 
     def __post_init__(self) -> None:
-        """Note that this is not called by typed-configparser and must be called manually"""
         self.area = np.square(self.radius)
         self.gravitational_acceleration = self.radius / np.square(self.time)
         self.temperature_gradient = self.temperature / self.radius
@@ -123,11 +122,11 @@ class boundary_conditions:
     core_heat_capacity: float
 
     def scale_attributes(self, scalings_: scalings) -> None:
-        self._scalings: scalings = scalings_
-        self.equilibrium_temperature /= self._scalings.temperature
-        self.core_radius /= self._scalings.radius
-        self.core_density /= self._scalings.density
-        self.core_heat_capacity /= self._scalings.heat_capacity
+        self.scalings: scalings = scalings_
+        self.equilibrium_temperature /= self.scalings.temperature
+        self.core_radius /= self.scalings.radius
+        self.core_density /= self.scalings.density
+        self.core_heat_capacity /= self.scalings.heat_capacity
         self._scale_inner_boundary_condition()
         self._scale_outer_boundary_condition()
 
@@ -142,9 +141,9 @@ class boundary_conditions:
         if self.inner_boundary_condition == 1:
             self.inner_boundary_value = 0
         elif self.inner_boundary_condition == 2:
-            self.inner_boundary_value /= self._scalings.heat_flux
+            self.inner_boundary_value /= self.scalings.heat_flux
         elif self.inner_boundary_condition == 3:
-            self.inner_boundary_value /= self._scalings.temperature
+            self.inner_boundary_value /= self.scalings.temperature
         else:
             msg: str = f"inner_boundary_condition = {self.inner_boundary_condition} is unknown"
             raise ValueError(msg)
@@ -166,9 +165,9 @@ class boundary_conditions:
         elif self.outer_boundary_condition == 3:
             pass
         elif self.outer_boundary_condition == 4:
-            self.outer_boundary_value /= self._scalings.heat_flux
+            self.outer_boundary_value /= self.scalings.heat_flux
         elif self.outer_boundary_condition == 5:
-            self.outer_boundary_value /= self._scalings.temperature
+            self.outer_boundary_value /= self.scalings.temperature
         else:
             msg: str = f"outer_boundary_condition = {self.outer_boundary_condition} is unknown"
             raise ValueError(msg)
@@ -194,9 +193,9 @@ class initial_condition:
     basal_temperature: float
 
     def scale_attributes(self, scalings_: scalings) -> None:
-        self._scalings: scalings = scalings_
-        self.surface_temperature /= self._scalings.temperature
-        self.basal_temperature /= self._scalings.temperature
+        self.scalings: scalings = scalings_
+        self.surface_temperature /= self.scalings.temperature
+        self.basal_temperature /= self.scalings.temperature
 
 
 @dataclass
@@ -213,12 +212,12 @@ class mesh:
     gravitational_acceleration: float
 
     def scale_attributes(self, scalings_: scalings) -> None:
-        self._scalings: scalings = scalings_
-        self.outer_radius /= self._scalings.radius
-        self.inner_radius /= self._scalings.radius
-        self.adams_williamson_surface_density /= self._scalings.density
-        self.adams_williamson_beta *= self._scalings.radius
-        self.gravitational_acceleration /= self._scalings.gravitational_acceleration
+        self.scalings: scalings = scalings_
+        self.outer_radius /= self.scalings.radius
+        self.inner_radius /= self.scalings.radius
+        self.adams_williamson_surface_density /= self.scalings.density
+        self.adams_williamson_beta *= self.scalings.radius
+        self.gravitational_acceleration /= self.scalings.gravitational_acceleration
 
 
 @dataclass
@@ -232,8 +231,8 @@ class phase_mixed:
     liquidus: str
 
     def scale_attributes(self, scalings_: scalings) -> None:
-        self._scalings: scalings = scalings_
-        self.latent_heat_of_fusion /= self._scalings.latent_heat_per_mass
+        self.scalings: scalings = scalings_
+        self.latent_heat_of_fusion /= self.scalings.latent_heat_per_mass
 
 
 @dataclass
@@ -241,22 +240,22 @@ class phase:
     """Phase"""
 
     density: float | str
-    viscosity: float | str
     heat_capacity: float | str
     thermal_conductivity: float | str
     thermal_expansivity: float | str
+    viscosity: float | str
 
     def scale_attributes(self, scalings_: scalings) -> None:
         """Scales the attributes if they are numbers"""
-        self._scalings: scalings = scalings_
+        self.scalings: scalings = scalings_
         cls_fields: tuple[Field, ...] = fields(self.__class__)
-        for field in cls_fields:
+        for field_ in cls_fields:
             try:
-                new_val = getattr(self, field.name) / getattr(self._scalings, field.name)
-                logger.info("%s is a number", field.name)
-                setattr(self, field.name, new_val)
+                new_val = getattr(self, field_.name) / getattr(self.scalings, field_.name)
+                logger.info("%s is a number", field_.name)
+                setattr(self, field_.name, new_val)
             except TypeError:
-                logger.info("%s is a string (path to a filename)", field.name)
+                logger.info("%s is a string (path to a filename)", field_.name)
 
 
 @dataclass
@@ -271,11 +270,11 @@ class radionuclide:
     half_life_years: float
 
     def scale_attributes(self, scalings_: scalings) -> None:
-        self._scalings: scalings = scalings_
-        self.t0_years /= self._scalings.time_years
+        self.scalings: scalings = scalings_
+        self.t0_years /= self.scalings.time_years
         self.concentration *= 1e-6  # to mass fraction
-        self.heat_production /= self._scalings.power_per_mass
-        self.half_life_years /= self._scalings.time_years
+        self.heat_production /= self.scalings.power_per_mass
+        self.half_life_years /= self.scalings.time_years
 
 
 @dataclass
@@ -288,9 +287,9 @@ class solver:
     rtol: float
 
     def scale_attributes(self, scalings_: scalings) -> None:
-        self._scalings: scalings = scalings_
-        self.start_time /= self._scalings.time_years
-        self.end_time /= self._scalings.time_years
+        self.scalings: scalings = scalings_
+        self.start_time /= self.scalings.time_years
+        self.end_time /= self.scalings.time_years
 
 
 @dataclass
@@ -309,11 +308,9 @@ class Configuration:
     solver: solver
 
     def __post_init__(self):
-        # Note typed-configparser redefines __init__ and thus __post_init__ is not called
-        self.scalings.__post_init__()
         cls_fields: tuple[Field, ...] = fields(self.__class__)
-        for field in cls_fields:
-            data = getattr(self, field.name)
+        for field_ in cls_fields:
+            data = getattr(self, field_.name)
             # Dataclass
             if hasattr(data, "scale_attributes"):
                 data.scale_attributes(self.scalings)

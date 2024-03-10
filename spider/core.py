@@ -19,24 +19,23 @@
 from __future__ import annotations
 
 import logging
-import sys
-from ast import literal_eval
-from configparser import ConfigParser, SectionProxy
-from dataclasses import KW_ONLY, dataclass, field
-from pathlib import Path
-from typing import TYPE_CHECKING, Callable
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 import numpy as np
-from scipy import constants
-from thermochem import codata
 
-from spider.interfaces import ScaledDataclassFromConfiguration
-from spider.phase import MixedPhaseEvaluator, PhaseEvaluator, PhaseEvaluatorProtocol
-
-if sys.version_info < (3, 12):
-    from typing_extensions import override
-else:
-    from typing import override
+from spider.parser import (
+    Parameters,
+    boundary_conditions,
+    initial_condition,
+    mesh,
+    radionuclide,
+)
+from spider.phase import (
+    MixedPhaseEvaluator,
+    PhaseEvaluatorProtocol,
+    SinglePhaseEvaluator,
+)
 
 if TYPE_CHECKING:
     from spider.solver import State
@@ -45,90 +44,19 @@ logger: logging.Logger = logging.getLogger(__name__)
 
 
 @dataclass
-class BoundaryConditions(ScaledDataclassFromConfiguration):
+class BoundaryConditions:
     """Boundary conditions
 
     Args:
-        scalings: Scalings
+        parameters: Parameters
         mesh: Mesh
-        outer_boundary_condition: Outer boundary condition (flux, temperature, etc.)
-        outer_boundary_value: Value of the outer boundary condition (flux, temperature, etc.)
-        inner_boundary_condition: Inner boundary condition (flux, temperature. etc.)
-        inner_boundary_value: Value of the inner boundary condition (flux, temperature, etc.)
-        emissivity: Emissivity of the atmosphere (not necessarily used)
-        equilibrium_temperature: Planetary equilibrium temperature (not necessarily used)
-        core_radius: Radius of the core (not necessarily used)
-        core_density: Density of the core (not necessarily used)
-        core_heat_capacity: Heat capacity of the core (not necessarily used)
-
-    Attributes:
-        See Args
     """
 
-    scalings: Scalings
-    mesh: SpiderMesh
-    _: KW_ONLY
-    outer_boundary_condition: int
-    outer_boundary_value: float  # Equivalent to surface_bc_value in C code.
-    inner_boundary_condition: int
-    inner_boundary_value: float  # Equivalent to core_bc_value in C Code.
-    emissivity: float
-    equilibrium_temperature: float
-    core_radius: float
-    core_density: float
-    core_heat_capacity: float
+    _parameters: Parameters
+    _mesh: Mesh
 
-    @override
-    def scale_attributes(self) -> None:
-        """See base class."""
-        self.equilibrium_temperature /= self.scalings.temperature
-        self.core_radius /= self.scalings.radius
-        self.core_density /= self.scalings.density
-        self.core_heat_capacity /= self.core_heat_capacity
-        self._scale_inner_boundary_condition()
-        self._scale_outer_boundary_condition()
-
-    def _scale_inner_boundary_condition(self) -> None:
-        """Scales the inner boundary value.
-
-        Equivalent to CORE_BC in C code.
-            1: Simple core cooling
-            2: Prescribed heat flux
-            3: Prescribed temperature
-        """
-        if self.inner_boundary_condition == 1:
-            self.inner_boundary_value = 0
-        elif self.inner_boundary_condition == 2:
-            self.inner_boundary_value /= self.scalings.heat_flux
-        elif self.inner_boundary_condition == 3:
-            self.inner_boundary_value /= self.scalings.temperature
-        else:
-            msg: str = f"inner_boundary_condition = {self.inner_boundary_condition} is unknown"
-            raise ValueError(msg)
-
-    def _scale_outer_boundary_condition(self) -> None:
-        """Scales the outer boundary value.
-
-        Equivalent to SURFACE_BC in C code.
-            1: Grey-body atmosphere
-            2: Zahnle steam atmosphere
-            3: Couple to atmodeller
-            4: Prescribed heat flux
-            5: Prescribed temperature
-        """
-        if self.outer_boundary_condition == 1:
-            pass
-        elif self.outer_boundary_condition == 2:
-            pass
-        elif self.outer_boundary_condition == 3:
-            pass
-        elif self.outer_boundary_condition == 4:
-            self.outer_boundary_value /= self.scalings.heat_flux
-        elif self.outer_boundary_condition == 5:
-            self.outer_boundary_value /= self.scalings.temperature
-        else:
-            msg: str = f"outer_boundary_condition = {self.outer_boundary_condition} is unknown"
-            raise ValueError(msg)
+    def __post_init__(self):
+        self._settings: boundary_conditions = self._parameters.data.boundary_conditions
 
     def conform_temperature_boundary_conditions(
         self, temperature: np.ndarray, temperature_basic: np.ndarray, dTdr: np.ndarray
@@ -141,18 +69,18 @@ class BoundaryConditions(ScaledDataclassFromConfiguration):
             dTdr: Temperature gradient at the basic nodes
         """
         # Core-mantle boundary
-        if self.inner_boundary_condition == 3:
-            temperature_basic[0, :] = self.inner_boundary_value
+        if self._settings.inner_boundary_condition == 3:
+            temperature_basic[0, :] = self._settings.inner_boundary_value
             dTdr[0, :] = (
-                2 * (temperature[0, :] - temperature_basic[0, :]) / self.mesh.basic.delta_radii[0]
+                2 * (temperature[0, :] - temperature_basic[0, :]) / self._mesh.basic.delta_radii[0]
             )
         # Surface
-        if self.outer_boundary_condition == 5:
-            temperature_basic[-1, :] = self.outer_boundary_value
+        if self._settings.outer_boundary_condition == 5:
+            temperature_basic[-1, :] = self._settings.outer_boundary_value
             dTdr[-1, :] = (
                 2
                 * (temperature_basic[-1, :] - temperature[-1, :])
-                / self.mesh.basic.delta_radii[-1]
+                / self._mesh.basic.delta_radii[-1]
             )
 
     def apply(self, state: State) -> None:
@@ -180,20 +108,22 @@ class BoundaryConditions(ScaledDataclassFromConfiguration):
             4: Prescribed heat flux
             5: Prescribed temperature
         """
-        if self.outer_boundary_condition == 1:
+        if self._settings.outer_boundary_condition == 1:
             self.grey_body(state)
-        elif self.outer_boundary_condition == 2:
+        elif self._settings.outer_boundary_condition == 2:
             raise NotImplementedError
-        elif self.outer_boundary_condition == 3:
+        elif self._settings.outer_boundary_condition == 3:
             msg: str = "Requires coupling to atmodeller"
             logger.error(msg)
             raise NotImplementedError(msg)
-        elif self.outer_boundary_condition == 4:
-            state.heat_flux[-1, :] = self.outer_boundary_value
-        elif self.outer_boundary_condition == 5:
+        elif self._settings.outer_boundary_condition == 4:
+            state.heat_flux[-1, :] = self._settings.outer_boundary_value
+        elif self._settings.outer_boundary_condition == 5:
             pass
         else:
-            msg: str = f"outer_boundary_condition = {self.outer_boundary_condition} is unknown"
+            msg: str = (
+                f"outer_boundary_condition = {self._settings.outer_boundary_condition} is unknown"
+            )
             raise ValueError(msg)
 
     def grey_body(self, state: State) -> None:
@@ -203,9 +133,9 @@ class BoundaryConditions(ScaledDataclassFromConfiguration):
             state: The state to apply the boundary conditions to
         """
         state.heat_flux[-1, :] = (
-            self.emissivity
-            * self.scalings.stefan_boltzmann_constant
-            * (np.power(state.top_temperature, 4) - self.equilibrium_temperature**4)
+            self._settings.emissivity
+            * self._settings.scalings.stefan_boltzmann_constant
+            * (np.power(state.top_temperature, 4) - self._settings.equilibrium_temperature**4)
         )
 
     # TODO: Rename to only be associated with flux boundary conditions
@@ -220,49 +150,35 @@ class BoundaryConditions(ScaledDataclassFromConfiguration):
             2: Prescribed heat flux
             3: Prescribed temperature
         """
-        if self.inner_boundary_condition == 1:
+        if self._settings.inner_boundary_condition == 1:
             raise NotImplementedError
-        elif self.inner_boundary_condition == 2:
-            state.heat_flux[0, :] = self.inner_boundary_value
-        elif self.inner_boundary_condition == 3:
+        elif self._settings.inner_boundary_condition == 2:
+            state.heat_flux[0, :] = self._settings.inner_boundary_value
+        elif self._settings.inner_boundary_condition == 3:
             pass
             # raise NotImplementedError
         else:
-            msg: str = f"inner_boundary_condition = {self.inner_boundary_condition} is unknown"
+            msg: str = (
+                f"inner_boundary_condition = {self._settings.inner_boundary_condition} is unknown"
+            )
             raise ValueError(msg)
 
 
 @dataclass
-class InitialCondition(ScaledDataclassFromConfiguration):
+class InitialCondition:
     """Initial condition
 
     Args:
-        scalings: Scalings
+        parameters: Parameters
         mesh: Mesh
-        surface_temperature: Temperature of the "surface" (top staggered node)
-        basal_temperature: Temperature of the base of the mantle (bottom staggered node)
-
-    Attributes:
-        See Args
     """
 
-    scalings: Scalings
-    mesh: SpiderMesh
-    boundary_conditions: BoundaryConditions
-    _: KW_ONLY
-    surface_temperature: float
-    basal_temperature: float
-    _temperature: np.ndarray = field(init=False)
+    _parameters: Parameters
+    _mesh: Mesh
 
     def __post_init__(self):
-        super().__post_init__()
-        self._temperature = self.get_linear()
-
-    @override
-    def scale_attributes(self) -> None:
-        """See base class."""
-        self.surface_temperature /= self.scalings.temperature
-        self.basal_temperature /= self.scalings.temperature
+        self._settings: initial_condition = self._parameters.data.initial_condition
+        self._temperature: np.ndarray = self.get_linear()
 
     @property
     def temperature(self) -> np.ndarray:
@@ -277,7 +193,9 @@ class InitialCondition(ScaledDataclassFromConfiguration):
             Linear temperature profile for the staggered nodes
         """
         temperature: np.ndarray = np.linspace(
-            self.basal_temperature, self.surface_temperature, self.mesh.staggered.number_of_nodes
+            self._settings.basal_temperature,
+            self._settings.surface_temperature,
+            self._mesh.staggered.number_of_nodes,
         )
         return temperature
 
@@ -360,7 +278,7 @@ class _FixedMesh:
 
 
 @dataclass
-class SpiderMesh(ScaledDataclassFromConfiguration):
+class Mesh:
     """A staggered mesh.
 
     The 'basic' mesh is used for the flux calculations and the 'staggered' mesh is used for the
@@ -369,42 +287,23 @@ class SpiderMesh(ScaledDataclassFromConfiguration):
     # TODO Update with Adams williamson EOS
 
     Args:
-        scalings: Scalings
-
-    Attributes:
-        scalings: Scalings
-        inner_radius: Inner radius
-        outer_radius: Outer radius
-        number_of_nodes: Number of nodes
-        mixing_length_profile: The mixing length profile
-        basic: The basic mesh
-        staggered: The staggered mesh
+        parameters: Parameters
     """
 
-    scalings: Scalings
-    _: KW_ONLY
-    inner_radius: float
-    outer_radius: float
-    number_of_nodes: int
-    mixing_length_profile: str
-    gravitational_acceleration: float
-    adams_williamson_surface_density: float
-    adams_williamson_beta: float
+    _parameters: Parameters
 
     def __post_init__(self):
-        super().__post_init__()
+        self._settings: mesh = self._parameters.data.mesh
         basic_coordinates: np.ndarray = self.get_constant_spacing()
-        self.basic: _FixedMesh = _FixedMesh(basic_coordinates, self.mixing_length_profile)
+        self.basic: _FixedMesh = _FixedMesh(
+            basic_coordinates, self._settings.mixing_length_profile
+        )
         staggered_coordinates: np.ndarray = self.basic.radii[:-1] + 0.5 * self.basic.delta_radii
-        self.staggered: _FixedMesh = _FixedMesh(staggered_coordinates, self.mixing_length_profile)
+        self.staggered: _FixedMesh = _FixedMesh(
+            staggered_coordinates, self._settings.mixing_length_profile
+        )
         self._d_dr_transform: np.ndarray = self.d_dr_transform_matrix()
         self._quantity_transform: np.ndarray = self.quantity_transform_matrix()
-
-    @override
-    def scale_attributes(self) -> None:
-        """See base class."""
-        self.inner_radius /= self.scalings.radius
-        self.outer_radius /= self.scalings.radius
 
     def get_constant_spacing(self) -> np.ndarray:
         """Constant radius spacing across the mantle
@@ -412,7 +311,11 @@ class SpiderMesh(ScaledDataclassFromConfiguration):
         Returns:
             Radii with constant spacing
         """
-        radii: np.ndarray = np.linspace(self.inner_radius, self.outer_radius, self.number_of_nodes)
+        radii: np.ndarray = np.linspace(
+            self._settings.inner_radius,
+            self._settings.outer_radius,
+            self._settings.number_of_nodes,
+        )
         return radii
 
     def d_dr_transform_matrix(self) -> np.ndarray:
@@ -495,7 +398,7 @@ class SpiderMesh(ScaledDataclassFromConfiguration):
 
 
 @dataclass
-class Radionuclide(ScaledDataclassFromConfiguration):
+class Radionuclide:
     """Radionuclide
 
     Args:
@@ -511,21 +414,7 @@ class Radionuclide(ScaledDataclassFromConfiguration):
         See Args.
     """
 
-    scalings: Scalings
-    name: str
-    _: KW_ONLY
-    t0_years: float
-    abundance: float
-    concentration: float
-    heat_production: float
-    half_life_years: float
-
-    @override
-    def scale_attributes(self) -> None:
-        self.t0_years /= self.scalings.time_years
-        self.concentration *= 1e-6  # to mass fraction
-        self.heat_production /= self.scalings.power_per_mass
-        self.half_life_years /= self.scalings.time_years
+    _settings: radionuclide
 
     def get_heating(self, time: np.ndarray | float) -> np.ndarray | float:
         """Radiogenic heating
@@ -537,122 +426,20 @@ class Radionuclide(ScaledDataclassFromConfiguration):
             Radiogenic heating as a float if time is a float, otherwise a numpy row array where
                 each entry in the row is associated with a single time in the time array.
         """
-        arg: np.ndarray | float = np.log(2) * (self.t0_years - time) / self.half_life_years
+        arg: np.ndarray | float = (
+            np.log(2) * (self._settings.t0_years - time) / self._settings.half_life_years
+        )
         heating: np.ndarray | float = (
-            self.heat_production * self.abundance * self.concentration * np.exp(arg)
+            self._settings.heat_production
+            * self._settings.abundance
+            * self._settings.concentration
+            * np.exp(arg)
         )
 
         return heating
 
-    # TODO: Remove eventually, now moved into parser.py
-    # @dataclass(kw_only=True)
-    # class Scalings(ScaledDataclassFromConfiguration):
-    #     """Scalings for the numerical problem.
 
-    #     Args:
-    #         radius: Radius in metres. Defaults to 1.
-    #         temperature: Temperature in Kelvin. Defaults to 1.
-    #         density: Density in kg/m^3. Defaults to 1.
-    #         time: Time in seconds. Defaults to 1.
-
-    #     Attributes:
-    #         radius, m
-    #         temperature, K
-    #         density, kg/m^3
-    #         time, s
-    #         area, m^2
-    #         kinetic_energy_per_volume, J/m^3
-    #         gravitational_acceleration, m/s^2
-    #         heat_capacity, J/kg/K
-    #         heat_flux, W/m^2
-    #         latent_heat_per_mass, J/kg
-    #         power_per_mass, W/kg
-    #         power_per_volume, W/m^3
-    #         pressure, Pa
-    #         temperature_gradient, K/m
-    #         thermal_expansivity, 1/K
-    #         thermal_conductivity, W/m/K
-    #         velocity, m/s
-    #         viscosity, Pa s
-    #         time_years, years
-    #         stefan_boltzmann_constant (non-dimensional)
-    #     """
-
-    #     radius: float = 1
-    #     temperature: float = 1
-    #     density: float = 1
-    #     time: float = 1
-
-    #     @override
-    #     def scale_attributes(self) -> None:
-    #         self.area: float = np.square(self.radius)
-    #         self.gravitational_acceleration: float = self.radius / np.square(self.time)
-    #         self.temperature_gradient: float = self.temperature / self.radius
-    #         self.thermal_expansivity: float = 1 / self.temperature
-    #         self.pressure: float = self.density * self.gravitational_acceleration * self.radius
-    #         self.velocity: float = self.radius / self.time
-    #         self.kinetic_energy_per_volume: float = self.density * np.square(self.velocity)
-    #         self.heat_capacity: float = (
-    #             self.kinetic_energy_per_volume / self.density / self.temperature
-    #         )
-    #         self.latent_heat_per_mass: float = self.heat_capacity * self.temperature
-    #         self.power_per_volume: float = self.kinetic_energy_per_volume / self.time
-    #         self.power_per_mass: float = self.power_per_volume / self.density
-    #         self.heat_flux: float = self.power_per_volume * self.radius
-    #         self.thermal_conductivity: float = self.power_per_volume * self.area / self.temperature
-    #         self.viscosity: float = self.pressure * self.time
-    #         self.time_years: float = self.time / constants.Julian_year  # Equivalent to TIMEYRS C code
-    #         # Non-dimensional constants
-    #         self.stefan_boltzmann_constant: float = codata.value(
-    #             "Stefan-Boltzmann constant"
-    #         )  # W/m^2/K^4
-    #         self.stefan_boltzmann_constant /= (
-    #             self.power_per_volume * self.radius / np.power(self.temperature, 4)
-    #         )
-    #         logger.debug("scalings = %s", self)
-
-    # @property
-    # def phase_boundary(self) -> float:
-    #     """For scaling phase boundary"""
-    #     return self.temperature
-
-
-class SpiderConfigParser(ConfigParser):
-    """Parser for SPIDER configuration files
-
-    Args:
-        *filenames: Filenames of one or several configuration files
-    """
-
-    getpath: Callable[..., Path]  # For typing.
-
-    def __init__(self, *filenames):
-        kwargs: dict = {
-            "comment_prefixes": ("#",),
-            "converters": {"path": Path, "any": literal_eval},
-        }
-        super().__init__(**kwargs)
-        self.read(filenames)
-
-    @property
-    def phases(self) -> dict[str, SectionProxy]:
-        """Dictionary of the sections relating to phases"""
-        return {
-            self[section].name.split("_")[1]: self[section]
-            for section in self.sections()
-            if section.startswith("phase_")
-        }
-
-    @property
-    def radionuclides(self) -> dict[str, SectionProxy]:
-        """Dictionary of the sections relating to radionuclides"""
-        return {
-            self[section].name.split("_")[1]: self[section]
-            for section in self.sections()
-            if section.startswith("radionuclide_")
-        }
-
-
+# TODO: Rename below to something more like SpiderFunctions
 @dataclass
 class SpiderData:
     """Container for the objects necessary to compute the interior evolution.
@@ -673,55 +460,56 @@ class SpiderData:
         radionuclides: Radionuclides
     """
 
-    config_parser: SpiderConfigParser
-    scalings: Scalings = field(init=False)
+    _parameters: Parameters
+    # old below
+    # config_parser: SpiderConfigParser
+    # scalings: Scalings = field(init=False)
     boundary_conditions: BoundaryConditions = field(init=False)
     initial_condition: InitialCondition = field(init=False)
-    mesh: SpiderMesh = field(init=False)
-    phases: dict[str, PhaseEvaluator] = field(init=False, default_factory=dict)
-    phase: PhaseEvaluatorProtocol = field(init=False)
-    radionuclides: dict[str, Radionuclide] = field(init=False, default_factory=dict)
+    mesh: Mesh = field(init=False)
+    solid: PhaseEvaluatorProtocol = field(init=False)
+    liquid: PhaseEvaluatorProtocol = field(init=False)
+    mixed: PhaseEvaluatorProtocol = field(init=False)
+    # radionuclides: dict[str, Radionuclide] = field(init=False, default_factory=dict)
 
     def __post_init__(self):
-        self.scalings = Scalings.from_configuration(section=self.config_parser["scalings"])
-        self.mesh = SpiderMesh.from_configuration(
-            self.scalings, section=self.config_parser["mesh"]
+        self._mesh = Mesh(self._parameters)
+        self.boundary_conditions = BoundaryConditions(self._parameters, self._mesh)
+        self.initial_condition = InitialCondition(self._parameters, self._mesh)
+        self.solid = SinglePhaseEvaluator(
+            self._parameters.data.phase_solid, self._parameters.data.mesh
         )
-        self.boundary_conditions = BoundaryConditions.from_configuration(
-            self.scalings, self.mesh, section=self.config_parser["boundary_conditions"]
+        self.liquid = SinglePhaseEvaluator(
+            self._parameters.data.phase_liquid, self._parameters.data.mesh
+        )
+        self.mixed = MixedPhaseEvaluator(
+            self._parameters.data.phase_mixed, self.solid, self.liquid
         )
 
-        self.initial_condition = InitialCondition.from_configuration(
-            self.scalings,
-            self.mesh,
-            self.boundary_conditions,
-            section=self.config_parser["initial_condition"],
-        )
-        for phase_name, phase_section in self.config_parser.phases.items():
-            phase: PhaseEvaluator = PhaseEvaluator.from_configuration(
-                self.scalings, phase_name, section=phase_section
-            )
-            self.phases[phase_name] = phase
         for radionuclide_name, radionuclide_section in self.config_parser.radionuclides.items():
             radionuclide: Radionuclide = Radionuclide.from_configuration(
                 self.scalings, radionuclide_name, section=radionuclide_section
             )
             self.radionuclides[radionuclide_name] = radionuclide
-        self.set_phase()
 
-    def set_phase(self) -> None:
-        """Sets the phase"""
+        # Somewhere set the phase, to be either solid, liquid, or mixed
 
-        if len(self.phases) == 1:
-            phase_name, phase = next(iter(self.phases.items()))
-            logger.info("Only one phase provided: %s", phase_name)
-            self.phase = phase
+    #    self.set_phase()
 
-        elif len(self.phases) == 2:
-            logger.info("Two phases found so creating a composite")
-            self.phase = MixedPhaseEvaluator.from_configuration(
-                self.scalings, self.phases, section=self.config_parser["mixed_phase"]
-            )
+    # TODO: FIXME: Remove old below
+    # def set_phase(self) -> None:
+    #     """Sets the phase"""
+
+    #     if len(self.phases) == 1:
+    #         phase_name, phase = next(iter(self.phases.items()))
+    #         logger.info("Only one phase provided: %s", phase_name)
+    #         self.phase = phase
+
+    #     elif len(self.phases) == 2:
+    #         logger.info("Two phases found so creating a composite")
+    #         self.phase = MixedPhaseEvaluator.from_configuration(
+    #             self.scalings, self.phases, section=self.config_parser["mixed_phase"]
+    #         )
 
 
 def is_monotonic_increasing(some_array: np.ndarray) -> np.bool_:

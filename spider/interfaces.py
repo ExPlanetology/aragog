@@ -18,21 +18,13 @@
 
 from __future__ import annotations
 
-import inspect
 import logging
 import sys
 from abc import ABC, abstractmethod
-from configparser import SectionProxy
 from dataclasses import dataclass, field
-from typing import Any, Protocol
 
 import numpy as np
 from scipy.interpolate import RectBivariateSpline, interp1d
-
-if sys.version_info < (3, 11):
-    from typing_extensions import Self
-else:
-    from typing import Self
 
 if sys.version_info < (3, 12):
     from typing_extensions import override
@@ -41,41 +33,7 @@ else:
 
 logger: logging.Logger = logging.getLogger(__name__)
 
-
-@dataclass
-class DataclassFromConfiguration:
-    """A dataclass that can source its attributes from a configuration section"""
-
-    @classmethod
-    def from_configuration(cls, *args, section: SectionProxy) -> Self:
-        """Creates a dataclass instance from a configuration section.
-
-        This reads the configuration data and sources the attributes from this data as well as
-        performing type conversations.
-
-        Args:
-            *args: Positional arguments to pass through to the constructor
-            config: A configuration section
-
-        Returns:
-            A dataclass with its attributes populated
-        """
-        init_dict: dict[str, Any] = {
-            k: section.getany(k) for k in section.keys() if k in inspect.signature(cls).parameters
-        }
-        return cls(*args, **init_dict)
-
-
-@dataclass
-class ScaledDataclassFromConfiguration(ABC, DataclassFromConfiguration):
-    """A dataclass that requires its attributes to be scaled."""
-
-    def __post_init__(self):
-        self.scale_attributes()
-
-    @abstractmethod
-    def scale_attributes(self) -> None:
-        """Scales the attributes"""
+# FIXME: Check x versus y or y versus x for pressure and temperature
 
 
 @dataclass
@@ -199,31 +157,3 @@ class LookupProperty2D(PropertyABC):
     def _get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
         """See base class."""
         return self._lookup(pressure, temperature, grid=False)
-
-
-class PhaseEvaluatorProtocol(Protocol):
-    """Phase evaluator protocol
-
-    raise NotImplementedError() is to prevent pylint from reporting assignment-from-no-return /
-    E1111.
-    """
-
-    def density(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        raise NotImplementedError()
-
-    def gravitational_acceleration(
-        self, temperature: np.ndarray, pressure: np.ndarray
-    ) -> np.ndarray:
-        raise NotImplementedError()
-
-    def heat_capacity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        raise NotImplementedError()
-
-    def thermal_conductivity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        raise NotImplementedError()
-
-    def thermal_expansivity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        raise NotImplementedError()
-
-    def viscosity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        raise NotImplementedError()
