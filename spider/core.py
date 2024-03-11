@@ -460,37 +460,40 @@ class SpiderData:
         radionuclides: Radionuclides
     """
 
-    _parameters: Parameters
-    # old below
-    # config_parser: SpiderConfigParser
-    # scalings: Scalings = field(init=False)
+    parameters: Parameters
     boundary_conditions: BoundaryConditions = field(init=False)
     initial_condition: InitialCondition = field(init=False)
     mesh: Mesh = field(init=False)
     solid: PhaseEvaluatorProtocol = field(init=False)
     liquid: PhaseEvaluatorProtocol = field(init=False)
     mixed: PhaseEvaluatorProtocol = field(init=False)
+    # Below is a hack to hard-code a phase for testing
+    phase: PhaseEvaluatorProtocol = field(init=False)
+    # TODO: radionuclides
     # radionuclides: dict[str, Radionuclide] = field(init=False, default_factory=dict)
 
     def __post_init__(self):
-        self._mesh = Mesh(self._parameters)
-        self.boundary_conditions = BoundaryConditions(self._parameters, self._mesh)
-        self.initial_condition = InitialCondition(self._parameters, self._mesh)
+        self.mesh = Mesh(self.parameters)
+        self.boundary_conditions = BoundaryConditions(self.parameters, self.mesh)
+        self.initial_condition = InitialCondition(self.parameters, self.mesh)
         self.solid = SinglePhaseEvaluator(
-            self._parameters.data.phase_solid, self._parameters.data.mesh
+            self.parameters.data.phase_solid, self.parameters.data.mesh
         )
         self.liquid = SinglePhaseEvaluator(
-            self._parameters.data.phase_liquid, self._parameters.data.mesh
+            self.parameters.data.phase_liquid, self.parameters.data.mesh
         )
-        self.mixed = MixedPhaseEvaluator(
-            self._parameters.data.phase_mixed, self.solid, self.liquid
-        )
+        self.mixed = MixedPhaseEvaluator(self.parameters.data.phase_mixed, self.solid, self.liquid)
 
-        for radionuclide_name, radionuclide_section in self.config_parser.radionuclides.items():
-            radionuclide: Radionuclide = Radionuclide.from_configuration(
-                self.scalings, radionuclide_name, section=radionuclide_section
-            )
-            self.radionuclides[radionuclide_name] = radionuclide
+        # FIXME: hard-code a phase
+        self.phase = self.solid
+
+        # TODO: Reinstate radionuclides
+
+        # for radionuclide_name, radionuclide_section in self.config_parser.radionuclides.items():
+        #     radionuclide: Radionuclide = Radionuclide.from_configuration(
+        #         self.scalings, radionuclide_name, section=radionuclide_section
+        #     )
+        #     self.radionuclides[radionuclide_name] = radionuclide
 
         # Somewhere set the phase, to be either solid, liquid, or mixed
 

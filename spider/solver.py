@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import logging
 from configparser import SectionProxy
-from dataclasses import KW_ONLY, dataclass, field
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -28,15 +28,15 @@ import numpy as np
 from scipy.integrate import solve_ivp
 from scipy.optimize import OptimizeResult
 
-from spider.core import SpiderConfigParser, SpiderData
-from spider.interfaces import DataclassFromConfiguration
+from spider.core import SpiderData
+from spider.parser import Parameters
 from spider.phase import PhaseStateBasic, PhaseStateStaggered
 
 logger: logging.Logger = logging.getLogger(__name__)
 
 
 @dataclass
-class State(DataclassFromConfiguration):
+class State:
     """Stores the state at temperature and pressure.
 
     Args:
@@ -78,14 +78,7 @@ class State(DataclassFromConfiguration):
         viscous_velocity: Viscous velocity
     """
 
-    _data: SpiderData
-    _: KW_ONLY
-    conduction: bool
-    convection: bool
-    gravitational_separation: bool
-    mixing: bool
-    radionuclides: bool
-    tidal: bool
+    data: SpiderData
     phase_basic: PhaseStateBasic = field(init=False)
     phase_staggered: PhaseStateStaggered = field(init=False)
     _dTdr: np.ndarray = field(init=False)
@@ -100,8 +93,8 @@ class State(DataclassFromConfiguration):
     _inviscid_velocity: np.ndarray = field(init=False)
 
     def __post_init__(self):
-        self.phase_basic = PhaseStateBasic(self._data.phase)
-        self.phase_staggered = PhaseStateStaggered(self._data.phase)
+        self.phase_basic = PhaseStateBasic(self.data.phase)
+        self.phase_staggered = PhaseStateStaggered(self.data.phase)
 
     def conductive_heat_flux(self) -> np.ndarray:
         """Conductive heat flux"""
@@ -129,7 +122,7 @@ class State(DataclassFromConfiguration):
                 2-D array with each column associated with a single time in the time array.
         """
         radiogenic_heating_float: np.ndarray | float = 0
-        for radionuclide in self._data.radionuclides.values():
+        for radionuclide in self.data.radionuclides.values():
             radiogenic_heating_float += radionuclide.get_heating(time)
 
         radiogenic_heating: np.ndarray = radiogenic_heating_float * (
@@ -225,9 +218,9 @@ class State(DataclassFromConfiguration):
             temperature: Temperature at the staggered nodes
         """
         logger.debug("Setting the temperature profile")
-        self._temperature_basic = self._data.mesh.quantity_at_basic_nodes(temperature)
-        self._dTdr = self._data.mesh.d_dr_at_basic_nodes(temperature)
-        self._data.boundary_conditions.conform_temperature_boundary_conditions(
+        self._temperature_basic = self.data.mesh.quantity_at_basic_nodes(temperature)
+        self._dTdr = self.data.mesh.d_dr_at_basic_nodes(temperature)
+        self.data.boundary_conditions.conform_temperature_boundary_conditions(
             temperature, self._temperature_basic, self._dTdr
         )
         logger.debug("_temperature_basic = %s", self._temperature_basic)
@@ -248,7 +241,7 @@ class State(DataclassFromConfiguration):
         logger.debug("Updating the state")
         self._set_temperature(temperature)
         self.phase_staggered.update(temperature, pressure)
-        pressure_basic: np.ndarray = self._data.mesh.quantity_at_basic_nodes(pressure)
+        pressure_basic: np.ndarray = self.data.mesh.quantity_at_basic_nodes(pressure)
         self.phase_basic.update(self._temperature_basic, pressure_basic)
         self._super_adiabatic_temperature_gradient = self._dTdr - self.phase_basic.dTdrs
         self._is_convective = self._super_adiabatic_temperature_gradient < 0
@@ -259,12 +252,12 @@ class State(DataclassFromConfiguration):
         )
         # Viscous velocity
         self._viscous_velocity = (
-            velocity_prefactor * self._data.mesh.basic.mixing_length_cubed
+            velocity_prefactor * self.data.mesh.basic.mixing_length_cubed
         ) / (18 * self.phase_basic.kinematic_viscosity)
         self._viscous_velocity[~self.is_convective] = 0  # Must be super-adiabatic
         # Inviscid velocity
         self._inviscid_velocity = (
-            velocity_prefactor * self._data.mesh.basic.mixing_length_squared
+            velocity_prefactor * self.data.mesh.basic.mixing_length_squared
         ) / 16
         self._inviscid_velocity[~self.is_convective] = 0  # Must be super-adiabatic
         self._inviscid_velocity[self._is_convective] = np.sqrt(
@@ -273,28 +266,30 @@ class State(DataclassFromConfiguration):
         # Reynolds number
         self._reynolds_number = (
             self._viscous_velocity
-            * self._data.mesh.basic.mixing_length
+            * self.data.mesh.basic.mixing_length
             / self.phase_basic.kinematic_viscosity
         )
         # Eddy diffusivity
         self._eddy_diffusivity = np.where(
             self.viscous_regime, self._viscous_velocity, self._inviscid_velocity
         )
-        self._eddy_diffusivity *= self._data.mesh.basic.mixing_length
+        self._eddy_diffusivity *= self.data.mesh.basic.mixing_length
         # Heat flux
         self._heat_flux = 0  # np.zeros_like(self.temperature_basic)
-        if self.conduction:
+        if self.data.parameters.data.energy.conduction:
             self._heat_flux += self.conductive_heat_flux()
-        if self.convection:
+        if self.data.parameters.data.energy.convection:
             self._heat_flux += self.convective_heat_flux()
-        if self.gravitational_separation:
+        if self.data.parameters.data.energy.gravitational_separation:
             self._heat_flux += self.gravitational_separation_flux()
-        if self.mixing:
+        if self.data.parameters.data.energy.mixing:
             self._heat_flux += self.mixing_flux()
         # Heating
         self._heating = 0  # np.zeros_like(temperature)
-        if self.radionuclides:
-            self._heating += self.radiogenic_heating(time)
+
+        # FIXME: Reinstate
+        # if self.radionuclides:
+        #     self._heating += self.radiogenic_heating(time)
 
 
 class SpiderSolver:
@@ -316,7 +311,7 @@ class SpiderSolver:
         logger.info("Creating a SPIDER model")
         self.filename = Path(filename)
         self.root = Path(root)
-        self.config: SpiderConfigParser
+        self.parameters: Parameters
         self.data: SpiderData
         self.state: State
         self._solution: OptimizeResult
@@ -326,13 +321,13 @@ class SpiderSolver:
         """Parses a configuration file"""
         configuration_file: Path = self.root / self.filename
         logger.info("Parsing configuration file = %s", configuration_file)
-        self.config = SpiderConfigParser(configuration_file)
+        self.parameters = Parameters(configuration_file)
 
     def initialize(self) -> None:
         """Initializes the model using configuration data"""
         logger.info("Initializing %s", self.__class__.__name__)
-        self.data = SpiderData(self.config)
-        self.state = State.from_configuration(self.data, section=self.config["energy"])
+        self.data = SpiderData(self.parameters)
+        self.state = State(self.data)
 
     @property
     def solution(self) -> OptimizeResult:
@@ -345,7 +340,7 @@ class SpiderSolver:
         Returns:
             Temperature in kelvin at the staggered nodes
         """
-        temperature: np.ndarray = self.solution.y * self.data.scalings.temperature
+        temperature: np.ndarray = self.solution.y * self.data.parameters.data.scalings.temperature
         return temperature
 
     def dTdt(
@@ -397,13 +392,19 @@ class SpiderSolver:
         assert self.solution is not None
 
         # Dimensionalise quantities for plotting
-        radii: np.ndarray = self.data.mesh.basic.radii * self.data.scalings.radius * 1.0e-3  # km
+        radii: np.ndarray = (
+            self.data.mesh.basic.radii * self.data.parameters.data.scalings.radius * 1.0e-3
+        )  # km
         self.state.update(
             self.solution.y, self.solution.y, self.solution.t
         )  # FIXME: Second argument is pressure.
-        temperature: np.ndarray = self.state.temperature_basic * self.data.scalings.temperature
+        temperature: np.ndarray = (
+            self.state.temperature_basic * self.data.parameters.data.scalings.temperature
+        )
 
-        times: np.ndarray = self.solution.t * self.data.scalings.time_years  # years
+        times: np.ndarray = (
+            self.solution.t * self.data.parameters.data.scalings.time_years
+        )  # years
 
         plt.figure(figsize=(8, 6))
         ax = plt.subplot(111)
@@ -454,15 +455,12 @@ class SpiderSolver:
     def solve(self) -> None:
         """Solves the system of ODEs to determine the interior temperature profile."""
 
-        config_solver: SectionProxy = self.config["solver"]
-        start_time: float = (
-            config_solver.getfloat("start_time_years") / self.data.scalings.time_years
-        )
+        start_time: float = self.data.parameters.data.solver.start_time
         logger.debug("start_time = %f", start_time)
-        end_time: float = config_solver.getfloat("end_time_years") / self.data.scalings.time_years
+        end_time: float = self.data.parameters.data.solver.end_time
         logger.debug("end_time = %f", end_time)
-        atol: float = config_solver.getfloat("atol")
-        rtol: float = config_solver.getfloat("rtol")
+        atol: float = self.data.parameters.data.solver.atol
+        rtol: float = self.data.parameters.data.solver.rtol
 
         # FIXME: This is a dummy variable for pressure, which I think must be a 2-D array to work
         # because temperature is also a 2-D array, and functions evaluated at pressure and
