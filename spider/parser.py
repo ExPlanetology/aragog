@@ -18,6 +18,7 @@
 
 import logging
 from dataclasses import Field, dataclass, field, fields
+from typing import Any
 
 import numpy as np
 from scipy import constants
@@ -250,10 +251,18 @@ class phase:
         self.scalings: scalings = scalings_
         cls_fields: tuple[Field, ...] = fields(self.__class__)
         for field_ in cls_fields:
+            value: Any = getattr(self, field_.name)
+            scaling: float = getattr(self.scalings, field_.name)
             try:
-                new_val = getattr(self, field_.name) / getattr(self.scalings, field_.name)
-                logger.info("%s is a number", field_.name)
-                setattr(self, field_.name, new_val)
+                new_value = value / scaling
+                setattr(self, field_.name, new_value)
+                logger.debug(
+                    "%s is a number (value = %s, scaling = %s, new_value = %s)",
+                    field_.name,
+                    value,
+                    scaling,
+                    new_value,
+                )
             except TypeError:
                 logger.info("%s is a string (path to a filename)", field_.name)
 

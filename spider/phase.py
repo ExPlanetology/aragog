@@ -165,16 +165,16 @@ class SinglePhaseEvaluator(PhaseEvaluatorProtocol):
 
     Args:
         settings: phase
-        mesh: mesh
+        mesh_: mesh
     """
 
     # For typing
-    _density: PropertyABC
-    _gravitational_acceleration: PropertyABC
-    _heat_capacity: PropertyABC
-    _thermal_conductivity: PropertyABC
-    _thermal_expansivity: PropertyABC
-    _viscosity: PropertyABC
+    density: PropertyABC
+    gravitational_acceleration: PropertyABC
+    heat_capacity: PropertyABC
+    thermal_conductivity: PropertyABC
+    thermal_expansivity: PropertyABC
+    viscosity: PropertyABC
 
     def __init__(self, settings: phase, mesh_: mesh):
         self._settings: phase = settings
@@ -182,12 +182,11 @@ class SinglePhaseEvaluator(PhaseEvaluatorProtocol):
         cls_fields: tuple[Field, ...] = fields(self._settings)
         for field_ in cls_fields:
             name: str = field_.name
-            private_name: str = f"_{name}"
-            value = getattr(self, field_.name)
+            value = getattr(self._settings, field_.name)
 
             if is_number(value):
                 # Numbers have already been scaled
-                setattr(self, private_name, ConstantProperty(name=name, value=value))
+                setattr(self, name, ConstantProperty(name=name, value=value))
 
             elif is_file(value):
                 with open(value, encoding="utf-8") as infile:
@@ -204,21 +203,18 @@ class SinglePhaseEvaluator(PhaseEvaluatorProtocol):
                 ndim = value_array.shape[1]
                 logger.debug("ndim = %d", ndim)
                 if ndim == 2:
-                    setattr(self, private_name, LookupProperty1D(name=name, value=value_array))
+                    setattr(self, name, LookupProperty1D(name=name, value=value_array))
                 elif ndim == 3:
-                    setattr(self, private_name, LookupProperty2D(name=name, value=value_array))
+                    setattr(self, name, LookupProperty2D(name=name, value=value_array))
                 else:
                     raise ValueError(f"Lookup data must have 2 or 3 dimensions, not {ndim}")
             else:
                 msg: str = f"Cannot interpret value ({value}): not a number or a file"
                 raise ValueError(msg)
 
-        self._gravitational_acceleration = ConstantProperty(
+        self.gravitational_acceleration = ConstantProperty(
             "gravitational_acceleration", value=self._mesh.gravitational_acceleration
         )
-
-    def density(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        return self._density(temperature, pressure)
 
     def dTdPs(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
         """TODO: Update reference to sphinx: Solomatov (2007), Treatise on Geophysics, Eq. 3.2"""
@@ -229,23 +225,6 @@ class SinglePhaseEvaluator(PhaseEvaluatorProtocol):
         )
 
         return dTdPs
-
-    def gravitational_acceleration(
-        self, temperature: np.ndarray, pressure: np.ndarray
-    ) -> np.ndarray:
-        return self._gravitational_acceleration(temperature, pressure)
-
-    def heat_capacity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        return self._heat_capacity(temperature, pressure)
-
-    def thermal_conductivity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        return self._thermal_conductivity(temperature, pressure)
-
-    def thermal_expansivity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        return self._thermal_expansivity(temperature, pressure)
-
-    def viscosity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        return self._viscosity(temperature, pressure)
 
 
 class MixedPhaseEvaluator(PhaseEvaluatorProtocol):
