@@ -30,7 +30,7 @@ from spider.interfaces import (
     LookupProperty2D,
     PropertyABC,
 )
-from spider.parser import mesh, phase, phase_mixed
+from spider.parser import _MeshSettings, _PhaseMixedSettings, _PhaseSettings
 from spider.utilities import is_file, is_number, tanh_weight
 
 logger: logging.Logger = logging.getLogger(__name__)
@@ -165,7 +165,7 @@ class SinglePhaseEvaluator(PhaseEvaluatorProtocol):
 
     Args:
         settings: phase
-        mesh_: mesh
+        mesh: mesh
     """
 
     # For typing
@@ -176,9 +176,9 @@ class SinglePhaseEvaluator(PhaseEvaluatorProtocol):
     thermal_expansivity: PropertyABC
     viscosity: PropertyABC
 
-    def __init__(self, settings: phase, mesh_: mesh):
-        self._settings: phase = settings
-        self._mesh: mesh = mesh_
+    def __init__(self, settings: _PhaseSettings, mesh: _MeshSettings):
+        self._settings: _PhaseSettings = settings
+        self._mesh: _MeshSettings = mesh
         cls_fields: tuple[Field, ...] = fields(self._settings)
         for field_ in cls_fields:
             name: str = field_.name
@@ -198,7 +198,7 @@ class SinglePhaseEvaluator(PhaseEvaluatorProtocol):
                 # Must scale lookup data
                 for nn, col_name in enumerate(col_names):
                     logger.info("Scaling %s from %s", col_name, value)
-                    value_array[:, nn] /= getattr(self._settings.scalings_, col_name)
+                    value_array[:, nn] /= getattr(self._settings.scalings, col_name)
                 logger.debug("after scaling, value_array = %s", value_array)
                 ndim = value_array.shape[1]
                 logger.debug("ndim = %d", ndim)
@@ -242,11 +242,11 @@ class MixedPhaseEvaluator(PhaseEvaluatorProtocol):
 
     def __init__(
         self,
-        settings: phase_mixed,
+        settings: _PhaseMixedSettings,
         solid: PhaseEvaluatorProtocol,
         liquid: PhaseEvaluatorProtocol,
     ):
-        self._settings: phase_mixed = settings
+        self._settings: _PhaseMixedSettings = settings
         self.solid: PhaseEvaluatorProtocol = solid
         self.liquid: PhaseEvaluatorProtocol = liquid
         self.solidus: LookupProperty1D = self._get_melting_curve_lookup(
