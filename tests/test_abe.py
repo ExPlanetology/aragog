@@ -52,9 +52,9 @@ def test_liquid_no_heating():
     solver.solve()
     calculated: np.ndarray = solver.get_temperature()[:, -1]
     # spider_solver.plot()
-    # np.savetxt("testout.dat", calculated)
+    # np.savetxt("abe_liquid_no_heating.dat", calculated)
 
-    expected: np.ndarray = np.loadtxt(REFERENCE_TEST_DATA / Path("abe_liquid_no_heating.txt"))
+    expected: np.ndarray = np.loadtxt(REFERENCE_TEST_DATA / Path("abe_liquid_no_heating.dat"))
     logger.info("calculated = %s", calculated)
     logger.info("expected = %s", expected)
 
@@ -64,15 +64,14 @@ def test_liquid_no_heating():
 def test_solid_no_heating():
     """Cooling of a purely solid mantle."""
 
-    spider_solver: SpiderSolver = SpiderSolver(Path("abe_solid.cfg"), CFG_TEST_DATA)
-    # spider_solver.config["energy"]["radionuclides"] = "False"
-    spider_solver.initialize()
-    spider_solver.solve()
-    calculated: np.ndarray = spider_solver.get_temperature()[:, -1]
-    spider_solver.plot()
-    # np.savetxt("testout.dat", calculated)
+    solver: SpiderSolver = SpiderSolver(Path("abe_solid.cfg"), CFG_TEST_DATA)
+    solver.initialize()
+    solver.solve()
+    calculated: np.ndarray = solver.get_temperature()[:, -1]
+    # solver.plot()
+    # np.savetxt("abe_solid_no_heating.dat", calculated)
 
-    expected: np.ndarray = np.loadtxt(REFERENCE_TEST_DATA / Path("abe_solid_no_heating.txt"))
+    expected: np.ndarray = np.loadtxt(REFERENCE_TEST_DATA / Path("abe_solid_no_heating.dat"))
     logger.info("calculated = %s", calculated)
     logger.info("expected = %s", expected)
 
@@ -82,15 +81,15 @@ def test_solid_no_heating():
 def test_solid_with_heating():
     """Cooling of a purely solid mantle with radiogenic heating."""
 
-    spider_solver: SpiderSolver = SpiderSolver(Path("abe_solid.cfg"), CFG_TEST_DATA)
-    # spider_solver.config["energy"]["radionuclides"] = "True"
-    spider_solver.initialize()
-    spider_solver.solve()
-    calculated: np.ndarray = spider_solver.get_temperature()[:, -1]
-    spider_solver.plot()
-    # np.savetxt("testout.dat", calculated)
+    solver: SpiderSolver = SpiderSolver(Path("abe_solid.cfg"), CFG_TEST_DATA)
+    solver.parameters.data.energy.radionuclides = True
+    solver.initialize()
+    solver.solve()
+    calculated: np.ndarray = solver.get_temperature()[:, -1]
+    # solver.plot()
+    np.savetxt("abe_solid_with_heating.dat", calculated)
 
-    expected: np.ndarray = np.loadtxt(REFERENCE_TEST_DATA / Path("abe_solid_with_heating.txt"))
+    expected: np.ndarray = np.loadtxt(REFERENCE_TEST_DATA / Path("abe_solid_with_heating.dat"))
     logger.info("calculated = %s", calculated)
     logger.info("expected = %s", expected)
 
@@ -106,9 +105,9 @@ def test_mixed():
     spider_solver.solve()
     calculated: np.ndarray = spider_solver.get_temperature()[:, -1]
     spider_solver.plot()
-    # np.savetxt("testout.dat", calculated)
+    # np.savetxt("abe_mixed_no_heating.dat", calculated)
 
-    expected: np.ndarray = np.loadtxt(REFERENCE_TEST_DATA / Path("abe_solid_with_heating.txt"))
+    expected: np.ndarray = np.loadtxt(REFERENCE_TEST_DATA / Path("abe_mixed_no_heating.txt"))
     logger.info("calculated = %s", calculated)
     logger.info("expected = %s", expected)
 
