@@ -19,7 +19,8 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from functools import cached_property
 
 import numpy as np
 
@@ -62,10 +63,11 @@ class FixedMesh:
         total_volume: Total volume
     """
 
+    settings: _MeshSettings
     radii: np.ndarray
-    mixing_length_profile: str
     outer_boundary: float | None = None
     inner_boundary: float | None = None
+    eos: AdamsWilliamsonEOS = field(init=False)
 
     def __post_init__(self):
         if not is_monotonic_increasing(self.radii):
@@ -76,40 +78,86 @@ class FixedMesh:
             self.outer_boundary = self.radii[-1]
         if self.inner_boundary is None:
             self.inner_boundary = self.radii[0]
-        self.delta_radii: np.ndarray = np.diff(self.radii)
-        self.depth: np.ndarray = self.outer_boundary - self.radii
-        self.height: np.ndarray = self.radii - self.inner_boundary
-        self.number_of_nodes: int = len(self.radii)
-        # Includes 4*pi factor unlike C-version of SPIDER.
-        self.area: np.ndarray = 4 * np.pi * np.square(self.radii).reshape(-1, 1)  # 2-D
-        mesh_cubed: np.ndarray = np.power(self.radii, 3)
-        self.volume: np.ndarray = (
-            4 / 3 * np.pi * (mesh_cubed[1:] - mesh_cubed[:-1]).reshape(-1, 1)
-        )  # 2-D
-        self.total_volume: float = 4 / 3 * np.pi * (mesh_cubed[-1] - mesh_cubed[0])
-        self.set_mixing_length()
-        self.mixing_length_squared: np.ndarray = np.square(self.mixing_length)
-        self.mixing_length_cubed: np.ndarray = np.power(self.mixing_length, 3)
+        self.eos: AdamsWilliamsonEOS = AdamsWilliamsonEOS(self.settings, self)
 
-    def set_mixing_length(self) -> None:
-        """Sets the mixing length"""
-        if self.mixing_length_profile == "nearest_boundary":
+    @cached_property
+    def area(self) -> np.ndarray:
+        """Includes 4*pi factor unlike C-version of SPIDER."""
+        return 4 * np.pi * np.square(self.radii).reshape(-1, 1)  # 2-D
+
+    @cached_property
+    def delta_radii(self) -> np.ndarray:
+        return np.diff(self.radii)
+
+    @cached_property
+    def density(self) -> np.ndarray:
+        return self.eos.density
+
+    @cached_property
+    def depth(self) -> np.ndarray:
+        return self.outer_boundary - self.radii
+
+    @cached_property
+    def height(self) -> np.ndarray:
+        return self.radii - self.inner_boundary
+
+    @cached_property
+    def _mesh_cubed(self) -> np.ndarray:
+        return np.power(self.radii, 3)
+
+    @cached_property
+    def mixing_length(self) -> np.ndarray:
+        if self.settings.mixing_length_profile == "nearest_boundary":
             logger.debug("Set mixing length profile to nearest boundary")
-            self.mixing_length = np.minimum(
+            mixing_length = np.minimum(
                 self.outer_boundary - self.radii, self.radii - self.inner_boundary
             )
-        elif self.mixing_length_profile == "constant":
+        elif self.settings.mixing_length_profile == "constant":
             logger.debug("Set mixing length profile to constant")
             assert self.outer_boundary is not None
             assert self.inner_boundary is not None
-            self.mixing_length = (
+            mixing_length = (
                 np.ones(self.radii.size) * 0.25 * (self.outer_boundary - self.inner_boundary)
             )
         else:
-            msg: str = f"Mixing length profile = {self.mixing_length_profile} is unknown"
+            msg: str = f"Mixing length profile = {self.settings.mixing_length_profile} is unknown"
             raise ValueError(msg)
 
-        self.mixing_length = self.mixing_length.reshape(-1, 1)  # 2-D
+        mixing_length = mixing_length.reshape(-1, 1)  # 2-D
+
+        return mixing_length
+
+    @cached_property
+    def mixing_length_cubed(self) -> np.ndarray:
+        return np.power(self.mixing_length, 3)
+
+    @cached_property
+    def mixing_length_squared(self) -> np.ndarray:
+        return np.square(self.mixing_length)
+
+    @cached_property
+    def number_of_nodes(self) -> int:
+        return len(self.radii)
+
+    @cached_property
+    def pressure(self) -> np.ndarray:
+        return self.eos.pressure
+
+    @cached_property
+    def pressure_gradient(self) -> np.ndarray:
+        return self.eos.pressure_gradient
+
+    @cached_property
+    def volume(self) -> np.ndarray:
+        volume: np.ndarray = (
+            4 / 3 * np.pi * (self._mesh_cubed[1:] - self._mesh_cubed[:-1]).reshape(-1, 1)
+        )  # 2-D
+
+        return volume
+
+    @cached_property
+    def total_volume(self) -> np.ndarray:
+        return 4 / 3 * np.pi * (self._mesh_cubed[-1] - self._mesh_cubed[0])
 
 
 @dataclass
@@ -128,11 +176,12 @@ class Mesh:
     def __post_init__(self):
         self.settings: _MeshSettings = self._parameters.mesh
         basic_coordinates: np.ndarray = self.get_constant_spacing()
-        self.basic: FixedMesh = FixedMesh(basic_coordinates, self.settings.mixing_length_profile)
+        self.basic: FixedMesh = FixedMesh(self.settings, basic_coordinates)
+        logger.warning(self.basic)
         staggered_coordinates: np.ndarray = self.basic.radii[:-1] + 0.5 * self.basic.delta_radii
         self.staggered: FixedMesh = FixedMesh(
+            self.settings,
             staggered_coordinates,
-            self.settings.mixing_length_profile,
             self.basic.outer_boundary,
             self.basic.inner_boundary,
         )
@@ -233,17 +282,18 @@ class AdamsWilliamsonEOS:
     """Adams-Williamson equation of state
 
     Args:
-        parameters: Parameters
+        settings: Mesh settings
         mesh: A fixed mesh
 
     Attributes:
         TODO
     """
 
-    def __init__(self, parameters: Parameters, mesh_: FixedMesh):
-        self.settings: _MeshSettings = parameters.mesh
-        self.mesh: FixedMesh = mesh_
+    def __init__(self, settings: _MeshSettings, mesh: FixedMesh):
+        self.settings: _MeshSettings = settings
+        self.mesh: FixedMesh = mesh
 
+    @cached_property
     def density(self) -> np.ndarray:
         """Density
 
@@ -267,49 +317,54 @@ class AdamsWilliamsonEOS:
         # using pressure, expression is simpler than sketch derivation above
         density: np.ndarray = (
             self.settings.adams_williamson_surface_density
-            + self.pressure()
+            + self.pressure
             * self.settings.adams_williamson_beta
             / self.settings.gravitational_acceleration
         )
 
         return density
 
-    def mass_element(self) -> np.ndarray:
-        """Mass element"""
-        # TODO: Check because C Spider does not include 4*pi scaling
-        mass_element: np.ndarray = self.mesh.area * self.density()
+    # @cached_property
+    # def mass_element(self) -> np.ndarray:
+    #     """Mass element"""
+    #     # TODO: Check because C Spider does not include 4*pi scaling
+    #     mass_element: np.ndarray = self.mesh.area * self.density
 
-        return mass_element
+    #     return mass_element
 
-    def mass_within_radius(self) -> np.ndarray:
-        """Mass contained within radii
+    # @cached_property
+    # def mass_within_radius(self) -> np.ndarray:
+    #     """Mass contained within radii
 
-        Returns:
-            Mass within a radius
-        """
-        mass: np.ndarray = (
-            -2 / self.settings.adams_williamson_beta**3
-            - np.square(self.mesh.radii) / self.settings.adams_williamson_beta
-            - 2 * self.mesh.radii / np.square(self.settings.adams_williamson_beta)
-        )
-        # TODO: Check because C Spider does not include 4*pi scaling
-        mass *= 4 * np.pi * self.density()
+    #     Returns:
+    #         Mass within a radius
+    #     """
+    #     mass: np.ndarray = (
+    #         -2 / self.settings.adams_williamson_beta**3
+    #         - np.square(self.mesh.radii) / self.settings.adams_williamson_beta
+    #         - 2 * self.mesh.radii / np.square(self.settings.adams_williamson_beta)
+    #     )
+    #     # TODO: Check because C Spider does not include 4*pi scaling
+    #     mass *= 4 * np.pi * self.density
 
-        return mass
+    #     return mass
 
-    def mass_within_shell(self) -> np.ndarray:
-        """Mass within a spherical shell
+    # @cached_property
+    # def mass_within_shell(self) -> np.ndarray:
+    #     """Mass within a spherical shell
 
-        Returns:
-            Mass within a spherical shell
-        """
-        # From outer radius to inner
-        mass_within_radius: np.ndarray = np.flip(self.mass_within_radius())
-        # Return same order as radii
-        delta_mass: np.ndarray = np.flip(mass_within_radius[:-1] - mass_within_radius[1:])
+    #     Returns:
+    #         Mass within a spherical shell
+    #     """
+    #     # TODO: Check because C Spider does not include 4*pi scaling
+    #     # From outer radius to inner
+    #     mass_within_radius: np.ndarray = np.flip(self.mass_within_radius)
+    #     # Return same order as radii
+    #     delta_mass: np.ndarray = np.flip(mass_within_radius[:-1] - mass_within_radius[1:])
 
-        return delta_mass
+    #     return delta_mass
 
+    @cached_property
     def pressure(self) -> np.ndarray:
         """Pressure
 
@@ -330,12 +385,22 @@ class AdamsWilliamsonEOS:
 
         return pressure
 
+    @cached_property
     def pressure_gradient(self) -> np.ndarray:
         """Pressure gradient
 
         Returns:
             Pressure gradient
         """
-        dPdr: np.ndarray = -self.settings.gravitational_acceleration * self.density()
+        dPdr: np.ndarray = -self.settings.gravitational_acceleration * self.density
 
         return dPdr
+
+    @cached_property
+    def radius(self) -> np.ndarray:
+        """Radii
+
+        Returns:
+            Radii
+        """
+        return self.mesh.radii
