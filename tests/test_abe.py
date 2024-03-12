@@ -47,11 +47,10 @@ def test_version():
 def test_liquid_no_heating():
     """Cooling of a purely molten magma ocean."""
 
-    spider_solver: SpiderSolver = SpiderSolver("abe_liquid.cfg", CFG_TEST_DATA)
-    # spider_solver.config["energy"]["radionuclides"] = "False"
-    spider_solver.initialize()
-    spider_solver.solve()
-    calculated: np.ndarray = spider_solver.get_temperature()[:, -1]
+    solver: SpiderSolver = SpiderSolver("abe_liquid.cfg", CFG_TEST_DATA)
+    solver.initialize()
+    solver.solve()
+    calculated: np.ndarray = solver.get_temperature()[:, -1]
     # spider_solver.plot()
     # np.savetxt("testout.dat", calculated)
 
@@ -84,11 +83,11 @@ def test_solid_with_heating():
     """Cooling of a purely solid mantle with radiogenic heating."""
 
     spider_solver: SpiderSolver = SpiderSolver(Path("abe_solid.cfg"), CFG_TEST_DATA)
-    spider_solver.config["energy"]["radionuclides"] = "True"
+    # spider_solver.config["energy"]["radionuclides"] = "True"
     spider_solver.initialize()
     spider_solver.solve()
     calculated: np.ndarray = spider_solver.get_temperature()[:, -1]
-    # spider_solver.plot()
+    spider_solver.plot()
     # np.savetxt("testout.dat", calculated)
 
     expected: np.ndarray = np.loadtxt(REFERENCE_TEST_DATA / Path("abe_solid_with_heating.txt"))

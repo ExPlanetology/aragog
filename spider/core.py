@@ -36,6 +36,7 @@ from spider.phase import (
     PhaseEvaluatorProtocol,
     SinglePhaseEvaluator,
 )
+from spider.utilities import is_monotonic_increasing
 
 if TYPE_CHECKING:
     from spider.solver import State
@@ -397,48 +398,6 @@ class Mesh:
         return quantity_at_basic_nodes
 
 
-@dataclass
-class Radionuclide:
-    """Radionuclide
-
-    Args:
-        scalings: Scalings
-        name: Name of the radionuclide
-        t0_years: Time at which quantities are defined
-        abundance: Abundance
-        concentration: Concentration
-        heat_production: Heat production
-        half_life_years: Half life
-
-    Attributes:
-        See Args.
-    """
-
-    _settings: radionuclide
-
-    def get_heating(self, time: np.ndarray | float) -> np.ndarray | float:
-        """Radiogenic heating
-
-        Args:
-            time: Time
-
-        Returns:
-            Radiogenic heating as a float if time is a float, otherwise a numpy row array where
-                each entry in the row is associated with a single time in the time array.
-        """
-        arg: np.ndarray | float = (
-            np.log(2) * (self._settings.t0_years - time) / self._settings.half_life_years
-        )
-        heating: np.ndarray | float = (
-            self._settings.heat_production
-            * self._settings.abundance
-            * self._settings.concentration
-            * np.exp(arg)
-        )
-
-        return heating
-
-
 # TODO: Rename below to something more like SpiderFunctions
 @dataclass
 class SpiderData:
@@ -468,8 +427,7 @@ class SpiderData:
     liquid: PhaseEvaluatorProtocol = field(init=False)
     mixed: PhaseEvaluatorProtocol = field(init=False)
     phase: PhaseEvaluatorProtocol = field(init=False)
-    # TODO: radionuclides
-    # radionuclides: dict[str, Radionuclide] = field(init=False, default_factory=dict)
+    radionuclides: list[radionuclide] = field(init=False)
 
     def __post_init__(self):
         self.mesh = Mesh(self.parameters)
@@ -492,37 +450,15 @@ class SpiderData:
         elif phase == "mixed":
             self.phase = self.mixed
 
-        # TODO: Reinstate radionuclides
+        # TODO: Clean up
+        self.radionuclides = self.parameters.data.radionuclides
 
+        # Old below
         # for radionuclide_name, radionuclide_section in self.config_parser.radionuclides.items():
         #     radionuclide: Radionuclide = Radionuclide.from_configuration(
         #         self.scalings, radionuclide_name, section=radionuclide_section
         #     )
         #     self.radionuclides[radionuclide_name] = radionuclide
-
-        # Somewhere set the phase, to be either solid, liquid, or mixed
-
-    #    self.set_phase()
-
-    # TODO: FIXME: Remove old below
-    # def set_phase(self) -> None:
-    #     """Sets the phase"""
-
-    #     if len(self.phases) == 1:
-    #         phase_name, phase = next(iter(self.phases.items()))
-    #         logger.info("Only one phase provided: %s", phase_name)
-    #         self.phase = phase
-
-    #     elif len(self.phases) == 2:
-    #         logger.info("Two phases found so creating a composite")
-    #         self.phase = MixedPhaseEvaluator.from_configuration(
-    #             self.scalings, self.phases, section=self.config_parser["mixed_phase"]
-    #         )
-
-
-def is_monotonic_increasing(some_array: np.ndarray) -> np.bool_:
-    """Returns True if an array is monotonically increasing, otherwise returns False."""
-    return np.all(np.diff(some_array) > 0)
 
 
 @dataclass
@@ -553,7 +489,7 @@ class AdamsWilliamsonEOS:
         Adams-Williamson density is a simple function of depth (radius)
         Sketch derivation:
             dP/dr = dP/drho * drho/dr = -rho g
-            dP/drho \sim (dP/drho)_s (adiabatic)
+            dP/drho sim (dP/drho)_s (adiabatic)
             drho/dr = -rho g / Si
             then integrate to give the form rho(r) = k * exp(-(g*r)/c)
             (g is positive)

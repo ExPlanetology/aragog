@@ -331,6 +331,23 @@ class radionuclide:
         self.heat_production /= self.scalings_.power_per_mass
         self.half_life_years /= self.scalings_.time_years
 
+    def get_heating(self, time: np.ndarray | float) -> np.ndarray | float:
+        """Radiogenic heating
+
+        Args:
+            time: Time
+
+        Returns:
+            Radiogenic heating as a float if time is a float, otherwise a numpy row array where
+                each entry in the row is associated with a single time in the time array.
+        """
+        arg: np.ndarray | float = np.log(2) * (self.t0_years - time) / self.half_life_years
+        heating: np.ndarray | float = (
+            self.heat_production * self.abundance * self.concentration * np.exp(arg)
+        )
+
+        return heating
+
 
 @dataclass
 class solver:
