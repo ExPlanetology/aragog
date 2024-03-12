@@ -85,3 +85,37 @@ def test_solid_constant_properties():
 
     viscosity: np.ndarray = phase.viscosity(temperature, pressure)
     assert np.isclose(viscosity, 1.9436979e10, atol=ATOL, rtol=RTOL).all()
+
+
+def test_lookup_property_1D():
+    """1D lookup property"""
+
+    solver: SpiderSolver = SpiderSolver("abe_mixed_lookup.cfg", CFG_TEST_DATA)
+    solver.initialize()
+    temperature_scaled = temperature / solver.parameters.scalings.temperature
+    pressure_scaled = pressure / solver.parameters.scalings.pressure
+
+    solidus: np.ndarray = solver.data.mixed.solidus(temperature_scaled, pressure_scaled)
+    solidus_target: np.ndarray = np.array([0.34515095, 1.05180909])
+    assert np.isclose(solidus, solidus_target, atol=ATOL, rtol=RTOL).all()
+
+    liquidus: np.ndarray = solver.data.mixed.liquidus(temperature_scaled, pressure_scaled)
+    liquidus_target: np.ndarray = np.array([0.4500425, 1.15670029])
+    assert np.isclose(liquidus, liquidus_target, atol=ATOL, rtol=RTOL).all()
+
+
+def test_lookup_property_2D():
+    """2D lookup property"""
+
+    solver: SpiderSolver = SpiderSolver("abe_mixed_lookup.cfg", CFG_TEST_DATA)
+    solver.initialize()
+
+    temperature_: np.ndarray = np.array([1000, 1500, 2500, 2500, 2500])
+    pressure_: np.ndarray = np.array([0, 1.4e11, 0, 1.4e11, 0.7e11])
+
+    temperature_scaled = temperature_ / solver.parameters.scalings.temperature
+    pressure_scaled = pressure_ / solver.parameters.scalings.pressure
+
+    density_melt: np.ndarray = solver.data.liquid.density(temperature_scaled, pressure_scaled)
+    density_melt_target: np.ndarray = np.array([0.5, 0.5625, 0.3125, 0.4375, 0.375])
+    assert np.isclose(density_melt, density_melt_target, atol=ATOL, rtol=RTOL).all()

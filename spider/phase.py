@@ -19,21 +19,145 @@
 from __future__ import annotations
 
 import logging
+import sys
+from abc import ABC, abstractmethod
 from dataclasses import Field, dataclass, field, fields
 from typing import Protocol
 
 import numpy as np
+from scipy.interpolate import RectBivariateSpline, interp1d
 
-from spider.interfaces import (
-    ConstantProperty,
-    LookupProperty1D,
-    LookupProperty2D,
-    PropertyABC,
-)
 from spider.parser import _MeshSettings, _PhaseMixedSettings, _PhaseSettings
 from spider.utilities import is_file, is_number, tanh_weight
 
+if sys.version_info < (3, 12):
+    from typing_extensions import override
+else:
+    from typing import override
+
 logger: logging.Logger = logging.getLogger(__name__)
+
+
+@dataclass
+class PropertyABC(ABC):
+    """A property whose value is to be evaluated at temperature and pressure.
+
+    Args:
+        name: Name of the property
+
+    Attributes:
+        name: Name of the property
+    """
+
+    name: str
+
+    @abstractmethod
+    def _get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray | float:
+        """Computes the property value at temperature and pressure.
+
+        Args:
+            temperature: Temperature
+            pressure: Pressure
+
+        Returns:
+            The property value evaluated at temperature and pressure.
+        """
+
+    def __call__(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        """Returns an array with the same shape as pressure"""
+        return self._get_value(temperature, pressure) * np.ones_like(pressure)
+
+
+@dataclass(kw_only=True)
+class ConstantProperty(PropertyABC):
+    """A property with a constant value
+
+    Args:
+        name: Name of the property
+        value: The constant value
+
+    Attributes:
+        name: Name of the property
+        value: The constant value
+        ndim: Number of dimensions, which is equal to zero
+    """
+
+    value: float
+    ndim: int = field(init=False, default=0)
+
+    @override
+    def _get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        """See base class."""
+        del pressure
+        return self.value * np.ones_like(temperature)
+
+
+@dataclass(kw_only=True)
+class LookupProperty1D(PropertyABC):
+    """A property from a 1-D lookup
+
+    Args:
+        name: Name of the property
+        value: The 1-D array
+
+    Attributes:
+        name: Name of the property
+        value: The 1-D array
+        ndim: Number of dimensions, which is equal to one
+    """
+
+    value: np.ndarray
+    ndim: int = field(init=False, default=1)
+    _lookup: interp1d = field(init=False)
+
+    def __post_init__(self):
+        # Sort the data to ensure x is increasing
+        data: np.ndarray = self.value[self.value[:, 0].argsort()]
+        self._lookup = interp1d(data[:, 0], data[:, 1])
+
+    @override
+    def _get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        """See base class."""
+        del temperature
+        return self._lookup(pressure)
+
+
+@dataclass(kw_only=True)
+class LookupProperty2D(PropertyABC):
+    """A property from a 2-D lookup
+
+    Args:
+        name: Name of the property
+        value: The 2-D array
+
+    Attributes:
+        name: Name of the property
+        value: The 2-D array
+        ndim: Number of dimensions, which is equal to two
+    """
+
+    value: np.ndarray
+    ndim: int = field(init=False, default=2)
+    _lookup: RectBivariateSpline = field(init=False)
+
+    def __post_init__(self):
+        # x and y must be increasing otherwise the interpolation might give unexpected behaviour
+        x_values = self.value[:, 0].round(decimals=0)
+        logger.debug("x_values round = %s", x_values)
+        logger.debug("self.value.shape = %s", self.value.shape)
+        x_values: np.ndarray = np.unique(self.value[:, 0])
+        logger.debug("x_values.shape = %s", x_values.shape)
+        y_values: np.ndarray = np.unique(self.value[:, 1])
+        logger.debug("y_values.shape = %s", y_values.shape)
+        z_values: np.ndarray = self.value[:, 2]
+        logger.debug("z_values = %s", z_values)
+        z_values = z_values.reshape((x_values.size, y_values.size), order="F")
+        self._lookup = RectBivariateSpline(x_values, y_values, z_values, kx=1, ky=1, s=0)
+
+    @override
+    def _get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        """See base class."""
+        return self._lookup(pressure, temperature, grid=False)
 
 
 @dataclass
@@ -92,7 +216,7 @@ class PhaseStateBasic:
 
     phase_evaluator: PhaseEvaluatorProtocol
     density: np.ndarray = field(init=False)
-    gravitational_acceleration: float = field(init=False)
+    gravitational_acceleration: np.ndarray = field(init=False)
     heat_capacity: np.ndarray = field(init=False)
     thermal_conductivity: np.ndarray = field(init=False)
     thermal_expansivity: np.ndarray = field(init=False)
@@ -143,7 +267,9 @@ class PhaseEvaluatorProtocol(Protocol):
     def dTdPs(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
         raise NotImplementedError()
 
-    def gravitational_acceleration(self, temperature: np.ndarray, pressure: np.ndarray) -> float:
+    def gravitational_acceleration(
+        self, temperature: np.ndarray, pressure: np.ndarray
+    ) -> np.ndarray:
         """To compute dT/dr at constant entropy."""
         raise NotImplementedError()
 
@@ -160,7 +286,7 @@ class PhaseEvaluatorProtocol(Protocol):
         raise NotImplementedError()
 
 
-class SinglePhaseEvaluator(PhaseEvaluatorProtocol):
+class SinglePhaseEvaluator:
     """Contains the objects to evaluate the EOS and transport properties of a phase.
 
     Args:
@@ -227,7 +353,7 @@ class SinglePhaseEvaluator(PhaseEvaluatorProtocol):
         return dTdPs
 
 
-class MixedPhaseEvaluator(PhaseEvaluatorProtocol):
+class MixedPhaseEvaluator:
     """Evaluates the EOS and transport properties of a mixed phase.
 
     TODO: This is only correct for the mixed phase region, since properties are evaluated at the
@@ -279,7 +405,9 @@ class MixedPhaseEvaluator(PhaseEvaluatorProtocol):
 
         return dTdPs
 
-    def gravitational_acceleration(self, temperature: np.ndarray, pressure: np.ndarray) -> float:
+    def gravitational_acceleration(
+        self, temperature: np.ndarray, pressure: np.ndarray
+    ) -> np.ndarray:
         """Gravitational acceleration
 
         Same for both the solid and liquid phase so just pick one.

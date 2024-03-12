@@ -227,7 +227,7 @@ class SpiderData:
     mesh: Mesh = field(init=False)
     solid: PhaseEvaluatorProtocol = field(init=False)
     liquid: PhaseEvaluatorProtocol = field(init=False)
-    mixed: PhaseEvaluatorProtocol = field(init=False)
+    mixed: MixedPhaseEvaluator = field(init=False)
     phase: PhaseEvaluatorProtocol = field(init=False)
 
     def __post_init__(self):
