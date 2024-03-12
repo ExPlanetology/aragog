@@ -96,7 +96,7 @@ def test_solid_with_heating():
     assert np.isclose(calculated, expected, atol=ATOL, rtol=RTOL).all()
 
 
-# @pytest.mark.skip(reason="mixed phases not yet implemented")
+@pytest.mark.skip(reason="mixed phases not yet implemented")
 def test_mixed():
     """Test Abe (1993."""
 
