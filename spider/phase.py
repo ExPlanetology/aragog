@@ -198,7 +198,7 @@ class SinglePhaseEvaluator(PhaseEvaluatorProtocol):
                 # Must scale lookup data
                 for nn, col_name in enumerate(col_names):
                     logger.info("Scaling %s from %s", col_name, value)
-                    value_array[:, nn] /= getattr(self._settings.scalings, col_name)
+                    value_array[:, nn] /= getattr(self._settings.scalings_, col_name)
                 logger.debug("after scaling, value_array = %s", value_array)
                 ndim = value_array.shape[1]
                 logger.debug("ndim = %d", ndim)
@@ -376,6 +376,6 @@ class MixedPhaseEvaluator(PhaseEvaluatorProtocol):
         logger.debug("before scaling, value_array = %s", value_array)
         for nn, col_name in enumerate(col_names):
             logger.info("Scaling %s from %s", col_name, value)
-            value_array[:, nn] /= getattr(self._settings.scalings, col_name)
+            value_array[:, nn] /= getattr(self._settings.scalings_, col_name)
 
         return LookupProperty1D(name=name, value=value_array)

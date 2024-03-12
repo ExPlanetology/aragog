@@ -134,7 +134,7 @@ class BoundaryConditions:
         """
         state.heat_flux[-1, :] = (
             self._settings.emissivity
-            * self._settings.scalings.stefan_boltzmann_constant
+            * self._settings.scalings_.stefan_boltzmann_constant
             * (np.power(state.top_temperature, 4) - self._settings.equilibrium_temperature**4)
         )
 
@@ -467,7 +467,6 @@ class SpiderData:
     solid: PhaseEvaluatorProtocol = field(init=False)
     liquid: PhaseEvaluatorProtocol = field(init=False)
     mixed: PhaseEvaluatorProtocol = field(init=False)
-    # Below is a hack to hard-code a phase for testing
     phase: PhaseEvaluatorProtocol = field(init=False)
     # TODO: radionuclides
     # radionuclides: dict[str, Radionuclide] = field(init=False, default_factory=dict)
@@ -484,8 +483,14 @@ class SpiderData:
         )
         self.mixed = MixedPhaseEvaluator(self.parameters.data.phase_mixed, self.solid, self.liquid)
 
-        # FIXME: hard-code a phase
-        self.phase = self.solid
+        phase: str = self.parameters.data.phase_mixed.phase
+
+        if phase == "liquid":
+            self.phase = self.liquid
+        elif phase == "solid":
+            self.phase = self.solid
+        elif phase == "mixed":
+            self.phase = self.mixed
 
         # TODO: Reinstate radionuclides
 
