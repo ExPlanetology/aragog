@@ -366,11 +366,6 @@ class AdamsWilliamsonEOS:
 
     @cached_property
     def pressure(self) -> np.ndarray:
-        """Pressure
-
-        Returns:
-            Pressure
-        """
         factor: float = (
             self.settings.adams_williamson_surface_density
             * self.settings.gravitational_acceleration
@@ -387,20 +382,10 @@ class AdamsWilliamsonEOS:
 
     @cached_property
     def pressure_gradient(self) -> np.ndarray:
-        """Pressure gradient
-
-        Returns:
-            Pressure gradient
-        """
         dPdr: np.ndarray = -self.settings.gravitational_acceleration * self.density
 
         return dPdr
 
     @cached_property
     def radius(self) -> np.ndarray:
-        """Radii
-
-        Returns:
-            Radii
-        """
         return self.mesh.radii
