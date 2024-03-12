@@ -19,7 +19,6 @@
 from __future__ import annotations
 
 import logging
-from configparser import SectionProxy
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -122,7 +121,7 @@ class State:
                 2-D array with each column associated with a single time in the time array.
         """
         radiogenic_heating_float: np.ndarray | float = 0
-        for radionuclide in self.data.radionuclides.values():
+        for radionuclide in self.data.radionuclides:
             radiogenic_heating_float += radionuclide.get_heating(time)
 
         radiogenic_heating: np.ndarray = radiogenic_heating_float * (
@@ -286,10 +285,8 @@ class State:
             self._heat_flux += self.mixing_flux()
         # Heating
         self._heating = 0  # np.zeros_like(temperature)
-
-        # FIXME: Reinstate
-        # if self.radionuclides:
-        #     self._heating += self.radiogenic_heating(time)
+        if self.data.parameters.data.energy.radionuclides:
+            self._heating += self.radiogenic_heating(time)
 
 
 class SpiderSolver:
