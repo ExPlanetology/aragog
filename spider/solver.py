@@ -274,18 +274,18 @@ class State:
         )
         self._eddy_diffusivity *= self.data.mesh.basic.mixing_length
         # Heat flux
-        self._heat_flux = 0  # np.zeros_like(self.temperature_basic)
-        if self.data.parameters.data.energy.conduction:
+        self._heat_flux = np.zeros_like(self.temperature_basic)
+        if self.data.parameters.energy.conduction:
             self._heat_flux += self.conductive_heat_flux()
-        if self.data.parameters.data.energy.convection:
+        if self.data.parameters.energy.convection:
             self._heat_flux += self.convective_heat_flux()
-        if self.data.parameters.data.energy.gravitational_separation:
+        if self.data.parameters.energy.gravitational_separation:
             self._heat_flux += self.gravitational_separation_flux()
-        if self.data.parameters.data.energy.mixing:
+        if self.data.parameters.energy.mixing:
             self._heat_flux += self.mixing_flux()
         # Heating
-        self._heating = 0  # np.zeros_like(temperature)
-        if self.data.parameters.data.energy.radionuclides:
+        self._heating = np.zeros_like(temperature)
+        if self.data.parameters.energy.radionuclides:
             self._heating += self.radiogenic_heating(time)
 
 
@@ -318,7 +318,7 @@ class SpiderSolver:
         """Parses a configuration file"""
         configuration_file: Path = self.root / self.filename
         logger.info("Parsing configuration file = %s", configuration_file)
-        self.parameters = Parameters(configuration_file)
+        self.parameters = Parameters.from_file(configuration_file)
 
     def initialize(self) -> None:
         """Initializes the model using configuration data"""
@@ -337,7 +337,7 @@ class SpiderSolver:
         Returns:
             Temperature in kelvin at the staggered nodes
         """
-        temperature: np.ndarray = self.solution.y * self.data.parameters.data.scalings.temperature
+        temperature: np.ndarray = self.solution.y * self.data.parameters.scalings.temperature
         return temperature
 
     def dTdt(
@@ -390,18 +390,16 @@ class SpiderSolver:
 
         # Dimensionalise quantities for plotting
         radii: np.ndarray = (
-            self.data.mesh.basic.radii * self.data.parameters.data.scalings.radius * 1.0e-3
+            self.data.mesh.basic.radii * self.data.parameters.scalings.radius * 1.0e-3
         )  # km
         self.state.update(
             self.solution.y, self.solution.y, self.solution.t
         )  # FIXME: Second argument is pressure.
         temperature: np.ndarray = (
-            self.state.temperature_basic * self.data.parameters.data.scalings.temperature
+            self.state.temperature_basic * self.data.parameters.scalings.temperature
         )
 
-        times: np.ndarray = (
-            self.solution.t * self.data.parameters.data.scalings.time_years
-        )  # years
+        times: np.ndarray = self.solution.t * self.data.parameters.scalings.time_years  # years
 
         plt.figure(figsize=(8, 6))
         ax = plt.subplot(111)
@@ -452,12 +450,12 @@ class SpiderSolver:
     def solve(self) -> None:
         """Solves the system of ODEs to determine the interior temperature profile."""
 
-        start_time: float = self.data.parameters.data.solver.start_time
+        start_time: float = self.data.parameters.solver.start_time
         logger.debug("start_time = %f", start_time)
-        end_time: float = self.data.parameters.data.solver.end_time
+        end_time: float = self.data.parameters.solver.end_time
         logger.debug("end_time = %f", end_time)
-        atol: float = self.data.parameters.data.solver.atol
-        rtol: float = self.data.parameters.data.solver.rtol
+        atol: float = self.data.parameters.solver.atol
+        rtol: float = self.data.parameters.solver.rtol
 
         # FIXME: This is a dummy variable for pressure, which I think must be a 2-D array to work
         # because temperature is also a 2-D array, and functions evaluated at pressure and

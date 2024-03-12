@@ -82,7 +82,7 @@ def test_solid_with_heating():
     """Cooling of a purely solid mantle with radiogenic heating."""
 
     solver: SpiderSolver = SpiderSolver(Path("abe_solid.cfg"), CFG_TEST_DATA)
-    solver.parameters.data.energy.radionuclides = True
+    solver.parameters.energy.radionuclides = True
     solver.initialize()
     solver.solve()
     calculated: np.ndarray = solver.get_temperature()[:, -1]
