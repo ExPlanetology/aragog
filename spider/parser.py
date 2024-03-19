@@ -273,6 +273,7 @@ class _PhaseMixedSettings:
     solidus: str
     liquidus: str
     phase: str
+    phase_transition_width: float
     scalings: _ScalingsSettings = field(init=False)
 
     def scale_attributes(self, scalings: _ScalingsSettings) -> None:

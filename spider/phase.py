@@ -505,3 +505,151 @@ class _MixedPhaseEvaluator:
             value_array[:, nn] /= getattr(self._settings.scalings_, col_name)
 
         return LookupProperty1D(name=name, value=value_array)
+
+
+class CompositePhaseEvaluator:
+    """Evaluates the EOS and transport properties of a composite phase.
+
+    This combines the single phase evaluators for the liquid and solid regions with the mixed phase
+    evaluator for the mixed phase region. This ensure that the phase properties are computed
+    correctly for all temperatures and pressures.
+
+    Args:
+        solid: Solid phase evaluator
+        liquid: Liquid phase evaluator
+        mixed: Mixed phase evaluator
+    """
+
+    def __init__(
+        self,
+        solid: PhaseEvaluatorProtocol,
+        liquid: PhaseEvaluatorProtocol,
+        mixed: _MixedPhaseEvaluator,
+    ):
+        self.solid: PhaseEvaluatorProtocol = solid
+        self.liquid: PhaseEvaluatorProtocol = liquid
+        self.mixed: PhaseEvaluatorProtocol = mixed
+
+    def density(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        """Density"""
+
+    def dTdPs(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        """dTdPs"""
+
+    def gravitational_acceleration(
+        self, temperature: np.ndarray, pressure: np.ndarray
+    ) -> np.ndarray:
+        """Gravitational acceleration"""
+
+    def heat_capacity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        """Heat capacity"""
+
+    def thermal_conductivity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        """Thermal conductivity"""
+
+    def thermal_expansivity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        """Thermal expansivity"""
+
+    def viscosity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        """Viscosity"""
+
+    def _get_smoothing(self, smooth_width, gphi):
+        # get smoothing across phase boundaries for a two-phase composite
+
+        # no smoothing
+        if smooth_width == 0.0:
+            smth = 1.0  # mixed phase only
+            if gphi < 0.0 or gphi > 1.0:
+                smth = 0.0  # single phase only
+
+        # tanh smoothing
+        else:
+            if gphi > 0.5:
+                smth = 1.0 - tanh_weight(gphi, 1.0, smooth_width)
+            else:
+                smth = tanh_weight(gphi, 0.0, smooth_width)
+
+        return smth
+
+    def _tanh_weight(self, qty, threshold, width):
+        # tanh weight for viscosity profile and smoothing
+
+        z = (qty - threshold) / width
+        fwt = 0.5 * (1.0 + np.tanh(z))
+        return fwt
+
+
+# Below copied from cspider. To implement above to get (optional) smoothing across the phase
+# boundaries
+
+#   smth = get_smoothing(composite->matprop_smooth_width, gphi);
+
+#   /* now blend mixed phase EOS with single phase EOS across the phase boundary */
+#   if (gphi > 0.5)
+#   {
+#     /* melt only properties */
+#     ierr = EOSEval(composite->eos[composite->melt_slot], P, T, &eval2);
+#     CHKERRQ(ierr);
+#   }
+#   else
+#   {
+#     /* solid only properties */
+#     ierr = EOSEval(composite->eos[composite->solid_slot], P, T, &eval2);
+#     CHKERRQ(ierr);
+#   }
+
+#   /* blend mixed phase with single phase, across phase boundary */
+#   eval->alpha = combine_matprop(smth, eval->alpha, eval2.alpha);
+#   eval->rho = combine_matprop(smth, eval->rho, eval2.rho);
+#   eval->T = combine_matprop(smth, eval->T, eval2.T);
+#   eval->Cp = combine_matprop(smth, eval->Cp, eval2.Cp);
+#   eval->dTdPs = combine_matprop(smth, eval->dTdPs, eval2.dTdPs);
+#   eval->cond = combine_matprop(smth, eval->cond, eval2.cond);
+#   eval->log10visc = combine_matprop(smth, eval->log10visc, eval2.log10visc);
+
+#   PetscFunctionReturn(0);
+# }
+
+
+# PetscScalar get_smoothing(PetscScalar smooth_width, PetscScalar gphi)
+# {
+#     /* get smoothing across phase boundaries for a two phase composite */
+
+#     PetscScalar smth;
+
+#     /* no smoothing */
+#     if (smooth_width == 0.0)
+#     {
+#         smth = 1.0; // mixed phase only
+#         if ((gphi < 0.0) || (gphi > 1.0))
+#         {
+#             smth = 0.0; // single phase only
+#         }
+#     }
+
+#     /* tanh smoothing */
+#     else
+#     {
+#         if (gphi > 0.5)
+#         {
+#             smth = 1.0 - tanh_weight(gphi, 1.0, smooth_width);
+#         }
+#         else
+#         {
+#             smth = tanh_weight(gphi, 0.0, smooth_width);
+#         }
+#     }
+
+#     return smth;
+# }
+
+# PetscScalar tanh_weight(PetscScalar qty, PetscScalar threshold, PetscScalar width)
+# {
+#     /* tanh weight for viscosity profile and smoothing */
+
+#     PetscScalar fwt, z;
+
+#     z = (qty - threshold) / width;
+#     fwt = 0.5 * (1.0 + PetscTanhScalar(z));
+#     return fwt;
+# }
