@@ -51,7 +51,7 @@ def test_liquid_no_heating():
     solver.initialize()
     solver.solve()
     calculated: np.ndarray = solver.get_temperature()[:, -1]
-    # spider_solver.plot()
+    solver.plot()
     # np.savetxt("abe_liquid_no_heating.dat", calculated)
 
     expected: np.ndarray = np.loadtxt(REFERENCE_TEST_DATA / Path("abe_liquid_no_heating.dat"))
@@ -68,7 +68,7 @@ def test_solid_no_heating():
     solver.initialize()
     solver.solve()
     calculated: np.ndarray = solver.get_temperature()[:, -1]
-    # solver.plot()
+    solver.plot()
     # np.savetxt("abe_solid_no_heating.dat", calculated)
 
     expected: np.ndarray = np.loadtxt(REFERENCE_TEST_DATA / Path("abe_solid_no_heating.dat"))
@@ -96,7 +96,7 @@ def test_solid_with_heating():
     assert np.isclose(calculated, expected, atol=ATOL, rtol=RTOL).all()
 
 
-@pytest.mark.skip(reason="mixed phases not yet implemented")
+# @pytest.mark.skip(reason="mixed phases not yet implemented")
 def test_mixed():
     """Test Abe (1993."""
 
