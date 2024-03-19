@@ -353,12 +353,10 @@ class SinglePhaseEvaluator:
         return dTdPs
 
 
-class MixedPhaseEvaluator:
+class _MixedPhaseEvaluator:
     """Evaluates the EOS and transport properties of a mixed phase.
 
-    TODO: This is only correct for the mixed phase region, since properties are evaluated at the
-    liquidus and solidus values. Need a composite phase evaluator to correctly merge liquid, solid,
-    and mixed at all temperature and pressure conditions.
+    This only computes quantities within the mixed phase region where 0 < melt fraction < 1.
 
     Args:
         settings: Mixed phase settings

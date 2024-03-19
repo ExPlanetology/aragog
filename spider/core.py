@@ -32,9 +32,9 @@ from spider.parser import (
     _Radionuclide,
 )
 from spider.phase import (
-    MixedPhaseEvaluator,
     PhaseEvaluatorProtocol,
     SinglePhaseEvaluator,
+    _MixedPhaseEvaluator,
 )
 
 if TYPE_CHECKING:
@@ -227,7 +227,7 @@ class SpiderData:
     mesh: Mesh = field(init=False)
     solid: PhaseEvaluatorProtocol = field(init=False)
     liquid: PhaseEvaluatorProtocol = field(init=False)
-    mixed: MixedPhaseEvaluator = field(init=False)
+    mixed: _MixedPhaseEvaluator = field(init=False)
     phase: PhaseEvaluatorProtocol = field(init=False)
 
     def __post_init__(self):
@@ -236,7 +236,7 @@ class SpiderData:
         self.initial_condition = InitialCondition(self.parameters, self.mesh)
         self.solid = SinglePhaseEvaluator(self.parameters.phase_solid, self.parameters.mesh)
         self.liquid = SinglePhaseEvaluator(self.parameters.phase_liquid, self.parameters.mesh)
-        self.mixed = MixedPhaseEvaluator(self.parameters.phase_mixed, self.solid, self.liquid)
+        self.mixed = _MixedPhaseEvaluator(self.parameters.phase_mixed, self.solid, self.liquid)
 
         phase: str = self.parameters.phase_mixed.phase
 
