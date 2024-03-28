@@ -63,9 +63,9 @@ class PropertyABC(ABC):
             The property value evaluated at temperature and pressure.
         """
 
-    def __call__(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+    def __call__(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray | float:
         """Returns an array with the same shape as pressure"""
-        return self._get_value(temperature, pressure) * np.ones_like(pressure)
+        return self._get_value(temperature, pressure)
 
 
 @dataclass(kw_only=True)
@@ -88,6 +88,7 @@ class ConstantProperty(PropertyABC):
     @override
     def _get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> float:
         """See base class."""
+        del temperature
         del pressure
         return self.value
 
@@ -189,11 +190,8 @@ class PhaseStateStaggered:
         """
         logger.debug("Updating the state of %s", self.__class__.__name__)
         self.density = self.phase_evaluator.density(temperature, pressure)
-        logger.debug("density = %s", self.density)
         self.heat_capacity = self.phase_evaluator.heat_capacity(temperature, pressure)
-        logger.debug("heat_capacity = %s", self.heat_capacity)
         self.capacitance = self.density * self.heat_capacity
-        logger.debug("capacitance = %s", self.capacitance)
 
 
 @dataclass

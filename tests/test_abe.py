@@ -45,6 +45,7 @@ def test_version():
     assert __version__ == "0.1.0"
 
 
+@profile_decorator
 def test_liquid_no_heating():
     """Cooling of a purely molten magma ocean."""
 
@@ -52,7 +53,7 @@ def test_liquid_no_heating():
     solver.initialize()
     solver.solve()
     calculated: np.ndarray = solver.get_temperature()[:, -1]
-    solver.plot()
+    # solver.plot()
     # np.savetxt("abe_liquid_no_heating.dat", calculated)
 
     expected: np.ndarray = np.loadtxt(REFERENCE_TEST_DATA / Path("abe_liquid_no_heating.dat"))
@@ -62,6 +63,7 @@ def test_liquid_no_heating():
     assert np.isclose(calculated, expected, atol=ATOL, rtol=RTOL).all()
 
 
+@profile_decorator
 def test_solid_no_heating():
     """Cooling of a purely solid mantle."""
 
@@ -69,7 +71,7 @@ def test_solid_no_heating():
     solver.initialize()
     solver.solve()
     calculated: np.ndarray = solver.get_temperature()[:, -1]
-    solver.plot()
+    # solver.plot()
     # np.savetxt("abe_solid_no_heating.dat", calculated)
 
     expected: np.ndarray = np.loadtxt(REFERENCE_TEST_DATA / Path("abe_solid_no_heating.dat"))
@@ -79,6 +81,7 @@ def test_solid_no_heating():
     assert np.isclose(calculated, expected, atol=ATOL, rtol=RTOL).all()
 
 
+@profile_decorator
 def test_solid_with_heating():
     """Cooling of a purely solid mantle with radiogenic heating."""
 
