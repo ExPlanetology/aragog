@@ -324,7 +324,7 @@ class SinglePhaseEvaluator:
                 # Must scale lookup data
                 for nn, col_name in enumerate(col_names):
                     logger.info("Scaling %s from %s", col_name, value)
-                    value_array[:, nn] /= getattr(self._settings.scalings, col_name)
+                    value_array[:, nn] /= getattr(self._settings.scalings_, col_name)
                 logger.debug("after scaling, value_array = %s", value_array)
                 ndim = value_array.shape[1]
                 logger.debug("ndim = %d", ndim)
@@ -554,9 +554,15 @@ class CompositePhaseEvaluator:
         """Gravitational acceleration"""
         return self.mixed.gravitational_acceleration(temperature, pressure)
 
+    def liquidus(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        return self.mixed.liquidus(temperature, pressure)
+
     def heat_capacity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
         """Heat capacity"""
         return self._get_composite(temperature, pressure, "heat_capacity")
+
+    def solidus(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        return self.mixed.solidus(temperature, pressure)
 
     def thermal_conductivity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
         """Thermal conductivity"""
@@ -585,18 +591,21 @@ class CompositePhaseEvaluator:
 
         # no smoothing
         if phase_transition_width == 0.0:
-            smoothing_factor = 1.0  # mixed phase only
-            if melt_fraction_no_clip < 0.0 or melt_fraction_no_clip > 1.0:
-                smoothing_factor = 0.0  # single phase only
+            smoothing_factor: np.ndarray = np.where(
+                ((melt_fraction_no_clip < 0.0) | (melt_fraction_no_clip > 1.0)), 0, 1
+            )
 
         # tanh smoothing
         else:
-            if melt_fraction_no_clip > 0.5:
-                smoothing_factor = 1.0 - tanh_weight(
-                    melt_fraction_no_clip, 1.0, phase_transition_width
-                )
-            else:
-                smoothing_factor = tanh_weight(melt_fraction_no_clip, 0.0, phase_transition_width)
+            smoothing_liquid: np.ndarray = 1.0 - tanh_weight(
+                melt_fraction_no_clip, 1.0, phase_transition_width
+            )
+            smoothing_solid: np.ndarray = tanh_weight(
+                melt_fraction_no_clip, 0.0, phase_transition_width
+            )
+            smoothing_factor = np.where(
+                melt_fraction_no_clip > 0.5, smoothing_liquid, smoothing_solid
+            )
 
         return smoothing_factor
 
@@ -606,11 +615,11 @@ class CompositePhaseEvaluator:
         """Evaluates the single phase (liquid or solid) to blend with the mixed phase."""
 
         melt_fraction_no_clip: np.ndarray = self.mixed.melt_fraction_no_clip(temperature, pressure)
-
         single_phase_to_blend: list[float] = []
 
         for nn, melt_fraction in enumerate(melt_fraction_no_clip):
-            if melt_fraction > 0.5:
+            # FIXME: Why does temperature become a 99x99 array?
+            if melt_fraction.all() > 0.5:
                 phase: PhaseEvaluatorProtocol = self.liquid
             else:
                 phase = self.solid

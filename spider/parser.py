@@ -145,7 +145,7 @@ class _BoundaryConditionsSettings:
     core_radius: float
     core_density: float
     core_heat_capacity: float
-    scalings: _ScalingsSettings = field(init=False)
+    scalings_: _ScalingsSettings = field(init=False)
 
     def scale_attributes(self, scalings: _ScalingsSettings) -> None:
         """Scales the attributes.
@@ -222,7 +222,7 @@ class _InitialConditionSettings:
 
     surface_temperature: float
     basal_temperature: float
-    scalings: _ScalingsSettings = field(init=False)
+    scalings_: _ScalingsSettings = field(init=False)
 
     def scale_attributes(self, scalings: _ScalingsSettings) -> None:
         """Scales the attributes.
@@ -247,7 +247,7 @@ class _MeshSettings:
     adams_williamson_surface_density: float
     adams_williamson_beta: float
     gravitational_acceleration: float
-    scalings: _ScalingsSettings = field(init=False)
+    scalings_: _ScalingsSettings = field(init=False)
 
     def scale_attributes(self, scalings: _ScalingsSettings) -> None:
         """Scales the attributes
@@ -255,12 +255,12 @@ class _MeshSettings:
         Args:
             scalings: scalings
         """
-        self.scalings = scalings
-        self.outer_radius /= self.scalings.radius
-        self.inner_radius /= self.scalings.radius
-        self.adams_williamson_surface_density /= self.scalings.density
-        self.adams_williamson_beta *= self.scalings.radius
-        self.gravitational_acceleration /= self.scalings.gravitational_acceleration
+        self.scalings_ = scalings
+        self.outer_radius /= self.scalings_.radius
+        self.inner_radius /= self.scalings_.radius
+        self.adams_williamson_surface_density /= self.scalings_.density
+        self.adams_williamson_beta *= self.scalings_.radius
+        self.gravitational_acceleration /= self.scalings_.gravitational_acceleration
 
 
 @dataclass
@@ -274,7 +274,7 @@ class _PhaseMixedSettings:
     liquidus: str
     phase: str
     phase_transition_width: float
-    scalings: _ScalingsSettings = field(init=False)
+    scalings_: _ScalingsSettings = field(init=False)
 
     def scale_attributes(self, scalings: _ScalingsSettings) -> None:
         """Scales the attributes
@@ -307,12 +307,12 @@ class _PhaseSettings:
         Args:
             scalings: scalings
         """
-        self.scalings = scalings
+        self.scalings_ = scalings
         cls_fields: tuple[Field, ...] = fields(self.__class__)
         for field_ in cls_fields:
             value: Any = getattr(self, field_.name)
             try:
-                scaling: float = getattr(self.scalings, field_.name)
+                scaling: float = getattr(self.scalings_, field_.name)
                 scaled_value = value / scaling
                 setattr(self, field_.name, scaled_value)
                 logger.info(
@@ -339,7 +339,7 @@ class _Radionuclide:
     concentration: float
     heat_production: float
     half_life_years: float
-    scalings: _ScalingsSettings = field(init=False)
+    scalings_: _ScalingsSettings = field(init=False)
 
     def scale_attributes(self, scalings: _ScalingsSettings) -> None:
         """Scales the attributes.
@@ -347,11 +347,11 @@ class _Radionuclide:
         Args:
             scalings: scalings
         """
-        self.scalings = scalings
-        self.t0_years /= self.scalings.time_years
+        self.scalings_ = scalings
+        self.t0_years /= self.scalings_.time_years
         self.concentration *= 1e-6  # to mass fraction
-        self.heat_production /= self.scalings.power_per_mass
-        self.half_life_years /= self.scalings.time_years
+        self.heat_production /= self.scalings_.power_per_mass
+        self.half_life_years /= self.scalings_.time_years
 
     def get_heating(self, time: np.ndarray | float) -> np.ndarray | float:
         """Radiogenic heating
@@ -379,7 +379,7 @@ class _SolverSettings:
     end_time: float
     atol: float
     rtol: float
-    scalings: _ScalingsSettings = field(init=False)
+    scalings_: _ScalingsSettings = field(init=False)
 
     def scale_attributes(self, scalings: _ScalingsSettings) -> None:
         self.scalings_ = scalings
