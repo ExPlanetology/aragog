@@ -28,7 +28,7 @@ import numpy as np
 from scipy.interpolate import RectBivariateSpline, interp1d
 
 from spider.parser import _MeshSettings, _PhaseMixedSettings, _PhaseSettings
-from spider.utilities import is_file, is_number, tanh_weight
+from spider.utilities import combine_properties, is_file, is_number, tanh_weight
 
 if sys.version_info < (3, 12):
     from typing_extensions import override
@@ -370,14 +370,14 @@ class _MixedPhaseEvaluator:
         solid: PhaseEvaluatorProtocol,
         liquid: PhaseEvaluatorProtocol,
     ):
-        self._settings: _PhaseMixedSettings = settings
+        self.settings: _PhaseMixedSettings = settings
         self.solid: PhaseEvaluatorProtocol = solid
         self.liquid: PhaseEvaluatorProtocol = liquid
         self.solidus: LookupProperty1D = self._get_melting_curve_lookup(
-            "solidus", self._settings.solidus
+            "solidus", self.settings.solidus
         )
         self.liquidus: LookupProperty1D = self._get_melting_curve_lookup(
-            "liquidus", self._settings.liquidus
+            "liquidus", self.settings.liquidus
         )
 
     def density(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
@@ -417,20 +417,30 @@ class _MixedPhaseEvaluator:
         liquidus_temperature: np.ndarray = self.liquidus(temperature, pressure)
         solidus_temperature: np.ndarray = self.solidus(temperature, pressure)
         delta_fusion_temperature: np.ndarray = liquidus_temperature - solidus_temperature
-        heat_capacity: np.ndarray = self._settings.latent_heat_of_fusion / delta_fusion_temperature
+        heat_capacity: np.ndarray = self.settings.latent_heat_of_fusion / delta_fusion_temperature
 
         return heat_capacity
+
+    def melt_fraction_no_clip(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        """Melt fraction without clipping.
+
+        This is the melt fraction (phi) without clipping, which effectively determines the phase
+        because phi<0 for the solid, 0<phi<1 for the mixed phase, and phi>1 for the melt.
+        """
+        liquidus_temperature: np.ndarray = self.liquidus(temperature, pressure)
+        solidus_temperature: np.ndarray = self.solidus(temperature, pressure)
+        delta_fusion_temperature: np.ndarray = liquidus_temperature - solidus_temperature
+        melt_fraction: np.ndarray = (temperature - solidus_temperature) / delta_fusion_temperature
+
+        return melt_fraction
 
     def melt_fraction(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
         """Melt fraction of the mixed phase
 
         The melt fraction is always between zero and one.
         """
-        liquidus_temperature: np.ndarray = self.liquidus(temperature, pressure)
-        solidus_temperature: np.ndarray = self.solidus(temperature, pressure)
-        delta_fusion_temperature: np.ndarray = liquidus_temperature - solidus_temperature
-        melt_fraction: np.ndarray = (temperature - solidus_temperature) / delta_fusion_temperature
-        melt_fraction = np.clip(melt_fraction, 0, 1)
+        melt_fraction_no_clip: np.ndarray = self.melt_fraction_no_clip(temperature, pressure)
+        melt_fraction = np.clip(melt_fraction_no_clip, 0, 1)
 
         return melt_fraction
 
@@ -482,8 +492,8 @@ class _MixedPhaseEvaluator:
         melt_fraction: np.ndarray = self.melt_fraction(temperature, pressure)
         weight: np.ndarray = tanh_weight(
             melt_fraction,
-            self._settings.rheological_transition_melt_fraction,
-            self._settings.rheological_transition_width,
+            self.settings.rheological_transition_melt_fraction,
+            self.settings.rheological_transition_width,
         )
         liquidus_viscosity: np.ndarray = self.liquid.viscosity(liquidus_temperature, pressure)
         solidus_viscosity: np.ndarray = self.solid.viscosity(solidus_temperature, pressure)
@@ -502,7 +512,7 @@ class _MixedPhaseEvaluator:
         logger.debug("before scaling, value_array = %s", value_array)
         for nn, col_name in enumerate(col_names):
             logger.info("Scaling %s from %s", col_name, value)
-            value_array[:, nn] /= getattr(self._settings.scalings_, col_name)
+            value_array[:, nn] /= getattr(self.settings.scalings_, col_name)
 
         return LookupProperty1D(name=name, value=value_array)
 
@@ -528,128 +538,95 @@ class CompositePhaseEvaluator:
     ):
         self.solid: PhaseEvaluatorProtocol = solid
         self.liquid: PhaseEvaluatorProtocol = liquid
-        self.mixed: PhaseEvaluatorProtocol = mixed
+        self.mixed: _MixedPhaseEvaluator = mixed
 
     def density(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
         """Density"""
+        return self._get_composite(temperature, pressure, "density")
 
     def dTdPs(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
         """dTdPs"""
+        return self._get_composite(temperature, pressure, "dTdPs")
 
     def gravitational_acceleration(
         self, temperature: np.ndarray, pressure: np.ndarray
     ) -> np.ndarray:
         """Gravitational acceleration"""
+        return self.mixed.gravitational_acceleration(temperature, pressure)
 
     def heat_capacity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
         """Heat capacity"""
+        return self._get_composite(temperature, pressure, "heat_capacity")
 
     def thermal_conductivity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
         """Thermal conductivity"""
+        return self._get_composite(temperature, pressure, "thermal_conductivity")
 
     def thermal_expansivity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
         """Thermal expansivity"""
+        return self._get_composite(temperature, pressure, "thermal_expansivity")
 
     def viscosity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
         """Viscosity"""
+        smoothing: np.ndarray | float = self._get_smoothing(temperature, pressure)
+        mixed: np.ndarray = np.log10(self.mixed.viscosity(temperature, pressure))
+        single: np.ndarray = np.log10(
+            self._get_single_phase_to_blend(temperature, pressure, "viscosity")
+        )
+        combined: np.ndarray = 10 ** combine_properties(smoothing, mixed, single)
 
-    def _get_smoothing(self, smooth_width, gphi):
-        # get smoothing across phase boundaries for a two-phase composite
+        return combined
+
+    def _get_smoothing(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray | float:
+        """Blends phases across phase boundaries."""
+
+        phase_transition_width: float = self.mixed.settings.phase_transition_width
+        melt_fraction_no_clip: np.ndarray = self.mixed.melt_fraction_no_clip(temperature, pressure)
 
         # no smoothing
-        if smooth_width == 0.0:
-            smth = 1.0  # mixed phase only
-            if gphi < 0.0 or gphi > 1.0:
-                smth = 0.0  # single phase only
+        if phase_transition_width == 0.0:
+            smoothing_factor = 1.0  # mixed phase only
+            if melt_fraction_no_clip < 0.0 or melt_fraction_no_clip > 1.0:
+                smoothing_factor = 0.0  # single phase only
 
         # tanh smoothing
         else:
-            if gphi > 0.5:
-                smth = 1.0 - tanh_weight(gphi, 1.0, smooth_width)
+            if melt_fraction_no_clip > 0.5:
+                smoothing_factor = 1.0 - tanh_weight(
+                    melt_fraction_no_clip, 1.0, phase_transition_width
+                )
             else:
-                smth = tanh_weight(gphi, 0.0, smooth_width)
+                smoothing_factor = tanh_weight(melt_fraction_no_clip, 0.0, phase_transition_width)
 
-        return smth
+        return smoothing_factor
 
-    def _tanh_weight(self, qty, threshold, width):
-        # tanh weight for viscosity profile and smoothing
+    def _get_single_phase_to_blend(
+        self, temperature: np.ndarray, pressure: np.ndarray, property_name: str
+    ) -> np.ndarray:
+        """Evaluates the single phase (liquid or solid) to blend with the mixed phase."""
 
-        z = (qty - threshold) / width
-        fwt = 0.5 * (1.0 + np.tanh(z))
-        return fwt
+        melt_fraction_no_clip: np.ndarray = self.mixed.melt_fraction_no_clip(temperature, pressure)
 
+        single_phase_to_blend: list[float] = []
 
-# Below copied from cspider. To implement above to get (optional) smoothing across the phase
-# boundaries
+        for nn, melt_fraction in enumerate(melt_fraction_no_clip):
+            if melt_fraction > 0.5:
+                phase: PhaseEvaluatorProtocol = self.liquid
+            else:
+                phase = self.solid
+            value: float = getattr(phase, property_name)(temperature[nn], pressure[nn])
+            single_phase_to_blend.append(value)
 
-#   smth = get_smoothing(composite->matprop_smooth_width, gphi);
+        return np.array(single_phase_to_blend)
 
-#   /* now blend mixed phase EOS with single phase EOS across the phase boundary */
-#   if (gphi > 0.5)
-#   {
-#     /* melt only properties */
-#     ierr = EOSEval(composite->eos[composite->melt_slot], P, T, &eval2);
-#     CHKERRQ(ierr);
-#   }
-#   else
-#   {
-#     /* solid only properties */
-#     ierr = EOSEval(composite->eos[composite->solid_slot], P, T, &eval2);
-#     CHKERRQ(ierr);
-#   }
+    def _get_composite(
+        self, temperature: np.ndarray, pressure: np.ndarray, property_name: str
+    ) -> np.ndarray:
+        """Evaluates the composite property"""
 
-#   /* blend mixed phase with single phase, across phase boundary */
-#   eval->alpha = combine_matprop(smth, eval->alpha, eval2.alpha);
-#   eval->rho = combine_matprop(smth, eval->rho, eval2.rho);
-#   eval->T = combine_matprop(smth, eval->T, eval2.T);
-#   eval->Cp = combine_matprop(smth, eval->Cp, eval2.Cp);
-#   eval->dTdPs = combine_matprop(smth, eval->dTdPs, eval2.dTdPs);
-#   eval->cond = combine_matprop(smth, eval->cond, eval2.cond);
-#   eval->log10visc = combine_matprop(smth, eval->log10visc, eval2.log10visc);
+        smoothing: np.ndarray | float = self._get_smoothing(temperature, pressure)
+        mixed: np.ndarray = getattr(self.mixed, property_name)(temperature, pressure)
+        single: np.ndarray = self._get_single_phase_to_blend(temperature, pressure, property_name)
+        combined: np.ndarray = combine_properties(smoothing, mixed, single)
 
-#   PetscFunctionReturn(0);
-# }
-
-
-# PetscScalar get_smoothing(PetscScalar smooth_width, PetscScalar gphi)
-# {
-#     /* get smoothing across phase boundaries for a two phase composite */
-
-#     PetscScalar smth;
-
-#     /* no smoothing */
-#     if (smooth_width == 0.0)
-#     {
-#         smth = 1.0; // mixed phase only
-#         if ((gphi < 0.0) || (gphi > 1.0))
-#         {
-#             smth = 0.0; // single phase only
-#         }
-#     }
-
-#     /* tanh smoothing */
-#     else
-#     {
-#         if (gphi > 0.5)
-#         {
-#             smth = 1.0 - tanh_weight(gphi, 1.0, smooth_width);
-#         }
-#         else
-#         {
-#             smth = tanh_weight(gphi, 0.0, smooth_width);
-#         }
-#     }
-
-#     return smth;
-# }
-
-# PetscScalar tanh_weight(PetscScalar qty, PetscScalar threshold, PetscScalar width)
-# {
-#     /* tanh weight for viscosity profile and smoothing */
-
-#     PetscScalar fwt, z;
-
-#     z = (qty - threshold) / width;
-#     fwt = 0.5 * (1.0 + PetscTanhScalar(z));
-#     return fwt;
-# }
+        return combined
