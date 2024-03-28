@@ -38,7 +38,7 @@ def profile_decorator(func):
     def wrapper(*args, **kwargs):
         with Profile() as profile:
             result = func(*args, **kwargs)
-        stats = Stats(profile).strip_dirs().sort_stats(SortKey.CALLS)
+        stats = Stats(profile).strip_dirs().sort_stats(SortKey.TIME)
         stats.print_stats()
         return result
 

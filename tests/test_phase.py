@@ -26,7 +26,6 @@ import numpy as np
 
 from spider import CFG_TEST_DATA, SpiderSolver, __version__, debug_logger
 from spider.phase import PhaseEvaluatorProtocol
-from spider.utilities import profile_decorator
 
 logger: logging.Logger = debug_logger()
 # logger.setLevel(logging.INFO)
