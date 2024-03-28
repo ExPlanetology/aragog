@@ -110,7 +110,7 @@ class State:
         )
         return convective_heat_flux
 
-    def radiogenic_heating(self, time: np.ndarray | float) -> np.ndarray:
+    def radiogenic_heating(self, time: np.ndarray | float) -> np.ndarray | float:
         """Radiogenic heating
 
         Args:
@@ -124,7 +124,7 @@ class State:
         for radionuclide in self.data.radionuclides:
             radiogenic_heating_float += radionuclide.get_heating(time)
 
-        radiogenic_heating: np.ndarray = radiogenic_heating_float * (
+        radiogenic_heating: np.ndarray | float = radiogenic_heating_float * (
             self.phase_staggered.density / self.phase_staggered.capacitance
         )
 
@@ -225,9 +225,7 @@ class State:
         logger.debug("_temperature_basic = %s", self._temperature_basic)
         logger.debug("_dTdr = %s", self._dTdr)
 
-    def update(
-        self, temperature: np.ndarray, pressure: np.ndarray, time: np.ndarray | float
-    ) -> None:
+    def update(self, temperature: np.ndarray, time: np.ndarray | float) -> None:
         """Updates the state.
 
         The evaluation order matters because we want to minimise the number of evaluations.
@@ -239,9 +237,8 @@ class State:
         """
         logger.debug("Updating the state")
         self._set_temperature(temperature)
-        self.phase_staggered.update(temperature, pressure)
-        pressure_basic: np.ndarray = self.data.mesh.quantity_at_basic_nodes(pressure)
-        self.phase_basic.update(self._temperature_basic, pressure_basic)
+        self.phase_staggered.update(temperature, self.data.mesh.staggered.eos.pressure)
+        self.phase_basic.update(self._temperature_basic, self.data.mesh.basic.eos.pressure)
         self._super_adiabatic_temperature_gradient = self._dTdr - self.phase_basic.dTdrs
         self._is_convective = self._super_adiabatic_temperature_gradient < 0
         velocity_prefactor: np.ndarray = (
@@ -274,7 +271,8 @@ class State:
         )
         self._eddy_diffusivity *= self.data.mesh.basic.mixing_length
         # Heat flux
-        self._heat_flux = np.zeros_like(self.temperature_basic)
+        # FIXME: try and remove zeros_like
+        self._heat_flux = 0  # np.zeros_like(self.temperature_basic)
         if self.data.parameters.energy.conduction:
             self._heat_flux += self.conductive_heat_flux()
         if self.data.parameters.energy.convection:
@@ -284,7 +282,8 @@ class State:
         if self.data.parameters.energy.mixing:
             self._heat_flux += self.mixing_flux()
         # Heating
-        self._heating = np.zeros_like(temperature)
+        # FIXME: try and remove zeros_like
+        self._heating = 0  # np.zeros_like(temperature)
         if self.data.parameters.energy.radionuclides:
             self._heating += self.radiogenic_heating(time)
 
@@ -344,20 +343,18 @@ class SpiderSolver:
         self,
         time: np.ndarray | float,
         temperature: np.ndarray,
-        pressure: np.ndarray,
     ) -> np.ndarray:
         """dT/dt at the staggered nodes
 
         Args:
             time: Time
             temperature: Temperature at the staggered nodes
-            pressure: Pressure at the staggered nodes
 
         Returns:
             dT/dt at the staggered nodes
         """
         logger.debug("temperature passed into dTdt = %s", temperature)
-        self.state.update(temperature, pressure, time)
+        self.state.update(temperature, time)
         heat_flux: np.ndarray = self.state.heat_flux
         logger.debug("heat_flux = %s", heat_flux)
         self.data.boundary_conditions.apply(self.state)
@@ -389,13 +386,14 @@ class SpiderSolver:
         assert self.solution is not None
 
         pressure_staggered: np.ndarray = self.data.mesh.staggered.eos.pressure
-        pressure_tile: np.ndarray = np.tile(pressure_staggered, (len(self.solution.t), 1)).T
+        # TODO: Can probably remove below
+        # pressure_tile: np.ndarray = np.tile(pressure_staggered, (len(self.solution.t), 1)).T
 
         # Dimensionalise quantities for plotting
         radii: np.ndarray = (
             self.data.mesh.basic.radii * self.data.parameters.scalings.radius * 1.0e-3
         )  # km
-        self.state.update(self.solution.y, pressure_tile, self.solution.t)
+        self.state.update(self.solution.y, self.solution.t)
 
         temperature: np.ndarray = (
             self.state.temperature_basic * self.data.parameters.scalings.temperature
@@ -465,15 +463,12 @@ class SpiderSolver:
         atol: float = self.data.parameters.solver.atol
         rtol: float = self.data.parameters.solver.rtol
 
-        pressure: np.ndarray = self.data.mesh.staggered.eos.pressure.reshape(-1, 1)
-
         self._solution = solve_ivp(
             self.dTdt,
             (start_time, end_time),
             self.data.initial_condition.temperature,
             method="BDF",
             vectorized=True,
-            args=(pressure,),
             atol=atol,
             rtol=rtol,
         )

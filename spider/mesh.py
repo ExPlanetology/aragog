@@ -275,10 +275,6 @@ class Mesh:
         quantity_at_basic_nodes: np.ndarray = self._quantity_transform.dot(staggered_quantity)
         logger.debug("quantity_at_basic_nodes = %s", quantity_at_basic_nodes)
 
-        # FIXME: Seems to be required for mixed phase?  Some pressure interpolation dropping to
-        # negative values?
-        quantity_at_basic_nodes = np.clip(quantity_at_basic_nodes, a_min=0, a_max=np.inf)
-
         return quantity_at_basic_nodes
 
 
