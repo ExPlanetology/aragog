@@ -22,9 +22,13 @@ from cProfile import Profile
 from functools import wraps
 from pathlib import Path
 from pstats import SortKey, Stats
-from typing import Any
+from typing import Any, TypeVar
 
 import numpy as np
+import pandas as pd
+
+T = TypeVar("T")
+MultiplyT = TypeVar("MultiplyT", float, np.ndarray, pd.Series, pd.DataFrame)
 
 
 def profile_decorator(func):
@@ -92,3 +96,19 @@ def tanh_weight(value: np.ndarray, threshold: float, width: float) -> np.ndarray
     weight: float | np.ndarray = 0.5 * (1.0 + np.tanh(arg))
 
     return weight
+
+
+def combine_properties(weight, property1: MultiplyT, property2: MultiplyT) -> MultiplyT:
+    """Linear weighting of two quantities.
+
+    Args:
+        weight: The weight to apply to property1
+        property1: The value of the first property
+        property2: The value of the second property
+
+    Returns:
+        The combined (weighted) property
+    """
+    out: MultiplyT = weight * property1 + (1.0 - weight) * property2
+
+    return out

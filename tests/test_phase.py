@@ -119,3 +119,21 @@ def test_lookup_property_2D():
     density_melt: np.ndarray = solver.data.liquid.density(temperature_scaled, pressure_scaled)
     density_melt_target: np.ndarray = np.array([0.5, 0.5625, 0.3125, 0.4375, 0.375])
     assert np.isclose(density_melt, density_melt_target, atol=ATOL, rtol=RTOL).all()
+
+
+def test_mixed_phase():
+    """Mixed phase"""
+
+    solver: SpiderSolver = SpiderSolver("abe_mixed.cfg", CFG_TEST_DATA)
+    solver.initialize()
+
+    # Chosen to be the melting curve, i.e. 50% melt fraction
+    temperature_: np.ndarray = np.array([1590.3869054958254, 4521.708837963126])
+    pressure_: np.ndarray = np.array([0, 1.4e11])
+
+    temperature_scaled = temperature_ / solver.parameters.scalings.temperature
+    pressure_scaled = pressure_ / solver.parameters.scalings.pressure
+
+    density_melt: np.ndarray = solver.data.mixed.density(temperature_scaled, pressure_scaled)
+    density_melt_target: np.ndarray = np.array([1.02439024, 1.02439024])
+    assert np.isclose(density_melt, density_melt_target, atol=ATOL, rtol=RTOL).all()
