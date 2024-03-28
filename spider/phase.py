@@ -86,10 +86,10 @@ class ConstantProperty(PropertyABC):
     ndim: int = field(init=False, default=0)
 
     @override
-    def _get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+    def _get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> float:
         """See base class."""
         del pressure
-        return self.value * np.ones_like(temperature)
+        return self.value
 
 
 @dataclass(kw_only=True)
