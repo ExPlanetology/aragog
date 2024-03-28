@@ -388,13 +388,15 @@ class SpiderSolver:
         """
         assert self.solution is not None
 
+        pressure_staggered: np.ndarray = self.data.mesh.staggered.eos.pressure
+        pressure_tile: np.ndarray = np.tile(pressure_staggered, (len(self.solution.t), 1)).T
+
         # Dimensionalise quantities for plotting
         radii: np.ndarray = (
             self.data.mesh.basic.radii * self.data.parameters.scalings.radius * 1.0e-3
         )  # km
-        self.state.update(
-            self.solution.y, self.solution.y, self.solution.t
-        )  # FIXME: Second argument is pressure.
+        self.state.update(self.solution.y, pressure_tile, self.solution.t)
+
         temperature: np.ndarray = (
             self.state.temperature_basic * self.data.parameters.scalings.temperature
         )
@@ -414,8 +416,14 @@ class SpiderSolver:
         time_step: float = time_range / (num_lines - 1)
 
         # TODO: Plot the melting curves
-        # liquidus_temperature: np.ndarray = self.data.phase.liquid.phase_boundary()
-        # solidus_temperature: np.ndarray = self.data.phase.solid.phase_boundary()
+        try:
+            pressure: np.ndarray = self.data.mesh.basic.eos.pressure
+            liquidus_temperature: np.ndarray = self.data.phase.liquidus(temperature, pressure)
+            solidus_temperature: np.ndarray = self.data.phase.solidus(temperature, pressure)
+            ax.plot(liquidus_temperature * self.data.parameters.scalings.temperature, radii, "--")
+            ax.plot(solidus_temperature * self.data.parameters.scalings.temperature, radii, "--")
+        except AttributeError:
+            pass
 
         # Plot the first line.
         label_first: str = f"{times[0]:.2f}"
@@ -457,10 +465,7 @@ class SpiderSolver:
         atol: float = self.data.parameters.solver.atol
         rtol: float = self.data.parameters.solver.rtol
 
-        # FIXME: This is a dummy variable for pressure, which I think must be a 2-D array to work
-        # because temperature is also a 2-D array, and functions evaluated at pressure and
-        # temperature should return an array the same size and shape as temperature and pressure.
-        pressure: np.ndarray = self.data.initial_condition.temperature.reshape(-1, 1)
+        pressure: np.ndarray = self.data.mesh.staggered.eos.pressure.reshape(-1, 1)
 
         self._solution = solve_ivp(
             self.dTdt,

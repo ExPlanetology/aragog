@@ -16,6 +16,8 @@
 #
 """Tests phases"""
 
+# For testing we access some private members, so pylint: disable=W0212
+
 from __future__ import annotations
 
 import logging
@@ -24,6 +26,7 @@ import numpy as np
 
 from spider import CFG_TEST_DATA, SpiderSolver, __version__, debug_logger
 from spider.phase import PhaseEvaluatorProtocol
+from spider.utilities import profile_decorator
 
 logger: logging.Logger = debug_logger()
 # logger.setLevel(logging.INFO)
@@ -46,7 +49,7 @@ def test_liquid_constant_properties():
 
     solver: SpiderSolver = SpiderSolver("abe_mixed.cfg", CFG_TEST_DATA)
     solver.initialize()
-    phase: PhaseEvaluatorProtocol = solver.data.liquid
+    phase: PhaseEvaluatorProtocol = solver.data._liquid
 
     density: np.ndarray = phase.density(temperature, pressure)
     assert np.isclose(density, 1, atol=ATOL, rtol=RTOL).all()
@@ -69,7 +72,7 @@ def test_solid_constant_properties():
 
     solver: SpiderSolver = SpiderSolver("abe_mixed.cfg", CFG_TEST_DATA)
     solver.initialize()
-    phase: PhaseEvaluatorProtocol = solver.data.solid
+    phase: PhaseEvaluatorProtocol = solver.data._solid
 
     density: np.ndarray = phase.density(temperature, pressure)
     assert np.isclose(density, 1.05, atol=ATOL, rtol=RTOL).all()
@@ -95,11 +98,11 @@ def test_lookup_property_1D():
     temperature_scaled = temperature / solver.parameters.scalings.temperature
     pressure_scaled = pressure / solver.parameters.scalings.pressure
 
-    solidus: np.ndarray = solver.data.mixed.solidus(temperature_scaled, pressure_scaled)
+    solidus: np.ndarray = solver.data._mixed.solidus(temperature_scaled, pressure_scaled)
     solidus_target: np.ndarray = np.array([0.34515095, 1.05180909])
     assert np.isclose(solidus, solidus_target, atol=ATOL, rtol=RTOL).all()
 
-    liquidus: np.ndarray = solver.data.mixed.liquidus(temperature_scaled, pressure_scaled)
+    liquidus: np.ndarray = solver.data._mixed.liquidus(temperature_scaled, pressure_scaled)
     liquidus_target: np.ndarray = np.array([0.4500425, 1.15670029])
     assert np.isclose(liquidus, liquidus_target, atol=ATOL, rtol=RTOL).all()
 
@@ -116,13 +119,13 @@ def test_lookup_property_2D():
     temperature_scaled = temperature_ / solver.parameters.scalings.temperature
     pressure_scaled = pressure_ / solver.parameters.scalings.pressure
 
-    density_melt: np.ndarray = solver.data.liquid.density(temperature_scaled, pressure_scaled)
+    density_melt: np.ndarray = solver.data._liquid.density(temperature_scaled, pressure_scaled)
     density_melt_target: np.ndarray = np.array([0.5, 0.5625, 0.3125, 0.4375, 0.375])
     assert np.isclose(density_melt, density_melt_target, atol=ATOL, rtol=RTOL).all()
 
 
-def test_mixed_phase():
-    """Mixed phase"""
+def test_mixed_density():
+    """Mixed phase density"""
 
     solver: SpiderSolver = SpiderSolver("abe_mixed.cfg", CFG_TEST_DATA)
     solver.initialize()
@@ -134,6 +137,6 @@ def test_mixed_phase():
     temperature_scaled = temperature_ / solver.parameters.scalings.temperature
     pressure_scaled = pressure_ / solver.parameters.scalings.pressure
 
-    density_melt: np.ndarray = solver.data.mixed.density(temperature_scaled, pressure_scaled)
+    density_melt: np.ndarray = solver.data._mixed.density(temperature_scaled, pressure_scaled)
     density_melt_target: np.ndarray = np.array([1.02439024, 1.02439024])
     assert np.isclose(density_melt, density_melt_target, atol=ATOL, rtol=RTOL).all()
