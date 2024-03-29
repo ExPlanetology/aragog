@@ -96,9 +96,6 @@ class State:
 
     def conductive_heat_flux(self) -> np.ndarray:
         """Conductive heat flux"""
-        logger.debug(
-            "thermal_conductivity.shape = %s", self.phase_basic.thermal_conductivity.shape
-        )
         conductive_heat_flux: np.ndarray = -self.phase_basic.thermal_conductivity * self._dTdr
         return conductive_heat_flux
 
