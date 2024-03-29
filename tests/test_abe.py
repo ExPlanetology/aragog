@@ -53,7 +53,7 @@ def test_liquid_no_heating():
     solver: SpiderSolver = SpiderSolver("abe_liquid.cfg", CFG_TEST_DATA)
     solver.initialize()
     solver.solve()
-    calculated: np.ndarray = solver.get_temperature()[:, -1]
+    calculated: np.ndarray = solver.temperature_staggered[:, -1]
     # np.savetxt("abe_liquid_no_heating.dat", calculated)
 
     output: Output = Output(solver)
@@ -73,7 +73,7 @@ def test_solid_no_heating():
     solver: SpiderSolver = SpiderSolver(Path("abe_solid.cfg"), CFG_TEST_DATA)
     solver.initialize()
     solver.solve()
-    calculated: np.ndarray = solver.get_temperature()[:, -1]
+    calculated: np.ndarray = solver.temperature_staggered[:, -1]
     # np.savetxt("abe_solid_no_heating.dat", calculated)
 
     output: Output = Output(solver)
@@ -94,7 +94,7 @@ def test_solid_with_heating():
     solver.parameters.energy.radionuclides = True
     solver.initialize()
     solver.solve()
-    calculated: np.ndarray = solver.get_temperature()[:, -1]
+    calculated: np.ndarray = solver.temperature_staggered[:, -1]
     # np.savetxt("abe_solid_with_heating.dat", calculated)
 
     output: Output = Output(solver)
@@ -115,7 +115,7 @@ def test_mixed():
     solver: SpiderSolver = SpiderSolver(Path("abe_mixed.cfg"), CFG_TEST_DATA)
     solver.initialize()
     solver.solve()
-    calculated: np.ndarray = solver.get_temperature()[:, -1]
+    calculated: np.ndarray = solver.temperature_staggered[:, -1]
     # spider_solver.plot()
     # np.savetxt("abe_mixed_no_heating.dat", calculated)
 
@@ -136,7 +136,7 @@ def test_mixed_lookup():
     spider_solver: SpiderSolver = SpiderSolver(Path("abe_mixed_lookup.cfg"), CFG_TEST_DATA)
     spider_solver.initialize()
     spider_solver.solve()
-    calculated: np.ndarray = spider_solver.get_temperature()[:, -1]
+    calculated: np.ndarray = spider_solver.temperature_staggered[:, -1]
     # spider_solver.plot()
     # np.savetxt("testout.dat", calculated)
 
