@@ -31,6 +31,7 @@ from spider import (
     __version__,
     debug_logger,
 )
+from spider.output import Output
 from spider.utilities import profile_decorator
 
 logger: logging.Logger = debug_logger()
@@ -53,8 +54,10 @@ def test_liquid_no_heating():
     solver.initialize()
     solver.solve()
     calculated: np.ndarray = solver.get_temperature()[:, -1]
-    # solver.plot()
     # np.savetxt("abe_liquid_no_heating.dat", calculated)
+
+    output: Output = Output(solver)
+    output.plot()
 
     expected: np.ndarray = np.loadtxt(REFERENCE_TEST_DATA / Path("abe_liquid_no_heating.dat"))
     logger.info("calculated = %s", calculated)
@@ -71,8 +74,10 @@ def test_solid_no_heating():
     solver.initialize()
     solver.solve()
     calculated: np.ndarray = solver.get_temperature()[:, -1]
-    # solver.plot()
     # np.savetxt("abe_solid_no_heating.dat", calculated)
+
+    output: Output = Output(solver)
+    output.plot()
 
     expected: np.ndarray = np.loadtxt(REFERENCE_TEST_DATA / Path("abe_solid_no_heating.dat"))
     logger.info("calculated = %s", calculated)
@@ -90,8 +95,10 @@ def test_solid_with_heating():
     solver.initialize()
     solver.solve()
     calculated: np.ndarray = solver.get_temperature()[:, -1]
-    # solver.plot()
-    np.savetxt("abe_solid_with_heating.dat", calculated)
+    # np.savetxt("abe_solid_with_heating.dat", calculated)
+
+    output: Output = Output(solver)
+    output.plot()
 
     expected: np.ndarray = np.loadtxt(REFERENCE_TEST_DATA / Path("abe_solid_with_heating.dat"))
     logger.info("calculated = %s", calculated)
@@ -105,12 +112,15 @@ def test_solid_with_heating():
 def test_mixed():
     """Test Abe (1993."""
 
-    spider_solver: SpiderSolver = SpiderSolver(Path("abe_mixed.cfg"), CFG_TEST_DATA)
-    spider_solver.initialize()
-    spider_solver.solve()
-    calculated: np.ndarray = spider_solver.get_temperature()[:, -1]
-    spider_solver.plot()
+    solver: SpiderSolver = SpiderSolver(Path("abe_mixed.cfg"), CFG_TEST_DATA)
+    solver.initialize()
+    solver.solve()
+    calculated: np.ndarray = solver.get_temperature()[:, -1]
+    # spider_solver.plot()
     # np.savetxt("abe_mixed_no_heating.dat", calculated)
+
+    output: Output = Output(solver)
+    output.plot()
 
     # expected: np.ndarray = np.loadtxt(REFERENCE_TEST_DATA / Path("abe_mixed_no_heating.txt"))
     # logger.info("calculated = %s", calculated)

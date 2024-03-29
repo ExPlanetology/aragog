@@ -25,7 +25,9 @@ logger.addHandler(logging.NullHandler())
 
 def complex_formatter() -> logging.Formatter:
     """Complex formatter."""
-    fmt: str = "[%(asctime)s - %(name)-30s - %(lineno)03d - %(levelname)-9s - %(funcName)s()] - %(message)s"
+    fmt: str = (
+        "[%(asctime)s - %(name)-30s - %(lineno)03d - %(levelname)-9s - %(funcName)s()] - %(message)s"
+    )
     datefmt: str = "%Y-%m-%d %H:%M:%S"
     formatter: logging.Formatter = logging.Formatter(fmt, datefmt=datefmt)
     return formatter

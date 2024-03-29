@@ -22,7 +22,6 @@ import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import matplotlib.pyplot as plt
 import numpy as np
 from scipy.integrate import solve_ivp
 from scipy.optimize import OptimizeResult
@@ -97,6 +96,9 @@ class State:
 
     def conductive_heat_flux(self) -> np.ndarray:
         """Conductive heat flux"""
+        logger.debug(
+            "thermal_conductivity.shape = %s", self.phase_basic.thermal_conductivity.shape
+        )
         conductive_heat_flux: np.ndarray = -self.phase_basic.thermal_conductivity * self._dTdr
         return conductive_heat_flux
 
@@ -270,13 +272,16 @@ class State:
             self.viscous_regime, self._viscous_velocity, self._inviscid_velocity
         )
         self._eddy_diffusivity *= self.data.mesh.basic.mixing_length
+        logger.debug("Before evaluating heat flux")
         # Heat flux
         # FIXME: try and remove zeros_like
         self._heat_flux = 0  # np.zeros_like(self.temperature_basic)
         if self.data.parameters.energy.conduction:
             self._heat_flux += self.conductive_heat_flux()
+            logger.debug("heat_flux.shape = %s", self._heat_flux.shape)
         if self.data.parameters.energy.convection:
             self._heat_flux += self.convective_heat_flux()
+            logger.debug("heat_flux.shape = %s", self._heat_flux.shape)
         if self.data.parameters.energy.gravitational_separation:
             self._heat_flux += self.gravitational_separation_flux()
         if self.data.parameters.energy.mixing:
@@ -325,11 +330,6 @@ class SpiderSolver:
         self.data = SpiderData(self.parameters)
         self.state = State(self.data)
 
-    @property
-    def solution(self) -> OptimizeResult:
-        """The solution."""
-        return self._solution
-
     def get_temperature(self) -> np.ndarray:
         """Temperature in kelvin
 
@@ -338,6 +338,11 @@ class SpiderSolver:
         """
         temperature: np.ndarray = self.solution.y * self.data.parameters.scalings.temperature
         return temperature
+
+    @property
+    def solution(self) -> OptimizeResult:
+        """The solution."""
+        return self._solution
 
     def dTdt(
         self,
@@ -354,6 +359,7 @@ class SpiderSolver:
             dT/dt at the staggered nodes
         """
         logger.debug("temperature passed into dTdt = %s", temperature)
+        logger.debug("temperature.shape = %s", temperature.shape)
         self.state.update(temperature, time)
         heat_flux: np.ndarray = self.state.heat_flux
         logger.debug("heat_flux = %s", heat_flux)
@@ -365,6 +371,8 @@ class SpiderSolver:
         logger.debug("energy_flux size = %s", energy_flux.shape)
 
         delta_energy_flux: np.ndarray = np.diff(energy_flux, axis=0)
+        logger.debug("delta_energy_flux size = %s", delta_energy_flux.shape)
+        logger.debug("capacitance = %s", self.state.phase_staggered.capacitance.shape)
         capacitance: np.ndarray = (
             self.state.phase_staggered.capacitance * self.data.mesh.basic.volume
         )
@@ -376,82 +384,6 @@ class SpiderSolver:
         logger.debug("dTdt (with internal heating) = %s", dTdt)
 
         return dTdt
-
-    def plot(self, num_lines: int = 11) -> None:
-        """Plots the solution with labelled lines according to time.
-
-        Args:
-            num_lines: Number of lines to plot. Defaults to 11.
-        """
-        assert self.solution is not None
-
-        pressure_staggered: np.ndarray = self.data.mesh.staggered.eos.pressure
-        # TODO: Can probably remove below
-        # pressure_tile: np.ndarray = np.tile(pressure_staggered, (len(self.solution.t), 1)).T
-
-        # Dimensionalise quantities for plotting
-        radii: np.ndarray = (
-            self.data.mesh.basic.radii * self.data.parameters.scalings.radius * 1.0e-3
-        )  # km
-        self.state.update(self.solution.y, self.solution.t)
-
-        temperature: np.ndarray = (
-            self.state.temperature_basic * self.data.parameters.scalings.temperature
-        )
-
-        times: np.ndarray = self.solution.t * self.data.parameters.scalings.time_years  # years
-
-        plt.figure(figsize=(8, 6))
-        ax = plt.subplot(111)
-
-        # Ensure there are at least 2 lines to plot (first and last).
-        num_lines = max(2, num_lines)
-
-        # Calculate the time range.
-        time_range: float = times[-1] - times[0]
-
-        # Calculate the time step based on the total number of lines.
-        time_step: float = time_range / (num_lines - 1)
-
-        # TODO: Plot the melting curves
-        try:
-            pressure: np.ndarray = self.data.mesh.basic.eos.pressure
-            liquidus_temperature: np.ndarray = self.data.phase.liquidus(temperature, pressure)
-            solidus_temperature: np.ndarray = self.data.phase.solidus(temperature, pressure)
-            ax.plot(liquidus_temperature * self.data.parameters.scalings.temperature, radii, "--")
-            ax.plot(solidus_temperature * self.data.parameters.scalings.temperature, radii, "--")
-        except AttributeError:
-            pass
-
-        # Plot the first line.
-        label_first: str = f"{times[0]:.2f}"
-        ax.plot(temperature[:, 0], radii, label=label_first)
-
-        # Loop through the selected lines and plot each with a label.
-        for i in range(1, num_lines - 1):
-            desired_time: float = times[0] + i * time_step
-            # Find the closest available time step.
-            closest_time_index: np.intp = np.argmin(np.abs(times - desired_time))
-            time: float = times[closest_time_index]
-            label: str = f"{time:.2f}"  # Create a label based on the time.
-            plt.plot(temperature[:, closest_time_index], radii, label=label)
-
-        # Plot the last line.
-        times_end: float = times[-1]
-        label_last: str = f"{times_end:.2f}"
-        ax.plot(temperature[:, -1], radii, label=label_last)
-
-        # Shrink current axis by 20% to allow space for the legend.
-        box = ax.get_position()
-        ax.set_position((box.x0, box.y0, box.width * 0.8, box.height))
-
-        ax.set_xlabel("Temperature (K)")
-        ax.set_ylabel("Radii (km)")
-        ax.set_title("Magma ocean thermal profile")
-        ax.grid(True)
-        legend = plt.legend(loc="center left", bbox_to_anchor=(1, 0.5))
-        legend.set_title("Time (yr)")
-        plt.show()
 
     def solve(self) -> None:
         """Solves the system of ODEs to determine the interior temperature profile."""
