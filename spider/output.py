@@ -67,6 +67,28 @@ class Output:
         )
 
     @property
+    def dTdr(self) -> np.ndarray:
+        """dTdr"""
+        return self.solver.state.dTdr * self.data.parameters.scalings.temperature_gradient
+
+    @property
+    def dTdrs(self) -> np.ndarray:
+        """dTdrs"""
+        return (
+            self.solver.state.phase_basic.dTdrs
+            * self.data.parameters.scalings.temperature_gradient
+        )
+
+    @property
+    def heat_capacity_basic(self) -> np.ndarray:
+        """Heat capacity"""
+        return (
+            self.solver.state.phase_basic.heat_capacity
+            * np.ones(self.shape_basic)
+            * self.data.parameters.scalings.heat_capacity
+        )
+
+    @property
     def liquidus_K_staggered(self) -> np.ndarray:
         """Liquidus"""
         return (
@@ -107,6 +129,14 @@ class Output:
         )
 
     @property
+    def super_adiabatic_temperature_gradient_basic(self) -> np.ndarray:
+        """Super adiabatic temperature gradient"""
+        return (
+            self.state.super_adiabatic_temperature_gradient
+            * self.data.parameters.scalings.temperature_gradient
+        )
+
+    @property
     def temperature_K_basic(self) -> np.ndarray:
         """Temperature of the basic mesh in K"""
         return self.state.temperature_basic * self.data.parameters.scalings.temperature
@@ -115,6 +145,15 @@ class Output:
     def temperature_K_staggered(self) -> np.ndarray:
         """Temperature of the staggered mesh in K"""
         return self.solver.temperature_staggered
+
+    @property
+    def thermal_expansivity_basic(self) -> np.ndarray:
+        """Thermal expansivity"""
+        return (
+            self.solver.state.phase_basic.thermal_expansivity
+            * np.ones(self.shape_basic)
+            * self.data.parameters.scalings.thermal_expansivity
+        )
 
     @property
     def log10_viscosity_basic(self) -> np.ndarray:
@@ -144,7 +183,7 @@ class Output:
 
         self.state.update(self.solution.y, self.solution.t)
 
-        _, axs = plt.subplots(1, 4, sharey=True)
+        _, axs = plt.subplots(1, 10, sharey=True)
 
         # Ensure there are at least 2 lines to plot (first and last).
         num_lines = max(2, num_lines)
@@ -195,9 +234,57 @@ class Output:
         axs[2].set_xlabel("Log10(viscosity)")
         axs[2].set_title("Log10(viscosity)")
 
-        plot_times(axs[3], np.log10(self.convective_heat_flux_basic), self.pressure_GPa_basic)
+        plot_times(axs[3], self.convective_heat_flux_basic, self.pressure_GPa_basic)
         axs[3].set_xlabel("Convective heat flux")
         axs[3].set_title("Convective heat flux")
+
+        plot_times(
+            axs[4],
+            self.super_adiabatic_temperature_gradient_basic,
+            self.pressure_GPa_basic,
+        )
+        axs[4].set_xlabel("Super adiabatic temperature gradient")
+        axs[4].set_title("Super adiabatic temperature gradient")
+
+        plot_times(
+            axs[5],
+            self.dTdr,
+            self.pressure_GPa_basic,
+        )
+        axs[5].set_xlabel("dTdr")
+        axs[5].set_title("dTdr")
+
+        plot_times(
+            axs[6],
+            self.dTdrs,
+            self.pressure_GPa_basic,
+        )
+        axs[6].set_xlabel("dTdrs")
+        axs[6].set_title("dTdrs")
+
+        plot_times(
+            axs[7],
+            self.density_basic,
+            self.pressure_GPa_basic,
+        )
+        axs[7].set_xlabel("Density")
+        axs[7].set_title("Density")
+
+        plot_times(
+            axs[8],
+            self.heat_capacity_basic,
+            self.pressure_GPa_basic,
+        )
+        axs[8].set_xlabel("Heat capacity")
+        axs[8].set_title("Heat capacity")
+
+        plot_times(
+            axs[9],
+            self.thermal_expansivity_basic,
+            self.pressure_GPa_basic,
+        )
+        axs[9].set_xlabel("Thermal expansivity")
+        axs[9].set_title("Thermal expansivity")
 
         # Shrink current axis by 20% to allow space for the legend.
         # box = ax.get_position()
