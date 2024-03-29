@@ -177,8 +177,8 @@ class PhaseStateStaggered:
 
     phase_evaluator: PhaseEvaluatorProtocol
     capacitance: np.ndarray = field(init=False)
-    density: np.ndarray = field(init=False)
-    heat_capacity: np.ndarray = field(init=False)
+    density: np.ndarray | float = field(init=False)
+    heat_capacity: np.ndarray | float = field(init=False)
 
     def update(self, temperature: np.ndarray, pressure: np.ndarray) -> None:
         """Updates the state.
@@ -214,14 +214,14 @@ class PhaseStateBasic:
     """
 
     phase_evaluator: PhaseEvaluatorProtocol
-    density: np.ndarray = field(init=False)
-    gravitational_acceleration: np.ndarray = field(init=False)
-    heat_capacity: np.ndarray = field(init=False)
-    thermal_conductivity: np.ndarray = field(init=False)
-    thermal_expansivity: np.ndarray = field(init=False)
-    viscosity: np.ndarray = field(init=False)
+    density: np.ndarray | float = field(init=False)
+    gravitational_acceleration: float = field(init=False)
+    heat_capacity: np.ndarray | float = field(init=False)
+    thermal_conductivity: np.ndarray | float = field(init=False)
+    thermal_expansivity: np.ndarray | float = field(init=False)
+    viscosity: np.ndarray | float = field(init=False)
     dTdrs: np.ndarray = field(init=False)
-    kinematic_viscosity: np.ndarray = field(init=False)
+    kinematic_viscosity: np.ndarray | float = field(init=False)
 
     def update(self, temperature: np.ndarray, pressure: np.ndarray) -> None:
         """Updates the state.
@@ -263,31 +263,33 @@ class PhaseEvaluatorProtocol(Protocol):
     E1111.
     """
 
-    def density(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+    def density(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray | float:
         raise NotImplementedError()
 
     def dTdPs(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
         raise NotImplementedError()
 
-    def gravitational_acceleration(
-        self, temperature: np.ndarray, pressure: np.ndarray
-    ) -> np.ndarray:
+    def gravitational_acceleration(self, temperature: np.ndarray, pressure: np.ndarray) -> float:
         """To compute dT/dr at constant entropy."""
         raise NotImplementedError()
 
-    def heat_capacity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+    def heat_capacity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray | float:
         raise NotImplementedError()
 
-    def melt_fraction(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+    def melt_fraction(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray | float:
         raise NotImplementedError()
 
-    def thermal_conductivity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+    def thermal_conductivity(
+        self, temperature: np.ndarray, pressure: np.ndarray
+    ) -> np.ndarray | float:
         raise NotImplementedError()
 
-    def thermal_expansivity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+    def thermal_expansivity(
+        self, temperature: np.ndarray, pressure: np.ndarray
+    ) -> np.ndarray | float:
         raise NotImplementedError()
 
-    def viscosity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+    def viscosity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray | float:
         raise NotImplementedError()
 
 

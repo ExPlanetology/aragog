@@ -330,13 +330,16 @@ class SpiderSolver:
         self.data = SpiderData(self.parameters)
         self.state = State(self.data)
 
-    def get_temperature(self) -> np.ndarray:
-        """Temperature in kelvin
+    @property
+    def temperature_basic(self) -> np.ndarray:
+        """Temperature of the basic mesh in K"""
+        return self.data.mesh.quantity_at_basic_nodes(self.temperature_staggered)
 
-        Returns:
-            Temperature in kelvin at the staggered nodes
-        """
+    @property
+    def temperature_staggered(self) -> np.ndarray:
+        """Temperature of the staggered mesh in K"""
         temperature: np.ndarray = self.solution.y * self.data.parameters.scalings.temperature
+
         return temperature
 
     @property

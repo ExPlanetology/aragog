@@ -53,6 +53,11 @@ class Output:
         return self.solution.y.shape
 
     @property
+    def convective_heat_flux_basic(self) -> np.ndarray:
+        """Convective heat flux"""
+        return self.state.convective_heat_flux() * self.data.parameters.scalings.heat_flux
+
+    @property
     def density_basic(self) -> np.ndarray:
         """Density"""
         return (
@@ -109,7 +114,7 @@ class Output:
     @property
     def temperature_K_staggered(self) -> np.ndarray:
         """Temperature of the staggered mesh in K"""
-        return self.solver.get_temperature()
+        return self.solver.temperature_staggered
 
     @property
     def log10_viscosity_basic(self) -> np.ndarray:
@@ -139,7 +144,7 @@ class Output:
 
         self.state.update(self.solution.y, self.solution.t)
 
-        fig, axs = plt.subplots(1, 3, sharey=True)
+        _, axs = plt.subplots(1, 4, sharey=True)
 
         # Ensure there are at least 2 lines to plot (first and last).
         num_lines = max(2, num_lines)
@@ -189,6 +194,10 @@ class Output:
         plot_times(axs[2], self.log10_viscosity_basic, self.pressure_GPa_basic)
         axs[2].set_xlabel("Log10(viscosity)")
         axs[2].set_title("Log10(viscosity)")
+
+        plot_times(axs[3], np.log10(self.convective_heat_flux_basic), self.pressure_GPa_basic)
+        axs[3].set_xlabel("Convective heat flux")
+        axs[3].set_title("Convective heat flux")
 
         # Shrink current axis by 20% to allow space for the legend.
         # box = ax.get_position()
