@@ -27,8 +27,9 @@ from typing import Any, TypeVar
 import numpy as np
 import pandas as pd
 
-T = TypeVar("T")
 MultiplyT = TypeVar("MultiplyT", float, np.ndarray, pd.Series, pd.DataFrame)
+
+FloatOrArray = float | np.ndarray
 
 
 def profile_decorator(func):
@@ -56,6 +57,7 @@ def is_file(value: Any) -> bool:
     """
     if isinstance(value, (str, Path)):
         return Path(value).is_file()
+
     return False
 
 
@@ -76,11 +78,12 @@ def is_number(value: Any) -> bool:
     try:
         float(value)
         return True
+
     except ValueError:
         return False
 
 
-def tanh_weight(value: np.ndarray, threshold: float, width: float) -> np.ndarray:
+def tanh_weight(value: FloatOrArray, threshold: float, width: float) -> np.ndarray:
     """Computes the tanh weight for viscosity profile and smoothing.
 
     Args:
@@ -92,8 +95,8 @@ def tanh_weight(value: np.ndarray, threshold: float, width: float) -> np.ndarray
         weight
     """
 
-    arg: float | np.ndarray = (value - threshold) / width
-    weight: float | np.ndarray = 0.5 * (1.0 + np.tanh(arg))
+    arg: FloatOrArray = (value - threshold) / width
+    weight: np.ndarray = 0.5 * (1.0 + np.tanh(arg))
 
     return weight
 
