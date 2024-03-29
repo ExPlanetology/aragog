@@ -1,16 +1,20 @@
 # SPIDER
 **Simulating Planetary Interior Dynamics with Extreme Rheology**
 
+## Under development
+
+This code remains under active development so changes and improvements are anticipated in the coming weeks and months. Hence the interface is not stable and should not be relied upon.
+
 ## About
 
-This is a pure Python version of the [SPIDER code](https://github.com/djbower/spider). This version does not support quadruple precision and applies conventional finite volumes to solve the system, i.e., the auxilliary variable approach outlined in Bower et al., 2018 is not invoked. Nevertheless, this pure Python version will probably prove to be more convenient for future development, particularly given that the atmosphere module is now supported by a separate and more comprehensive Python package *Atmodeller*.
+This is a pure Python version of the [SPIDER code](https://github.com/djbower/spider). This version does not support quadruple precision and applies conventional finite volumes to solve the system, i.e., the auxilliary variable approach outlined in Bower et al., 2018 is not invoked. Nevertheless, this pure Python version will probably prove to be more convenient for future development, particularly given that the atmosphere module in the original SPIDER code is now supported by a separate and more comprehensive Python package *Atmodeller* (release forthcoming).
 
 ## Citation
 
-### 1. SPIDER code (interior dynamics)
+### 1. *Spider* code (interior dynamics)
 Bower, D.J., P. Sanan, and A.S. Wolf (2018), Numerical solution of a non-linear conservation law applicable to the interior dynamics of partially molten planets, Phys. Earth Planet. Inter., 274, 49-62, doi: 10.1016/j.pepi.2017.11.004, arXiv: <https://arxiv.org/abs/1711.07303>, EarthArXiv: <https://eartharxiv.org/k6tgf>
 
-### 2. MgSiO3 melt data tables (RTpress) within SPIDER
+### 2. MgSiO3 melt data tables (RTpress) within *Spider*
 Wolf, A.S. and D.J. Bower (2018), An equation of state for high pressure-temperature liquids (RTpress) with application to MgSiO3 melt, Phys. Earth Planet. Inter., 278, 59-74, doi: 10.1016/j.pepi.2018.02.004, EarthArXiv: <https://eartharxiv.org/4c2s5>
 
 ### 3. Volatile and atmosphere coupling
@@ -27,19 +31,37 @@ Bower, D.J., Hakim, K., Sossi, P.A., and Sanan, P. (2022), Retention of water in
 
 If you want a GUI way of installing *Spider*, particularly if you are a Windows or Spyder user, see [here](https://gist.github.com/djbower/c82b4a70a3c3c74ad26dc572edefdd34). Otherwise, the instructions below should work to install *Spider* using the terminal on a Mac or Linux system.
 
-Navigate to a location on your computer and obtain the *Spider* source code:
+### 1. Obtain the source code
+
+Navigate to a location on your computer and obtain the source code:
 
     git clone git@github.com:ExPlanetology/pyspider.git spider
     cd spider
+
+### 2. Create a Python environment
 
 The basic procedure is to install *Spider* into an environment. For example, if you are using a Conda distribution to create Python environments (e.g. [Anaconda](https://www.anaconda.com/download)), create a new environment to install *Spider*. *Spider* requires Python >= 3.10:
 
     conda create -n spider python
     conda activate spider
 
-Install *Spider* into the environment. The preference is to use [Poetry](https://python-poetry.org) because it allows greater flexibility and control over dependency management, and this is actually required if you want to install the dependencies for testing and documentation that are unfortunately not yet supported by `pip`. However, you can install the main *Atmodeller* package using pip as follows, where you can include the `-e` option if you want an [editable install ](https://setuptools.pypa.io/en/latest/userguide/development_mode.html).
+### 3. Install into the environment
+
+Install *Spider* into the environment using either (a) [Poetry](https://python-poetry.org) or (b) [pip](https://pip.pypa.io/en/stable/getting-started/). If you are a developer you will probably prefer to use Poetry and if you are an end-user you will probably prefer to use pip. This [Gist](https://gist.github.com/djbower/e9538e7eb5ed3deaf3c4de9dea41ebcd) provides further information.
+
+#### 3a. Option 1: Poetry
+
+This requires that you have you have [Poetry](https://python-poetry.org) installed:
+
+    poetry install
+
+#### 3b. Option 2: pip
+
+Alternatively, use `pip`, where you can include the `-e` option if you want an [editable install ](https://setuptools.pypa.io/en/latest/userguide/development_mode.html).
 
     pip install .
+
+If desired, you will need to manually install the dependencies for testing and documentation (these are automatically installed by Poetry but not when using `pip`). See the additional dependencies to install in `pyproject.toml`.
 
 ### Developer install
 
