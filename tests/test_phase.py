@@ -98,11 +98,11 @@ def test_lookup_property_1D():
     pressure_scaled = pressure / solver.parameters.scalings.pressure
 
     solidus: np.ndarray = solver.data._mixed.solidus(temperature_scaled, pressure_scaled)
-    solidus_target: np.ndarray = np.array([0.34515095, 1.05180909])
+    solidus_target: np.ndarray = np.array([[0.34515095], [1.05180909]])
     assert np.isclose(solidus, solidus_target, atol=ATOL, rtol=RTOL).all()
 
     liquidus: np.ndarray = solver.data._mixed.liquidus(temperature_scaled, pressure_scaled)
-    liquidus_target: np.ndarray = np.array([0.4500425, 1.15670029])
+    liquidus_target: np.ndarray = np.array([[0.4500425], [1.15670029]])
     assert np.isclose(liquidus, liquidus_target, atol=ATOL, rtol=RTOL).all()
 
 
@@ -130,12 +130,12 @@ def test_mixed_density():
     solver.initialize()
 
     # Chosen to be the melting curve, i.e. 50% melt fraction
-    temperature_: np.ndarray = np.array([1590.3869054958254, 4521.708837963126])
-    pressure_: np.ndarray = np.array([0, 1.4e11])
+    temperature_: np.ndarray = np.array([1590.3869054958254, 4521.708837963126]).reshape(-1, 1)
+    pressure_: np.ndarray = np.array([0, 1.4e11]).reshape(-1, 1)
 
     temperature_scaled = temperature_ / solver.parameters.scalings.temperature
     pressure_scaled = pressure_ / solver.parameters.scalings.pressure
 
     density_melt: np.ndarray = solver.data._mixed.density(temperature_scaled, pressure_scaled)
-    density_melt_target: np.ndarray = np.array([1.02439024, 1.02439024])
+    density_melt_target: np.ndarray = np.array([[1.02439024], [1.02439024]])
     assert np.isclose(density_melt, density_melt_target, atol=ATOL, rtol=RTOL).all()

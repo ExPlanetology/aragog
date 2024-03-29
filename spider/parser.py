@@ -295,6 +295,7 @@ class _PhaseSettings:
 
     density: float | str
     heat_capacity: float | str
+    melt_fraction: float
     thermal_conductivity: float | str
     thermal_expansivity: float | str
     viscosity: float | str
@@ -322,6 +323,8 @@ class _PhaseSettings:
                     scaling,
                     scaled_value,
                 )
+            except AttributeError:
+                logger.info("No scaling found for %s", field_.name)
             except TypeError:
                 logger.info(
                     "%s is a string (path to a filename) so the data will be scaled later",
