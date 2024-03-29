@@ -28,57 +28,135 @@ from scipy.optimize import OptimizeResult
 
 from spider.core import SpiderData
 from spider.parser import Parameters
-from spider.phase import PhaseStateBasic, PhaseStateStaggered
+from spider.phase import PhaseEvaluatorProtocol
 
 logger: logging.Logger = logging.getLogger(__name__)
+
+FloatOrArray = np.ndarray | float
+
+
+@dataclass
+class PhaseStateStaggered:
+    """Stores the state (material properties) at the staggered nodes.
+
+    Args:
+        phase_evaluator: A PhaseEvaluatorProtocol
+
+    Attributes:
+        capacitance: Thermal capacitance
+        density: Density
+        heat_capacity: Heat capacity
+    """
+
+    phase_evaluator: PhaseEvaluatorProtocol
+    capacitance: FloatOrArray = field(init=False)
+    density: FloatOrArray = field(init=False)
+    heat_capacity: FloatOrArray = field(init=False)
+
+    def update(self, temperature: np.ndarray, pressure: np.ndarray) -> None:
+        """Updates the state.
+
+        Args:
+            temperature: Temperature at the staggered nodes
+            pressure: Pressure at the staggered nodes
+        """
+        logger.debug("Updating the state of %s", self.__class__.__name__)
+        self.density = self.phase_evaluator.density(temperature, pressure)
+        self.heat_capacity = self.phase_evaluator.heat_capacity(temperature, pressure)
+        self.capacitance = self.density * self.heat_capacity
+
+
+@dataclass
+class PhaseStateBasic:
+    """Stores the state (material properties) at the basic nodes.
+
+    Args:
+        phase_evaluator: A PhaseEvaluatorProtocol
+
+    Attributes:
+        density: Density
+        dTdrs: Adiabatic temperature gradient with respect to radius
+        gravitational_acceleration: Gravitational acceleration
+        heat_capacity: Heat capacity
+        kinematic_viscosity: Kinematic viscosity
+        thermal_conductivity: Thermal conductivity
+        thermal_expansivity: Thermal expansivity
+        viscosity: Dynamic viscosity
+    """
+
+    phase_evaluator: PhaseEvaluatorProtocol
+    density: FloatOrArray = field(init=False)
+    dTdrs: np.ndarray = field(init=False)
+    gravitational_acceleration: float = field(init=False)
+    heat_capacity: FloatOrArray = field(init=False)
+    kinematic_viscosity: FloatOrArray = field(init=False)
+    thermal_conductivity: FloatOrArray = field(init=False)
+    thermal_expansivity: FloatOrArray = field(init=False)
+    viscosity: FloatOrArray = field(init=False)
+
+    def update(self, temperature: np.ndarray, pressure: np.ndarray) -> None:
+        """Updates the state.
+
+        Args:
+            temperature: Temperature at the basic nodes
+            pressure: Pressure at the basic nodes
+        """
+        self.density = self.phase_evaluator.density(temperature, pressure)
+        self.gravitational_acceleration = self.phase_evaluator.gravitational_acceleration(
+            temperature, pressure
+        )
+        self.heat_capacity = self.phase_evaluator.heat_capacity(temperature, pressure)
+        self.thermal_conductivity = self.phase_evaluator.thermal_conductivity(
+            temperature, pressure
+        )
+        self.thermal_expansivity = self.phase_evaluator.thermal_expansivity(temperature, pressure)
+        self.viscosity = self.phase_evaluator.viscosity(temperature, pressure)
+        self.dTdrs = (
+            -self.gravitational_acceleration
+            * self.thermal_expansivity
+            * temperature
+            / self.heat_capacity
+        )
+        self.kinematic_viscosity = self.viscosity / self.density
 
 
 @dataclass
 class State:
-    """Stores the state at temperature and pressure.
+    """Stores and updates the state at temperature and pressure.
+
+    update() minimises the number of function calls by only updating what is required to integrate
+    the energy balance.
 
     Args:
-        _data: SpiderData
-        conduction: Include conduction flux
-        convection: Include convection flux
-        gravitational_separation: Include gravitational separation flux
-        mixing: Include mixing flux
-        radionuclides: Include radionuclides
-        tidal: Include tidal heating
+        data: SpiderData
 
     Attributes:
-        conduction: Include conduction flux
-        convection: Include convection flux
-        gravitational_separation: Include gravitational separation flux
-        mixing: Include mixing flux
-        radionuclides: Include radionuclides
-        tidal: Include tidal heating
-        phase_basic: Phase properties at the basic nodes
-        phase_staggered: Phase properties at the staggered nodes
+        basic: State at the basic nodes
+        staggered: State at the staggered nodes
         conductive_heat_flux: Conductive heat flux at the basic nodes
         convective_heat_flux: Convective heat flux at the basic nodes
         critical_reynolds_number: Critical Reynolds number
-        dTdr: Temperature gradient with respect to radius at the basic nodes
+        dTdr: Temperature gradient at the basic nodes with respect to radius
         eddy_diffusivity: Eddy diffusivity at the basic nodes
-        gravitational_separation: Gravitational separation at the basic nodes
+        gravitational_separation_flux: Gravitational separation flux at the basic nodes
         heating: Heat generation at the staggered nodes
         heat_flux: Heat flux at the basic nodes
-        inviscid_regime: Array with True if the flow is inviscid and otherwise False
-        inviscid_velocity: Inviscid velocity
-        is_convective: Array with True if the flow is convecting and otherwise False
-        mixing: Mixing heat flux at the basic nodes
-        reynolds_number: Reynolds number
-        super_adiabatic_temperature_gradient: Super adiabatic temperature gradient
+        inviscid_regime: True if the flow is inviscid and otherwise False, at the basic nodes
+        inviscid_velocity: Inviscid velocity at the basic nodes
+        is_convective: True if the flow is convecting and otherwise False, at the basic nodes
+        reynolds_number: Reynolds number at the basic nodes
+        super_adiabatic_temperature_gradient: Super adiabatic temperature gradient at the basic nod
         temperature_basic: Temperature at the basic nodes
+        temperature_staggered: Temperature at the staggered nodes
         bottom_temperature: Temperature at the bottom basic node
         top_temperature: Temperature at the top basic node
-        viscous_regime: Array with True if the flow is viscous and otherwise False
-        viscous_velocity: Viscous velocity
+        viscous_regime: True if the flow is viscous and otherwise False, at the basic nodes
+        viscous_velocity: Viscous velocity at the basic nodes
     """
 
     data: SpiderData
-    phase_basic: PhaseStateBasic = field(init=False)
-    phase_staggered: PhaseStateStaggered = field(init=False)
+    basic: PhaseStateBasic = field(init=False)
+    staggered: PhaseStateStaggered = field(init=False)
     _dTdr: np.ndarray = field(init=False)
     _eddy_diffusivity: np.ndarray = field(init=False)
     _heat_flux: np.ndarray = field(init=False)
@@ -87,6 +165,7 @@ class State:
     _reynolds_number: np.ndarray = field(init=False)
     _super_adiabatic_temperature_gradient: np.ndarray = field(init=False)
     _temperature_basic: np.ndarray = field(init=False)
+    _temperature_staggered: np.ndarray = field(init=False)
     _viscous_velocity: np.ndarray = field(init=False)
     _inviscid_velocity: np.ndarray = field(init=False)
 
@@ -94,11 +173,14 @@ class State:
         self.phase_basic = PhaseStateBasic(self.data.phase)
         self.phase_staggered = PhaseStateStaggered(self.data.phase)
 
+    @property
     def conductive_heat_flux(self) -> np.ndarray:
         """Conductive heat flux"""
         conductive_heat_flux: np.ndarray = -self.phase_basic.thermal_conductivity * self._dTdr
+
         return conductive_heat_flux
 
+    @property
     def convective_heat_flux(self) -> np.ndarray:
         """Convective heat flux"""
         convective_heat_flux: np.ndarray = (
@@ -107,6 +189,7 @@ class State:
             * self._eddy_diffusivity
             * self._super_adiabatic_temperature_gradient
         )
+
         return convective_heat_flux
 
     def radiogenic_heating(self, time: np.ndarray | float) -> np.ndarray | float:
@@ -142,6 +225,7 @@ class State:
     def eddy_diffusivity(self) -> np.ndarray:
         return self._eddy_diffusivity
 
+    @property
     def gravitational_separation_flux(self) -> np.ndarray:
         """Gravitational separation"""
         raise NotImplementedError
@@ -174,6 +258,7 @@ class State:
     def is_convective(self) -> np.ndarray:
         return self._is_convective
 
+    @property
     def mixing_flux(self) -> np.ndarray:
         """Mixing heat flux"""
         raise NotImplementedError
@@ -191,6 +276,10 @@ class State:
         return self._temperature_basic
 
     @property
+    def temperature_staggered(self) -> np.ndarray:
+        return self._temperature_staggered
+
+    @property
     def top_temperature(self) -> np.ndarray:
         return self._temperature_basic[-1, :]
 
@@ -206,24 +295,6 @@ class State:
     def viscous_velocity(self) -> np.ndarray:
         return self._viscous_velocity
 
-    def _set_temperature(self, temperature: np.ndarray) -> None:
-        """Sets the temperature at the basic nodes
-
-        This also ensures that the temperature profile adheres to any imposed thermal boundary
-        conditions at the top or bottom surfaces.
-
-        Args:
-            temperature: Temperature at the staggered nodes
-        """
-        logger.debug("Setting the temperature profile")
-        self._temperature_basic = self.data.mesh.quantity_at_basic_nodes(temperature)
-        self._dTdr = self.data.mesh.d_dr_at_basic_nodes(temperature)
-        self.data.boundary_conditions.conform_temperature_boundary_conditions(
-            temperature, self._temperature_basic, self._dTdr
-        )
-        logger.debug("_temperature_basic = %s", self._temperature_basic)
-        logger.debug("_dTdr = %s", self._dTdr)
-
     def update(self, temperature: np.ndarray, time: np.ndarray | float) -> None:
         """Updates the state.
 
@@ -235,7 +306,17 @@ class State:
             time: Time
         """
         logger.debug("Updating the state")
-        self._set_temperature(temperature)
+
+        logger.debug("Setting the temperature profile")
+        self._temperature_staggered = temperature
+        self._temperature_basic = self.data.mesh.quantity_at_basic_nodes(temperature)
+        logger.debug("temperature_basic = %s", self.temperature_basic)
+        self._dTdr = self.data.mesh.d_dr_at_basic_nodes(temperature)
+        logger.debug("dTdr = %s", self.dTdr)
+        self.data.boundary_conditions.conform_temperature_boundary_conditions(
+            temperature, self._temperature_basic, self._dTdr
+        )
+
         self.phase_staggered.update(temperature, self.data.mesh.staggered.eos.pressure)
         self.phase_basic.update(self._temperature_basic, self.data.mesh.basic.eos.pressure)
         self._super_adiabatic_temperature_gradient = self._dTdr - self.phase_basic.dTdrs
@@ -271,21 +352,17 @@ class State:
         self._eddy_diffusivity *= self.data.mesh.basic.mixing_length
         logger.debug("Before evaluating heat flux")
         # Heat flux
-        # FIXME: try and remove zeros_like
-        self._heat_flux = 0  # np.zeros_like(self.temperature_basic)
+        self._heat_flux = np.zeros_like(self.temperature_basic)
         if self.data.parameters.energy.conduction:
-            self._heat_flux += self.conductive_heat_flux()
-            logger.debug("heat_flux.shape = %s", self._heat_flux.shape)
+            self._heat_flux += self.conductive_heat_flux
         if self.data.parameters.energy.convection:
-            self._heat_flux += self.convective_heat_flux()
-            logger.debug("heat_flux.shape = %s", self._heat_flux.shape)
+            self._heat_flux += self.convective_heat_flux
         if self.data.parameters.energy.gravitational_separation:
-            self._heat_flux += self.gravitational_separation_flux()
+            self._heat_flux += self.gravitational_separation_flux
         if self.data.parameters.energy.mixing:
-            self._heat_flux += self.mixing_flux()
+            self._heat_flux += self.mixing_flux
         # Heating
-        # FIXME: try and remove zeros_like
-        self._heating = 0  # np.zeros_like(temperature)
+        self._heating = np.zeros_like(self.temperature_staggered)
         if self.data.parameters.energy.radionuclides:
             self._heating += self.radiogenic_heating(time)
 
