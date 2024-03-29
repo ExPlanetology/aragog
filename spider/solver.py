@@ -29,10 +29,9 @@ from scipy.optimize import OptimizeResult
 from spider.core import SpiderData
 from spider.parser import Parameters
 from spider.phase import PhaseEvaluatorProtocol
+from spider.utilities import FloatOrArray
 
 logger: logging.Logger = logging.getLogger(__name__)
-
-FloatOrArray = np.ndarray | float
 
 
 @dataclass

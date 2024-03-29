@@ -33,9 +33,9 @@ from spider.parser import (
 )
 from spider.phase import (
     CompositePhaseEvaluator,
+    MixedPhaseEvaluator,
     PhaseEvaluatorProtocol,
     SinglePhaseEvaluator,
-    _MixedPhaseEvaluator,
 )
 
 if TYPE_CHECKING:
@@ -228,7 +228,7 @@ class SpiderData:
     mesh: Mesh = field(init=False)
     _solid: PhaseEvaluatorProtocol = field(init=False)
     _liquid: PhaseEvaluatorProtocol = field(init=False)
-    _mixed: _MixedPhaseEvaluator = field(init=False)
+    _mixed: MixedPhaseEvaluator = field(init=False)
     _composite: PhaseEvaluatorProtocol = field(init=False)
     phase: PhaseEvaluatorProtocol = field(init=False)
 
@@ -238,7 +238,7 @@ class SpiderData:
         self.initial_condition = InitialCondition(self.parameters, self.mesh)
         self._solid = SinglePhaseEvaluator(self.parameters.phase_solid, self.parameters.mesh)
         self._liquid = SinglePhaseEvaluator(self.parameters.phase_liquid, self.parameters.mesh)
-        self._mixed = _MixedPhaseEvaluator(self.parameters.phase_mixed, self._solid, self._liquid)
+        self._mixed = MixedPhaseEvaluator(self.parameters.phase_mixed, self._solid, self._liquid)
         self._composite = CompositePhaseEvaluator(self._solid, self._liquid, self._mixed)
 
         phase: str = self.parameters.phase_mixed.phase
