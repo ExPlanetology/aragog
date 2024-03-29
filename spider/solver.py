@@ -43,6 +43,7 @@ class PhaseStateStaggered:
         phase_evaluator: A PhaseEvaluatorProtocol
 
     Attributes:
+        phase_evaluator: A PhaseEvaluatorProtocol
         capacitance: Thermal capacitance
         density: Density
         heat_capacity: Heat capacity
@@ -74,6 +75,7 @@ class PhaseStateBasic:
         phase_evaluator: A PhaseEvaluatorProtocol
 
     Attributes:
+        phase_evaluator: A PhaseEvaluatorProtocol
         density: Density
         dTdrs: Adiabatic temperature gradient with respect to radius
         gravitational_acceleration: Gravitational acceleration
@@ -87,7 +89,7 @@ class PhaseStateBasic:
     phase_evaluator: PhaseEvaluatorProtocol
     density: FloatOrArray = field(init=False)
     dTdrs: np.ndarray = field(init=False)
-    gravitational_acceleration: float = field(init=False)
+    gravitational_acceleration: FloatOrArray = field(init=False)
     heat_capacity: FloatOrArray = field(init=False)
     kinematic_viscosity: FloatOrArray = field(init=False)
     thermal_conductivity: FloatOrArray = field(init=False)
@@ -436,20 +438,20 @@ class SpiderSolver:
             dT/dt at the staggered nodes
         """
         logger.debug("temperature passed into dTdt = %s", temperature)
-        logger.debug("temperature.shape = %s", temperature.shape)
+        # logger.debug("temperature.shape = %s", temperature.shape)
         self.state.update(temperature, time)
         heat_flux: np.ndarray = self.state.heat_flux
-        logger.debug("heat_flux = %s", heat_flux)
+        # logger.debug("heat_flux = %s", heat_flux)
         self.data.boundary_conditions.apply(self.state)
-        logger.debug("heat_flux = %s", heat_flux)
-        logger.debug("mesh.basic.area.shape = %s", self.data.mesh.basic.area.shape)
+        # logger.debug("heat_flux = %s", heat_flux)
+        # logger.debug("mesh.basic.area.shape = %s", self.data.mesh.basic.area.shape)
 
         energy_flux: np.ndarray = heat_flux * self.data.mesh.basic.area
-        logger.debug("energy_flux size = %s", energy_flux.shape)
+        # logger.debug("energy_flux size = %s", energy_flux.shape)
 
         delta_energy_flux: np.ndarray = np.diff(energy_flux, axis=0)
-        logger.debug("delta_energy_flux size = %s", delta_energy_flux.shape)
-        logger.debug("capacitance = %s", self.state.phase_staggered.capacitance.shape)
+        # logger.debug("delta_energy_flux size = %s", delta_energy_flux.shape)
+        # logger.debug("capacitance = %s", self.state.phase_staggered.capacitance.shape)
         capacitance: np.ndarray = (
             self.state.phase_staggered.capacitance * self.data.mesh.basic.volume
         )
