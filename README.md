@@ -1,4 +1,4 @@
-# SPIDER
+# Spider
 **Simulating Planetary Interior Dynamics with Extreme Rheology**
 
 ## Under development
