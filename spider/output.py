@@ -92,7 +92,7 @@ class Output:
     def liquidus_K_staggered(self) -> np.ndarray:
         """Liquidus"""
         return (
-            self.data.phase.liquidus(self.solution.y, self.data.mesh.staggered.eos.pressure)
+            self.data.mixed.liquidus(self.solution.y, self.data.mesh.staggered.eos.pressure)
             * self.data.parameters.scalings.temperature
         )
 
@@ -124,7 +124,7 @@ class Output:
     def solidus_K_staggered(self) -> np.ndarray:
         """Solidus"""
         return (
-            self.data.phase.solidus(self.solution.y, self.data.mesh.staggered.eos.pressure)
+            self.data.mixed.solidus(self.solution.y, self.data.mesh.staggered.eos.pressure)
             * self.data.parameters.scalings.temperature
         )
 

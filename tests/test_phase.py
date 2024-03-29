@@ -16,8 +16,6 @@
 #
 """Tests phases"""
 
-# For testing we access some private members, so pylint: disable=W0212
-
 from __future__ import annotations
 
 import logging
@@ -49,7 +47,7 @@ def test_liquid_constant_properties():
 
     solver: SpiderSolver = SpiderSolver("abe_mixed.cfg", CFG_TEST_DATA)
     solver.initialize()
-    phase: PhaseEvaluatorProtocol = solver.data._liquid
+    phase: PhaseEvaluatorProtocol = solver.data.liquid
 
     temperature_scaled = temperature / solver.parameters.scalings.temperature
     pressure_scaled = pressure / solver.parameters.scalings.pressure
@@ -79,7 +77,7 @@ def test_solid_constant_properties():
 
     solver: SpiderSolver = SpiderSolver("abe_mixed.cfg", CFG_TEST_DATA)
     solver.initialize()
-    phase: PhaseEvaluatorProtocol = solver.data._solid
+    phase: PhaseEvaluatorProtocol = solver.data.solid
 
     temperature_scaled = temperature / solver.parameters.scalings.temperature
     pressure_scaled = pressure / solver.parameters.scalings.pressure
@@ -109,7 +107,7 @@ def test_lookup_property_1D():
 
     solver: SpiderSolver = SpiderSolver("abe_mixed_lookup.cfg", CFG_TEST_DATA)
     solver.initialize()
-    phase: PhaseEvaluatorProtocol = solver.data._mixed
+    phase: PhaseEvaluatorProtocol = solver.data.mixed
 
     temperature_scaled = temperature / solver.parameters.scalings.temperature
     pressure_scaled = pressure / solver.parameters.scalings.pressure
@@ -128,7 +126,7 @@ def test_lookup_property_2D():
 
     solver: SpiderSolver = SpiderSolver("abe_mixed_lookup.cfg", CFG_TEST_DATA)
     solver.initialize()
-    phase: PhaseEvaluatorProtocol = solver.data._liquid
+    phase: PhaseEvaluatorProtocol = solver.data.liquid
 
     temperature_: np.ndarray = np.array([1000, 1500, 2500, 2500, 2500])
     pressure_: np.ndarray = np.array([0, 1.4e11, 0, 1.4e11, 0.7e11])
@@ -146,7 +144,7 @@ def test_mixed_density():
 
     solver: SpiderSolver = SpiderSolver("abe_mixed.cfg", CFG_TEST_DATA)
     solver.initialize()
-    phase: PhaseEvaluatorProtocol = solver.data._mixed
+    phase: PhaseEvaluatorProtocol = solver.data.mixed
 
     # Chosen to be the melting curve, i.e. 50% melt fraction
     temperature_: np.ndarray = np.array([1590.3869054958254, 4521.708837963126]).reshape(-1, 1)
