@@ -55,7 +55,7 @@ class Output:
     @property
     def convective_heat_flux_basic(self) -> np.ndarray:
         """Convective heat flux"""
-        return self.state.convective_heat_flux() * self.data.parameters.scalings.heat_flux
+        return self.state.convective_heat_flux * self.data.parameters.scalings.heat_flux
 
     @property
     def density_basic(self) -> np.ndarray:

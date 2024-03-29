@@ -37,6 +37,8 @@ else:
 
 logger: logging.Logger = logging.getLogger(__name__)
 
+FloatOrArray = np.ndarray | float
+
 
 @dataclass
 class PropertyABC(ABC):
@@ -52,7 +54,7 @@ class PropertyABC(ABC):
     name: str
 
     @abstractmethod
-    def _get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray | float:
+    def _get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> FloatOrArray:
         """Computes the property value at temperature and pressure.
 
         Args:
@@ -63,8 +65,7 @@ class PropertyABC(ABC):
             The property value evaluated at temperature and pressure.
         """
 
-    def __call__(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray | float:
-        """Returns an array with the same shape as pressure"""
+    def __call__(self, temperature: np.ndarray, pressure: np.ndarray) -> FloatOrArray:
         return self._get_value(temperature, pressure)
 
 
@@ -120,8 +121,8 @@ class LookupProperty1D(PropertyABC):
     def _get_value(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
         """See base class."""
         del temperature
-        # TODO: Must return a 1-D array for liquidus and solidus
-        return self._lookup(pressure).reshape(-1, 1)
+
+        return self._lookup(pressure).reshape(-1, 1)  # 2-D
 
 
 @dataclass(kw_only=True)
@@ -169,33 +170,31 @@ class PhaseEvaluatorProtocol(Protocol):
     E1111.
     """
 
-    def density(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray | float:
+    def density(self, temperature: np.ndarray, pressure: np.ndarray) -> FloatOrArray:
         raise NotImplementedError()
 
     def dTdPs(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
         raise NotImplementedError()
 
-    def gravitational_acceleration(self, temperature: np.ndarray, pressure: np.ndarray) -> float:
+    def gravitational_acceleration(
+        self, temperature: np.ndarray, pressure: np.ndarray
+    ) -> FloatOrArray:
         """To compute dT/dr at constant entropy."""
         raise NotImplementedError()
 
-    def heat_capacity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray | float:
+    def heat_capacity(self, temperature: np.ndarray, pressure: np.ndarray) -> FloatOrArray:
         raise NotImplementedError()
 
-    def melt_fraction(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray | float:
+    def melt_fraction(self, temperature: np.ndarray, pressure: np.ndarray) -> FloatOrArray:
         raise NotImplementedError()
 
-    def thermal_conductivity(
-        self, temperature: np.ndarray, pressure: np.ndarray
-    ) -> np.ndarray | float:
+    def thermal_conductivity(self, temperature: np.ndarray, pressure: np.ndarray) -> FloatOrArray:
         raise NotImplementedError()
 
-    def thermal_expansivity(
-        self, temperature: np.ndarray, pressure: np.ndarray
-    ) -> np.ndarray | float:
+    def thermal_expansivity(self, temperature: np.ndarray, pressure: np.ndarray) -> FloatOrArray:
         raise NotImplementedError()
 
-    def viscosity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray | float:
+    def viscosity(self, temperature: np.ndarray, pressure: np.ndarray) -> FloatOrArray:
         raise NotImplementedError()
 
 
