@@ -204,7 +204,7 @@ class InitialCondition:
 # TODO: Rename below to something more like SpiderFunctions
 @dataclass
 class SpiderData:
-    """Container for the objects necessary to compute the interior evolution.
+    """Contains for the objects necessary to compute the interior evolution.
 
     This parsers the sections of the configuration data and instantiates the objects.
 
@@ -217,8 +217,11 @@ class SpiderData:
         boundary_conditions: Boundary conditions
         initial_condition: Initial condition
         mesh: Mesh
-        phases: Phases
-        phase: Active phase for evaluation
+        solid: Solid phase evaluator
+        liquid: Liquid phase evaluator
+        mixed: Mixed phase evaluator
+        composite: Composite phase evaluator
+        phase: Active phase evaluator
         radionuclides: Radionuclides
     """
 
@@ -226,29 +229,29 @@ class SpiderData:
     boundary_conditions: BoundaryConditions = field(init=False)
     initial_condition: InitialCondition = field(init=False)
     mesh: Mesh = field(init=False)
-    _solid: PhaseEvaluatorProtocol = field(init=False)
-    _liquid: PhaseEvaluatorProtocol = field(init=False)
-    _mixed: MixedPhaseEvaluator = field(init=False)
-    _composite: PhaseEvaluatorProtocol = field(init=False)
+    solid: PhaseEvaluatorProtocol = field(init=False)
+    liquid: PhaseEvaluatorProtocol = field(init=False)
+    mixed: MixedPhaseEvaluator = field(init=False)
+    composite: PhaseEvaluatorProtocol = field(init=False)
     phase: PhaseEvaluatorProtocol = field(init=False)
 
     def __post_init__(self):
         self.mesh = Mesh(self.parameters)
         self.boundary_conditions = BoundaryConditions(self.parameters, self.mesh)
         self.initial_condition = InitialCondition(self.parameters, self.mesh)
-        self._solid = SinglePhaseEvaluator(self.parameters.phase_solid, self.parameters.mesh)
-        self._liquid = SinglePhaseEvaluator(self.parameters.phase_liquid, self.parameters.mesh)
-        self._mixed = MixedPhaseEvaluator(self.parameters.phase_mixed, self._solid, self._liquid)
-        self._composite = CompositePhaseEvaluator(self._solid, self._liquid, self._mixed)
+        self.solid = SinglePhaseEvaluator(self.parameters.phase_solid, self.parameters.mesh)
+        self.liquid = SinglePhaseEvaluator(self.parameters.phase_liquid, self.parameters.mesh)
+        self.mixed = MixedPhaseEvaluator(self.parameters.phase_mixed, self.solid, self.liquid)
+        self.composite = CompositePhaseEvaluator(self.solid, self.liquid, self.mixed)
 
         phase: str = self.parameters.phase_mixed.phase
 
         if phase == "liquid":
-            self.phase = self._liquid
+            self.phase = self.liquid
         elif phase == "solid":
-            self.phase = self._solid
+            self.phase = self.solid
         elif phase == "mixed":
-            self.phase = self._composite
+            self.phase = self.composite
 
     @property
     def radionuclides(self) -> list[_Radionuclide]:
