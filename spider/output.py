@@ -25,7 +25,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.optimize import OptimizeResult
 
-from spider.core import SpiderData
+from spider.solver import Evaluator
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -39,7 +39,7 @@ class Output:
     def __init__(self, solver: Solver):
         self.solver: Solver = solver
         self.solution: OptimizeResult = self.solver.solution
-        self.data: SpiderData = self.solver.data
+        self.data: Evaluator = self.solver.data
         self.state: State = self.solver.state
 
     @property

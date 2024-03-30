@@ -19,7 +19,7 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -29,13 +29,6 @@ from spider.parser import (
     Parameters,
     _BoundaryConditionsSettings,
     _InitialConditionSettings,
-    _Radionuclide,
-)
-from spider.phase import (
-    CompositePhaseEvaluator,
-    MixedPhaseEvaluator,
-    PhaseEvaluator,
-    SinglePhaseEvaluator,
 )
 
 if TYPE_CHECKING:
@@ -199,60 +192,3 @@ class InitialCondition:
             self._mesh.staggered.number_of_nodes,
         )
         return temperature
-
-
-# TODO: Rename below to something more like SpiderFunctions
-@dataclass
-class SpiderData:
-    """Contains for the objects necessary to compute the interior evolution.
-
-    This parsers the sections of the configuration data and instantiates the objects.
-
-    Args:
-        config_parser: A SpiderConfigParser
-
-    Attributes:
-        config_parser: A SpiderConfigParser
-        scalings: Scalings
-        boundary_conditions: Boundary conditions
-        initial_condition: Initial condition
-        mesh: Mesh
-        solid: Solid phase evaluator
-        liquid: Liquid phase evaluator
-        mixed: Mixed phase evaluator
-        composite: Composite phase evaluator
-        phase: Active phase evaluator
-        radionuclides: Radionuclides
-    """
-
-    parameters: Parameters
-    boundary_conditions: BoundaryConditions = field(init=False)
-    initial_condition: InitialCondition = field(init=False)
-    mesh: Mesh = field(init=False)
-    solid: PhaseEvaluator = field(init=False)
-    liquid: PhaseEvaluator = field(init=False)
-    mixed: MixedPhaseEvaluator = field(init=False)
-    composite: PhaseEvaluator = field(init=False)
-    phase: PhaseEvaluator = field(init=False)
-
-    def __post_init__(self):
-        self.mesh = Mesh(self.parameters)
-        self.boundary_conditions = BoundaryConditions(self.parameters, self.mesh)
-        self.initial_condition = InitialCondition(self.parameters, self.mesh)
-        self.solid = SinglePhaseEvaluator(self.parameters.phase_solid, self.parameters.mesh)
-        self.liquid = SinglePhaseEvaluator(self.parameters.phase_liquid, self.parameters.mesh)
-        self.mixed = MixedPhaseEvaluator(self.parameters.phase_mixed, self.solid, self.liquid)
-        self.composite = CompositePhaseEvaluator(self.solid, self.liquid, self.mixed)
-
-        phase: str = self.parameters.phase_mixed.phase
-
-        if phase == "liquid":
-            self.phase = self.liquid
-        elif phase == "solid":
-            self.phase = self.solid
-        elif phase == "mixed":
-            self.phase = self.composite
-
-    @property
-    def radionuclides(self) -> list[_Radionuclide]:
-        return self.parameters.radionuclides
