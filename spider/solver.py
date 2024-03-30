@@ -18,8 +18,9 @@
 
 from __future__ import annotations
 
+import copy
 import logging
-from dataclasses import dataclass, field
+from dataclasses import InitVar, dataclass, field
 from pathlib import Path
 
 import numpy as np
@@ -27,8 +28,9 @@ from scipy.integrate import solve_ivp
 from scipy.optimize import OptimizeResult
 
 from spider.core import SpiderData
+from spider.mesh import Mesh
 from spider.parser import Parameters
-from spider.phase import PhaseEvaluatorProtocol
+from spider.phase import PhaseEvaluator
 from spider.utilities import FloatOrArray
 
 logger: logging.Logger = logging.getLogger(__name__)
@@ -40,6 +42,7 @@ class PhaseStateStaggered:
 
     Args:
         phase_evaluator: A PhaseEvaluatorProtocol
+        mesh: Mesh
 
     Attributes:
         phase_evaluator: A PhaseEvaluatorProtocol
@@ -48,12 +51,16 @@ class PhaseStateStaggered:
         heat_capacity: Heat capacity
     """
 
-    phase_evaluator: PhaseEvaluatorProtocol
+    phase_evaluator: PhaseEvaluator
+    mesh: InitVar[Mesh]
     capacitance: FloatOrArray = field(init=False)
     density: FloatOrArray = field(init=False)
     heat_capacity: FloatOrArray = field(init=False)
 
-    def update(self, temperature: np.ndarray, pressure: np.ndarray) -> None:
+    def __post_init__(self, mesh: Mesh):
+        self.phase_evaluator.set_pressure(mesh.staggered.eos.pressure)
+
+    def update(self, temperature: np.ndarray) -> None:
         """Updates the state.
 
         Args:
@@ -61,8 +68,10 @@ class PhaseStateStaggered:
             pressure: Pressure at the staggered nodes
         """
         logger.debug("Updating the state of %s", self.__class__.__name__)
-        self.density = self.phase_evaluator.density(temperature, pressure)
-        self.heat_capacity = self.phase_evaluator.heat_capacity(temperature, pressure)
+        self.phase_evaluator.set_temperature(temperature)
+        self.phase_evaluator.update()
+        self.density = self.phase_evaluator.density()
+        self.heat_capacity = self.phase_evaluator.heat_capacity()
         # FIXME: Update capacitance for mixed phase (enthalpy of fusion contribution)
         self.capacitance = self.density * self.heat_capacity
 
@@ -72,10 +81,11 @@ class PhaseStateBasic:
     """Stores the state (material properties) at the basic nodes.
 
     Args:
-        phase_evaluator: A PhaseEvaluatorProtocol
+        phase_evaluator: A PhaseEvaluator
+        mesh: Mesh
 
     Attributes:
-        phase_evaluator: A PhaseEvaluatorProtocol
+        phase_evaluator: A PhaseEvaluator
         density: Density
         dTdrs: Adiabatic temperature gradient with respect to radius
         gravitational_acceleration: Gravitational acceleration
@@ -86,7 +96,8 @@ class PhaseStateBasic:
         viscosity: Dynamic viscosity
     """
 
-    phase_evaluator: PhaseEvaluatorProtocol
+    phase_evaluator: PhaseEvaluator
+    mesh: InitVar[Mesh]
     density: FloatOrArray = field(init=False)
     dTdrs: np.ndarray = field(init=False)
     gravitational_acceleration: FloatOrArray = field(init=False)
@@ -96,23 +107,24 @@ class PhaseStateBasic:
     thermal_expansivity: FloatOrArray = field(init=False)
     viscosity: FloatOrArray = field(init=False)
 
-    def update(self, temperature: np.ndarray, pressure: np.ndarray) -> None:
+    def __post_init__(self, mesh: Mesh):
+        self.phase_evaluator.set_pressure(mesh.basic.eos.pressure)
+
+    def update(self, temperature: np.ndarray) -> None:
         """Updates the state.
 
         Args:
             temperature: Temperature at the basic nodes
             pressure: Pressure at the basic nodes
         """
-        self.density = self.phase_evaluator.density(temperature, pressure)
-        self.gravitational_acceleration = self.phase_evaluator.gravitational_acceleration(
-            temperature, pressure
-        )
-        self.heat_capacity = self.phase_evaluator.heat_capacity(temperature, pressure)
-        self.thermal_conductivity = self.phase_evaluator.thermal_conductivity(
-            temperature, pressure
-        )
-        self.thermal_expansivity = self.phase_evaluator.thermal_expansivity(temperature, pressure)
-        self.viscosity = self.phase_evaluator.viscosity(temperature, pressure)
+        self.phase_evaluator.set_temperature(temperature)
+        self.phase_evaluator.update()
+        self.density = self.phase_evaluator.density()
+        self.gravitational_acceleration = self.phase_evaluator.gravitational_acceleration()
+        self.heat_capacity = self.phase_evaluator.heat_capacity()
+        self.thermal_conductivity = self.phase_evaluator.thermal_conductivity()
+        self.thermal_expansivity = self.phase_evaluator.thermal_expansivity()
+        self.viscosity = self.phase_evaluator.viscosity()
         self.dTdrs = (
             -self.gravitational_acceleration
             * self.thermal_expansivity
@@ -172,8 +184,8 @@ class State:
     _inviscid_velocity: np.ndarray = field(init=False)
 
     def __post_init__(self):
-        self.phase_basic = PhaseStateBasic(self.data.phase)
-        self.phase_staggered = PhaseStateStaggered(self.data.phase)
+        self.phase_basic = PhaseStateBasic(copy.deepcopy(self.data.phase), self.data.mesh)
+        self.phase_staggered = PhaseStateStaggered(copy.deepcopy(self.data.phase), self.data.mesh)
 
     @property
     def conductive_heat_flux(self) -> np.ndarray:
@@ -319,8 +331,11 @@ class State:
             temperature, self._temperature_basic, self._dTdr
         )
 
-        self.phase_staggered.update(temperature, self.data.mesh.staggered.eos.pressure)
-        self.phase_basic.update(self._temperature_basic, self.data.mesh.basic.eos.pressure)
+        logger.warning("STAGGERED TEMP = %s", temperature.shape)
+        self.phase_staggered.update(temperature)
+        logger.warning("BASIC TEMP = %s", self._temperature_basic.shape)
+        self.phase_basic.update(self._temperature_basic)
+
         self._super_adiabatic_temperature_gradient = self._dTdr - self.phase_basic.dTdrs
         self._is_convective = self._super_adiabatic_temperature_gradient < 0
         velocity_prefactor: np.ndarray = (

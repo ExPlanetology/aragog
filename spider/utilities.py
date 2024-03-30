@@ -101,7 +101,7 @@ def tanh_weight(value: FloatOrArray, threshold: float, width: float) -> np.ndarr
     return weight
 
 
-def combine_properties(weight, property1: MultiplyT, property2: MultiplyT) -> MultiplyT:
+def combine_properties(weight, property1, property2):
     """Linear weighting of two quantities.
 
     Args:
@@ -112,6 +112,6 @@ def combine_properties(weight, property1: MultiplyT, property2: MultiplyT) -> Mu
     Returns:
         The combined (weighted) property
     """
-    out: MultiplyT = weight * property1 + (1.0 - weight) * property2
+    out = weight * property1 + (1.0 - weight) * property2
 
     return out
