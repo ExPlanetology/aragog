@@ -80,10 +80,16 @@ class LookupProperty1D(PropertyProtocol):
     _: KW_ONLY
     value: np.ndarray
     ndim: int = field(init=False, default=1)
+    _gradient: np.ndarray = field(init=False)
 
     def __post_init__(self):
         # Sort the data to ensure x is increasing
         self.value = self.value[self.value[:, 0].argsort()]
+        self._gradient = np.gradient(self.value[:, 1], self.value[:, 0])
+
+    def gradient(self, pressure: np.ndarray) -> np.ndarray:
+        """Computes the gradient"""
+        return np.interp(pressure, self.value[:, 0], self._gradient)
 
     def __call__(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
         del temperature
