@@ -94,16 +94,14 @@ class State:
 
         return capacitance
 
-    @property
     def conductive_heat_flux(self) -> np.ndarray:
         """Conductive heat flux"""
         conductive_heat_flux: np.ndarray = (
-            -self.evaluator.phase_basic.thermal_conductivity() * self._dTdr
+            -self.evaluator.phase_basic.thermal_conductivity() * self.dTdr()
         )
 
         return conductive_heat_flux
 
-    @property
     def convective_heat_flux(self) -> np.ndarray:
         """Convective heat flux"""
         convective_heat_flux: np.ndarray = (
@@ -140,7 +138,6 @@ class State:
         """Critical Reynolds number from Abe (1993)"""
         return 9 / 8
 
-    @property
     def dTdr(self) -> np.ndarray:
         return self._dTdr
 
@@ -237,7 +234,7 @@ class State:
         self._dTdr = self.evaluator.mesh.d_dr_at_basic_nodes(temperature)
         logger.debug("dTdr = %s", self.dTdr)
         self.evaluator.boundary_conditions.conform_temperature_boundary_conditions(
-            temperature, self._temperature_basic, self._dTdr
+            temperature, self._temperature_basic, self.dTdr()
         )
 
         self.evaluator.phase_staggered.set_temperature(temperature)
@@ -246,7 +243,7 @@ class State:
         self.evaluator.phase_basic.update()
 
         self._super_adiabatic_temperature_gradient = (
-            self._dTdr - self.evaluator.phase_basic.dTdrs()
+            self.dTdr() - self.evaluator.phase_basic.dTdrs()
         )
         self._is_convective = self._super_adiabatic_temperature_gradient < 0
         velocity_prefactor: np.ndarray = (
@@ -282,9 +279,9 @@ class State:
         # Heat flux
         self._heat_flux = np.zeros_like(self.temperature_basic)
         if self.evaluator.parameters.energy.conduction:
-            self._heat_flux += self.conductive_heat_flux
+            self._heat_flux += self.conductive_heat_flux()
         if self.evaluator.parameters.energy.convection:
-            self._heat_flux += self.convective_heat_flux
+            self._heat_flux += self.convective_heat_flux()
         if self.evaluator.parameters.energy.gravitational_separation:
             self._heat_flux += self.gravitational_separation_flux
         if self.evaluator.parameters.energy.mixing:
@@ -347,7 +344,7 @@ class Evaluator:
             )
             phase = CompositePhaseEvaluator(solid, liquid, mixed)
 
-        # Set the pressure since this will not change during a model run
+        # Set the pressure since this will not change during a model run.
         self.phase_basic = copy.deepcopy(phase)
         self.phase_basic.set_pressure(self.mesh.basic.eos.pressure)
         self.phase_staggered = copy.deepcopy(phase)
