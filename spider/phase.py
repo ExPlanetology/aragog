@@ -22,7 +22,7 @@ import logging
 from dataclasses import KW_ONLY, Field, dataclass, field, fields
 
 import numpy as np
-from scipy.interpolate import RectBivariateSpline, interp1d
+from scipy.interpolate import RectBivariateSpline
 
 from spider.interfaces import PhaseEvaluatorProtocol, PropertyProtocol
 from spider.parser import _MeshSettings, _PhaseMixedSettings, _PhaseSettings
@@ -80,17 +80,15 @@ class LookupProperty1D(PropertyProtocol):
     _: KW_ONLY
     value: np.ndarray
     ndim: int = field(init=False, default=1)
-    _lookup: interp1d = field(init=False)
 
     def __post_init__(self):
         # Sort the data to ensure x is increasing
-        data: np.ndarray = self.value[self.value[:, 0].argsort()]
-        self._lookup = interp1d(data[:, 0], data[:, 1])
+        self.value = self.value[self.value[:, 0].argsort()]
 
     def __call__(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
         del temperature
         # TODO: Will this break?  Assumes always one column
-        return self._lookup(pressure).reshape(-1, 1)  # 2-D
+        return np.interp(pressure, self.value[:, 0], self.value[:, 1]).reshape(-1, 1)
 
 
 @dataclass
