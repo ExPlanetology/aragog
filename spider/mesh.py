@@ -177,7 +177,6 @@ class Mesh:
         self.settings: _MeshSettings = self._parameters.mesh
         basic_coordinates: np.ndarray = self.get_constant_spacing()
         self.basic: FixedMesh = FixedMesh(self.settings, basic_coordinates)
-        logger.warning(self.basic)
         staggered_coordinates: np.ndarray = self.basic.radii[:-1] + 0.5 * self.basic.delta_radii
         self.staggered: FixedMesh = FixedMesh(
             self.settings,
@@ -377,12 +376,14 @@ class AdamsWilliamsonEOS:
             )
             - 1
         )
+        logger.debug("eos pressure = %s", pressure)
 
         return pressure
 
     @cached_property
     def pressure_gradient(self) -> np.ndarray:
         dPdr: np.ndarray = -self.settings.gravitational_acceleration * self.density
+        logger.debug("eos dPdr = %s", dPdr)
 
         return dPdr
 
