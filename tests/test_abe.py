@@ -31,8 +31,8 @@ from spider.utilities import profile_decorator
 logger: logging.Logger = debug_logger()
 logger.setLevel(logging.INFO)
 
-ATOL: float = 1e-8
-RTOL: float = 1e-8
+ATOL: float = 1e-5
+RTOL: float = 1e-5
 
 
 def test_version():

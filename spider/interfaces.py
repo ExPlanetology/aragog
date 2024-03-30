@@ -17,6 +17,7 @@
 """Interfaces"""
 
 import logging
+from abc import ABC, abstractmethod
 from typing import Protocol
 
 import numpy as np
@@ -29,34 +30,53 @@ logger: logging.Logger = logging.getLogger(__name__)
 class PropertyProtocol(Protocol):
     """Property protocol"""
 
+    def eval(self, *args) -> FloatOrArray: ...
+
     def __call__(self, temperature: np.ndarray, pressure: np.ndarray) -> FloatOrArray: ...
 
 
-class PhaseEvaluatorProtocol(Protocol):
-    """Phase evaluator protocol"""
+class PhaseEvaluator(ABC):
+    """Phase evaluator"""
 
-    def density(self, temperature: np.ndarray, pressure: np.ndarray) -> FloatOrArray:
-        raise NotImplementedError
+    temperature: np.ndarray
+    pressure: np.ndarray
 
-    def dTdPs(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-        raise NotImplementedError
+    def set_temperature(self, temperature: np.ndarray) -> None:
+        """Sets the temperature."""
+        self.temperature = temperature
 
-    def gravitational_acceleration(
-        self, temperature: np.ndarray, pressure: np.ndarray
-    ) -> FloatOrArray:
-        raise NotImplementedError
+    def set_pressure(self, pressure: np.ndarray) -> None:
+        """Sets the pressure."""
+        self.pressure = pressure
 
-    def heat_capacity(self, temperature: np.ndarray, pressure: np.ndarray) -> FloatOrArray:
-        raise NotImplementedError
+    def update(self) -> None:
+        """Precompute quantities to avoid duplicate calculations"""
 
-    def melt_fraction(self, temperature: np.ndarray, pressure: np.ndarray) -> FloatOrArray:
-        raise NotImplementedError
+    def dTdPs(self) -> np.ndarray:
+        """TODO: Update reference to sphinx: Solomatov (2007), Treatise on Geophysics, Eq. 3.2"""
+        dTdPs: np.ndarray = (
+            self.thermal_expansivity() * self.temperature / (self.density() * self.heat_capacity())
+        )
 
-    def thermal_conductivity(self, temperature: np.ndarray, pressure: np.ndarray) -> FloatOrArray:
-        raise NotImplementedError
+        return dTdPs
 
-    def thermal_expansivity(self, temperature: np.ndarray, pressure: np.ndarray) -> FloatOrArray:
-        raise NotImplementedError
+    @abstractmethod
+    def density(self) -> FloatOrArray: ...
 
-    def viscosity(self, temperature: np.ndarray, pressure: np.ndarray) -> FloatOrArray:
-        raise NotImplementedError
+    @abstractmethod
+    def gravitational_acceleration(self) -> FloatOrArray: ...
+
+    @abstractmethod
+    def heat_capacity(self) -> FloatOrArray: ...
+
+    @abstractmethod
+    def melt_fraction(self) -> FloatOrArray: ...
+
+    @abstractmethod
+    def thermal_conductivity(self) -> FloatOrArray: ...
+
+    @abstractmethod
+    def thermal_expansivity(self) -> FloatOrArray: ...
+
+    @abstractmethod
+    def viscosity(self) -> FloatOrArray: ...
