@@ -47,7 +47,7 @@ def test_liquid_constant_properties():
 
     solver: Solver = Solver("abe_mixed.cfg", CFG_TEST_DATA)
     solver.initialize()
-    phase: PhaseEvaluator = solver.data.liquid
+    phase: PhaseEvaluator = solver.evaluator.liquid
 
     temperature_scaled = temperature / solver.parameters.scalings.temperature
     pressure_scaled = pressure / solver.parameters.scalings.pressure
@@ -77,7 +77,7 @@ def test_solid_constant_properties():
 
     solver: Solver = Solver("abe_mixed.cfg", CFG_TEST_DATA)
     solver.initialize()
-    phase: PhaseEvaluator = solver.data.solid
+    phase: PhaseEvaluator = solver.evaluator.solid
 
     temperature_scaled = temperature / solver.parameters.scalings.temperature
     pressure_scaled = pressure / solver.parameters.scalings.pressure
@@ -107,7 +107,7 @@ def test_lookup_property_1D():
 
     solver: Solver = Solver("abe_mixed_lookup.cfg", CFG_TEST_DATA)
     solver.initialize()
-    phase: PhaseEvaluator = solver.data.mixed
+    phase: PhaseEvaluator = solver.evaluator.mixed
 
     temperature_scaled = temperature / solver.parameters.scalings.temperature
     pressure_scaled = pressure / solver.parameters.scalings.pressure
@@ -130,7 +130,7 @@ def test_lookup_property_2D():
 
     solver: Solver = Solver("abe_mixed_lookup.cfg", CFG_TEST_DATA)
     solver.initialize()
-    phase: PhaseEvaluator = solver.data.liquid
+    phase: PhaseEvaluator = solver.evaluator.liquid
 
     temperature_: np.ndarray = np.array([1000, 1500, 2500, 2500, 2500])
     pressure_: np.ndarray = np.array([0, 1.4e11, 0, 1.4e11, 0.7e11])
@@ -152,7 +152,7 @@ def test_mixed_density():
 
     solver: Solver = Solver("abe_mixed.cfg", CFG_TEST_DATA)
     solver.initialize()
-    phase: PhaseEvaluator = solver.data.mixed
+    phase: PhaseEvaluator = solver.evaluator.mixed
 
     # Chosen to be the melting curve, i.e. 50% melt fraction
     temperature_: np.ndarray = np.array([1590.3869054958254, 4521.708837963126]).reshape(-1, 1)

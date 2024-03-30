@@ -394,7 +394,7 @@ class _SolverSettings:
 
 @dataclass(kw_only=True)
 class Parameters:
-    """Assembles all the settings.
+    """Assembles all the parameters.
 
     The settings from each section are scaled here to ensure that all the settings are scaled
     (non-dimensionalised) consistently with each other.

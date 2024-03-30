@@ -60,6 +60,21 @@ class PhaseEvaluator(ABC):
 
         return dTdPs
 
+    def dTdrs(self) -> np.ndarray:
+        dTdrs: np.ndarray = (
+            -self.gravitational_acceleration()
+            * self.thermal_expansivity()
+            * self.temperature
+            / self.heat_capacity()
+        )
+
+        return dTdrs
+
+    def kinematic_viscosity(self) -> FloatOrArray:
+        viscosity: FloatOrArray = self.viscosity() / self.density()
+
+        return viscosity
+
     @abstractmethod
     def density(self) -> FloatOrArray: ...
 
