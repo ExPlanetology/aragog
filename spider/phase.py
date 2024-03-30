@@ -20,11 +20,11 @@ from __future__ import annotations
 
 import logging
 from dataclasses import KW_ONLY, Field, dataclass, field, fields
-from typing import Protocol
 
 import numpy as np
 from scipy.interpolate import RectBivariateSpline, interp1d
 
+from spider.interfaces import PhaseEvaluatorProtocol, PropertyProtocol
 from spider.parser import _MeshSettings, _PhaseMixedSettings, _PhaseSettings
 from spider.utilities import (
     FloatOrArray,
@@ -35,38 +35,6 @@ from spider.utilities import (
 )
 
 logger: logging.Logger = logging.getLogger(__name__)
-
-
-class PropertyProtocol(Protocol):
-    """Property protocol"""
-
-    def __call__(self, temperature: np.ndarray, pressure: np.ndarray) -> FloatOrArray: ...
-
-
-class PhaseEvaluatorProtocol(Protocol):
-    """Phase evaluator protocol"""
-
-    def density(self, temperature: np.ndarray, pressure: np.ndarray) -> FloatOrArray: ...
-
-    def dTdPs(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray: ...
-
-    def gravitational_acceleration(
-        self, temperature: np.ndarray, pressure: np.ndarray
-    ) -> FloatOrArray: ...
-
-    def heat_capacity(self, temperature: np.ndarray, pressure: np.ndarray) -> FloatOrArray: ...
-
-    def melt_fraction(self, temperature: np.ndarray, pressure: np.ndarray) -> FloatOrArray: ...
-
-    def thermal_conductivity(
-        self, temperature: np.ndarray, pressure: np.ndarray
-    ) -> FloatOrArray: ...
-
-    def thermal_expansivity(
-        self, temperature: np.ndarray, pressure: np.ndarray
-    ) -> FloatOrArray: ...
-
-    def viscosity(self, temperature: np.ndarray, pressure: np.ndarray) -> FloatOrArray: ...
 
 
 @dataclass
@@ -175,7 +143,7 @@ class SinglePhaseEvaluator(PhaseEvaluatorProtocol):
     density: PropertyProtocol
     gravitational_acceleration: PropertyProtocol
     heat_capacity: PropertyProtocol
-    melt_fraction: float
+    melt_fraction: ConstantProperty
     thermal_conductivity: PropertyProtocol
     thermal_expansivity: PropertyProtocol
     viscosity: PropertyProtocol
@@ -189,7 +157,7 @@ class SinglePhaseEvaluator(PhaseEvaluatorProtocol):
             value = getattr(self._settings, field_.name)
 
             if is_number(value):
-                # Numbers have already been scaled
+                # Numbers have already been scaled by the parser
                 setattr(self, name, ConstantProperty(name=name, value=value))
 
             elif is_file(value):
@@ -199,7 +167,7 @@ class SinglePhaseEvaluator(PhaseEvaluatorProtocol):
                     col_names = header[1:].split()
                 value_array: np.ndarray = np.loadtxt(value, ndmin=2)
                 logger.debug("before scaling, value_array = %s", value_array)
-                # Must scale lookup data
+                # Scale lookup data
                 for nn, col_name in enumerate(col_names):
                     logger.info("Scaling %s from %s", col_name, value)
                     value_array[:, nn] /= getattr(self._settings.scalings_, col_name)
@@ -403,7 +371,7 @@ class MixedPhaseEvaluator(PhaseEvaluatorProtocol):
         return LookupProperty1D(name=name, value=value_array)
 
 
-class CompositePhaseEvaluator:
+class CompositePhaseEvaluator(PhaseEvaluatorProtocol):
     """Evaluates the EOS and transport properties of a composite phase.
 
     This combines the single phase evaluators for the liquid and solid regions with the mixed phase
