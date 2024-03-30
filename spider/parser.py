@@ -274,6 +274,7 @@ class _PhaseMixedSettings:
     liquidus: str
     phase: str
     phase_transition_width: float
+    grain_size: float
     scalings_: _ScalingsSettings = field(init=False)
 
     def scale_attributes(self, scalings: _ScalingsSettings) -> None:
@@ -284,6 +285,7 @@ class _PhaseMixedSettings:
         """
         self.scalings_ = scalings
         self.latent_heat_of_fusion /= self.scalings_.latent_heat_per_mass
+        self.grain_size /= self.scalings_.radius
 
 
 @dataclass

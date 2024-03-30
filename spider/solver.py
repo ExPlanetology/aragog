@@ -63,6 +63,7 @@ class PhaseStateStaggered:
         logger.debug("Updating the state of %s", self.__class__.__name__)
         self.density = self.phase_evaluator.density(temperature, pressure)
         self.heat_capacity = self.phase_evaluator.heat_capacity(temperature, pressure)
+        # FIXME: Update capacitance for mixed phase (enthalpy of fusion contribution)
         self.capacitance = self.density * self.heat_capacity
 
 
@@ -451,6 +452,7 @@ class Solver:
         delta_energy_flux: np.ndarray = np.diff(energy_flux, axis=0)
         # logger.debug("delta_energy_flux size = %s", delta_energy_flux.shape)
         # logger.debug("capacitance = %s", self.state.phase_staggered.capacitance.shape)
+        # FIXME: Update capacitance for mixed phase (enthalpy of fusion contribution)
         capacitance: np.ndarray = (
             self.state.phase_staggered.capacitance * self.data.mesh.basic.volume
         )
