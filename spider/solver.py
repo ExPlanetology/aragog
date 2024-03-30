@@ -368,7 +368,7 @@ class State:
             self._heating += self.radiogenic_heating(time)
 
 
-class SpiderSolver:
+class Solver:
     """Creates the system and solves the interior dynamics
 
     Args:
