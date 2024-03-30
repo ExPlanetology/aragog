@@ -301,11 +301,8 @@ class MixedPhaseEvaluator(PhaseEvaluator):
 
         # Melt fraction without clipping
         # phi<0 for the solid, 0<phi<1 for the mixed phase, and phi>1 for the melt
-        # FIXME: Debugging here
-        logger.warning("MixedPhaseEvaluator temperature = %s", self.temperature.shape)
-        logger.warning("MixedPhaseEvaluator pressure = %s", self.pressure.shape)
-
         self._melt_fraction_no_clip = (self.temperature - self.solidus()) / self.delta_fusion()
+        logger.debug("_melt_fraction_no_clip = %s", self.melt_fraction_no_clip())
         self._melt_fraction = np.clip(self._melt_fraction_no_clip, 0, 1)
 
         # Mixed density by volume additivity
@@ -361,7 +358,10 @@ class MixedPhaseEvaluator(PhaseEvaluator):
 
     def liquidus(self) -> np.ndarray:
         """Liquidus"""
-        return self._liquidus.eval(self.pressure)
+        liquidus: np.ndarray = self._liquidus.eval(self.pressure)
+        logger.debug("liquidus = %s", liquidus)
+
+        return liquidus
 
     def liquidus_gradient(self) -> np.ndarray:
         """Liquidus gradient"""
@@ -385,7 +385,10 @@ class MixedPhaseEvaluator(PhaseEvaluator):
 
     def solidus(self) -> np.ndarray:
         """Solidus"""
-        return self._solidus.eval(self.pressure)
+        solidus: np.ndarray = self._solidus.eval(self.pressure)
+        logger.debug("solidus = %s", solidus)
+
+        return solidus
 
     def solidus_gradient(self) -> np.ndarray:
         """Solidus gradient"""
@@ -558,13 +561,21 @@ class CompositePhaseEvaluator(PhaseEvaluator):
             )
 
         self._blending_factor = blending_factor
+        logger.debug("_blending_factor = %s", self._blending_factor)
         self._liquid_mask = melt_fraction_no_clip > 0.5
+        logger.debug("_liquid_mask = %s", self._liquid_mask)
         self._solid_mask = ~self._liquid_mask
+        logger.debug("_solid_mask = %s", self._solid_mask)
 
     def _get_composite(self, property_name: str) -> np.ndarray:
         """Evaluates the composite property"""
         mixed_phase: np.ndarray = getattr(self.mixed, property_name)()
         single_phase: np.ndarray = np.empty_like(self._blending_factor)
+        logger.debug("single_phase = %s", single_phase)
+        logger.debug("_liquid_mask = %s", self._liquid_mask)
+        logger.debug("_solid_mask = %s", self._solid_mask)
+        test = getattr(self.liquid, property_name)()
+        logger.debug("test = %s", test)
         try:
             single_phase[self._liquid_mask] = getattr(self.liquid, property_name)()[
                 self._liquid_mask

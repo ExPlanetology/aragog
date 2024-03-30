@@ -43,10 +43,12 @@ class PhaseEvaluator(ABC):
 
     def set_temperature(self, temperature: np.ndarray) -> None:
         """Sets the temperature."""
+        logger.debug("set_temperature = %s", temperature)
         self.temperature = temperature
 
     def set_pressure(self, pressure: np.ndarray) -> None:
         """Sets the pressure."""
+        logger.debug("set_pressure = %s", pressure)
         self.pressure = pressure
 
     def update(self) -> None:
