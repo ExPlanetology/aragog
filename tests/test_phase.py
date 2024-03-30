@@ -22,7 +22,7 @@ import logging
 
 import numpy as np
 
-from spider import CFG_TEST_DATA, SpiderSolver, __version__, debug_logger
+from spider import CFG_TEST_DATA, Solver, __version__, debug_logger
 from spider.phase import PhaseEvaluatorProtocol
 from spider.utilities import FloatOrArray
 
@@ -45,7 +45,7 @@ def test_version():
 def test_liquid_constant_properties():
     """Constant liquid properties"""
 
-    solver: SpiderSolver = SpiderSolver("abe_mixed.cfg", CFG_TEST_DATA)
+    solver: Solver = Solver("abe_mixed.cfg", CFG_TEST_DATA)
     solver.initialize()
     phase: PhaseEvaluatorProtocol = solver.data.liquid
 
@@ -75,7 +75,7 @@ def test_liquid_constant_properties():
 def test_solid_constant_properties():
     """Constant solid properties"""
 
-    solver: SpiderSolver = SpiderSolver("abe_mixed.cfg", CFG_TEST_DATA)
+    solver: Solver = Solver("abe_mixed.cfg", CFG_TEST_DATA)
     solver.initialize()
     phase: PhaseEvaluatorProtocol = solver.data.solid
 
@@ -105,7 +105,7 @@ def test_solid_constant_properties():
 def test_lookup_property_1D():
     """1D lookup property"""
 
-    solver: SpiderSolver = SpiderSolver("abe_mixed_lookup.cfg", CFG_TEST_DATA)
+    solver: Solver = Solver("abe_mixed_lookup.cfg", CFG_TEST_DATA)
     solver.initialize()
     phase: PhaseEvaluatorProtocol = solver.data.mixed
 
@@ -124,7 +124,7 @@ def test_lookup_property_1D():
 def test_lookup_property_2D():
     """2D lookup property"""
 
-    solver: SpiderSolver = SpiderSolver("abe_mixed_lookup.cfg", CFG_TEST_DATA)
+    solver: Solver = Solver("abe_mixed_lookup.cfg", CFG_TEST_DATA)
     solver.initialize()
     phase: PhaseEvaluatorProtocol = solver.data.liquid
 
@@ -142,7 +142,7 @@ def test_lookup_property_2D():
 def test_mixed_density():
     """Mixed phase density"""
 
-    solver: SpiderSolver = SpiderSolver("abe_mixed.cfg", CFG_TEST_DATA)
+    solver: Solver = Solver("abe_mixed.cfg", CFG_TEST_DATA)
     solver.initialize()
     phase: PhaseEvaluatorProtocol = solver.data.mixed
 

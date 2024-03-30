@@ -23,13 +23,7 @@ from pathlib import Path
 
 import numpy as np
 
-from spider import (
-    CFG_TEST_DATA,
-    REFERENCE_TEST_DATA,
-    SpiderSolver,
-    __version__,
-    debug_logger,
-)
+from spider import CFG_TEST_DATA, REFERENCE_TEST_DATA, Solver, __version__, debug_logger
 
 # from spider.output import Output
 from spider.utilities import profile_decorator
@@ -50,7 +44,7 @@ def test_version():
 def test_liquid_no_heating():
     """Cooling of a purely molten magma ocean."""
 
-    solver: SpiderSolver = SpiderSolver("abe_liquid.cfg", CFG_TEST_DATA)
+    solver: Solver = Solver("abe_liquid.cfg", CFG_TEST_DATA)
     solver.initialize()
     solver.solve()
     calculated: np.ndarray = solver.temperature_staggered[:, -1]
@@ -70,7 +64,7 @@ def test_liquid_no_heating():
 def test_solid_no_heating():
     """Cooling of a purely solid mantle."""
 
-    solver: SpiderSolver = SpiderSolver(Path("abe_solid.cfg"), CFG_TEST_DATA)
+    solver: Solver = Solver(Path("abe_solid.cfg"), CFG_TEST_DATA)
     solver.initialize()
     solver.solve()
     calculated: np.ndarray = solver.temperature_staggered[:, -1]
@@ -90,7 +84,7 @@ def test_solid_no_heating():
 def test_solid_with_heating():
     """Cooling of a purely solid mantle with radiogenic heating."""
 
-    solver: SpiderSolver = SpiderSolver(Path("abe_solid.cfg"), CFG_TEST_DATA)
+    solver: Solver = Solver(Path("abe_solid.cfg"), CFG_TEST_DATA)
     solver.parameters.energy.radionuclides = True
     solver.initialize()
     solver.solve()
@@ -111,7 +105,7 @@ def test_solid_with_heating():
 def test_mixed():
     """Test Abe (1993."""
 
-    solver: SpiderSolver = SpiderSolver(Path("abe_mixed.cfg"), CFG_TEST_DATA)
+    solver: Solver = Solver(Path("abe_mixed.cfg"), CFG_TEST_DATA)
     solver.initialize()
     solver.solve()
     calculated: np.ndarray = solver.temperature_staggered[:, -1]

@@ -30,14 +30,14 @@ from spider.core import SpiderData
 logger: logging.Logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from spider.solver import SpiderSolver, State
+    from spider.solver import Solver, State
 
 
 class Output:
     """Stores inputs and outputs of the models."""
 
-    def __init__(self, solver: SpiderSolver):
-        self.solver: SpiderSolver = solver
+    def __init__(self, solver: Solver):
+        self.solver: Solver = solver
         self.solution: OptimizeResult = self.solver.solution
         self.data: SpiderData = self.solver.data
         self.state: State = self.solver.state

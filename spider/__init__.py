@@ -1,7 +1,22 @@
-"""Package level variables and initialises the package logger
+#
+# Copyright 2024 Dan J. Bower
+#
+# This file is part of Spider.
+#
+# Spider is free software: you can redistribute it and/or modify it under the terms of the GNU
+# General Public License as published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# Spider is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
+# even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along with Spider. If not,
+# see <https://www.gnu.org/licenses/>.
+#
+"""Package level variables and initialises the package logger"""
 
-See the LICENSE file for licensing information.
-"""
+from __future__ import annotations
 
 __version__: str = "0.1.0"
 
@@ -24,56 +39,58 @@ logger.addHandler(logging.NullHandler())
 
 
 def complex_formatter() -> logging.Formatter:
-    """Complex formatter."""
-    fmt: str = (
-        "[%(asctime)s - %(name)-30s - %(lineno)03d - %(levelname)-9s - %(funcName)s()] - %(message)s"
-    )
+    """Complex formatter"""
+    fmt: str = "[%(asctime)s - %(name)-30s - %(lineno)03d - %(levelname)-9s - %(funcName)s()]"
+    fmt += " - %(message)s"
     datefmt: str = "%Y-%m-%d %H:%M:%S"
     formatter: logging.Formatter = logging.Formatter(fmt, datefmt=datefmt)
+
     return formatter
 
 
 def simple_formatter() -> logging.Formatter:
-    """Simple formatter."""
+    """Simple formatter"""
     fmt: str = "[%(asctime)s - %(name)-30s - %(levelname)-9s] - %(message)s"
     datefmt: str = "%H:%M:%S"
     formatter: logging.Formatter = logging.Formatter(fmt, datefmt=datefmt)
+
     return formatter
 
 
 def debug_logger() -> logging.Logger:
-    """Setup the logging for debugging: DEBUG to the console."""
-    # Console logger.
-    logger: logging.Logger = logging.getLogger(__name__)
-    logger.setLevel(logging.DEBUG)
+    """Sets up the logging for debugging: debug to the console."""
+    # Console logger
+    package_logger: logging.Logger = logging.getLogger(__name__)
+    package_logger.setLevel(logging.DEBUG)
     logger.handlers = []
     console_handler: logging.Handler = logging.StreamHandler()
     console_formatter: logging.Formatter = simple_formatter()
     console_handler.setFormatter(console_formatter)
     logger.addHandler(console_handler)
 
-    return logger
+    return package_logger
 
 
 def debug_file_logger() -> logging.Logger:
-    """Setup the logging to a file (DEBUG) and to the console (INFO)."""
-    # Console logger.
-    logger: logging.Logger = logging.getLogger(__name__)
-    logger.setLevel(logging.DEBUG)
-    logger.handlers = []
+    """Sets up the logging to a file (debug) and to the console (info)."""
+    # Console logger
+    package_logger: logging.Logger = logging.getLogger(__name__)
+    package_logger.setLevel(logging.DEBUG)
+    package_logger.handlers = []
     console_handler: logging.Handler = logging.StreamHandler()
     console_formatter: logging.Formatter = simple_formatter()
     console_handler.setFormatter(console_formatter)
     console_handler.setLevel(logging.INFO)
     logger.addHandler(console_handler)
-    # File logger.
-    file_handler: logging.Handler = logging.FileHandler("%s.log" % __package__)
+    # File logger
+    file_handler: logging.Handler = logging.FileHandler(f"{__package__}.log")
     file_formatter: logging.Formatter = complex_formatter()
     file_handler.setFormatter(file_formatter)
     file_handler.setLevel(logging.DEBUG)
-    logger.addHandler(file_handler)
+    package_logger.addHandler(file_handler)
 
-    return logger
+    return package_logger
 
 
-from spider.solver import SpiderSolver
+# Expose public API so pylint: disable = C0413
+from spider.solver import Solver
