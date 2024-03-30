@@ -224,17 +224,17 @@ class MixedPhaseEvaluator(PhaseEvaluatorProtocol):
         self.settings: _PhaseMixedSettings = settings
         self.solid: PhaseEvaluatorProtocol = solid
         self.liquid: PhaseEvaluatorProtocol = liquid
-        self.solidus: LookupProperty1D = self._get_melting_curve_lookup(
+        self._solidus: LookupProperty1D = self._get_melting_curve_lookup(
             "solidus", self.settings.solidus
         )
-        self.liquidus: LookupProperty1D = self._get_melting_curve_lookup(
+        self._liquidus: LookupProperty1D = self._get_melting_curve_lookup(
             "liquidus", self.settings.liquidus
         )
 
     def density(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
         """Density of the mixed phase computed by volume additivity"""
-        liquidus_temperature: np.ndarray = self.liquidus(temperature, pressure)
-        solidus_temperature: np.ndarray = self.solidus(temperature, pressure)
+        liquidus_temperature: np.ndarray = self._liquidus(temperature, pressure)
+        solidus_temperature: np.ndarray = self._solidus(temperature, pressure)
         melt_fraction: np.ndarray = self.melt_fraction(temperature, pressure)
         density_inverse: np.ndarray = melt_fraction / self.liquid.density(
             liquidus_temperature, pressure
@@ -265,12 +265,21 @@ class MixedPhaseEvaluator(PhaseEvaluatorProtocol):
 
     def heat_capacity(self, temperature: np.ndarray, pressure: np.ndarray) -> FloatOrArray:
         """Heat capacity of the mixed phase :cite:p:`{Equation 4,}SOLO07`"""
-        liquidus_temperature: np.ndarray = self.liquidus(temperature, pressure)
-        solidus_temperature: np.ndarray = self.solidus(temperature, pressure)
+        liquidus_temperature: np.ndarray = self._liquidus(temperature, pressure)
+        solidus_temperature: np.ndarray = self._solidus(temperature, pressure)
         delta_fusion_temperature: np.ndarray = liquidus_temperature - solidus_temperature
         heat_capacity: np.ndarray = self.settings.latent_heat_of_fusion / delta_fusion_temperature
 
         return heat_capacity
+
+    def liquidus(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        """Liquidus"""
+        return self._liquidus(temperature, pressure)
+
+    def liquidus_gradient(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        """Liquidus gradient"""
+        del temperature
+        return self._liquidus.gradient(pressure)
 
     def melt_fraction_no_clip(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
         """Melt fraction without clipping.
@@ -278,9 +287,9 @@ class MixedPhaseEvaluator(PhaseEvaluatorProtocol):
         This is the melt fraction (phi) without clipping, which effectively determines the phase
         because phi<0 for the solid, 0<phi<1 for the mixed phase, and phi>1 for the melt.
         """
-        liquidus_temperature: np.ndarray = self.liquidus(temperature, pressure)
+        liquidus_temperature: np.ndarray = self._liquidus(temperature, pressure)
         logger.debug("liquidus_temperature.shape = %s", liquidus_temperature.shape)
-        solidus_temperature: np.ndarray = self.solidus(temperature, pressure)
+        solidus_temperature: np.ndarray = self._solidus(temperature, pressure)
         logger.debug("solidus_temperature.shape = %s", solidus_temperature.shape)
         delta_fusion_temperature: np.ndarray = liquidus_temperature - solidus_temperature
         logger.debug("delta_fusion_temperature.shape = %s", delta_fusion_temperature.shape)
@@ -303,14 +312,23 @@ class MixedPhaseEvaluator(PhaseEvaluatorProtocol):
 
     def porosity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
         """Porosity of the mixed phase, that is the volume fraction occupied by the melt"""
-        liquidus_temperature: np.ndarray = self.liquidus(temperature, pressure)
-        solidus_temperature: np.ndarray = self.solidus(temperature, pressure)
+        liquidus_temperature: np.ndarray = self._liquidus(temperature, pressure)
+        solidus_temperature: np.ndarray = self._solidus(temperature, pressure)
         density: np.ndarray = self.density(temperature, pressure)
         liquidus_density: FloatOrArray = self.liquid.density(liquidus_temperature, pressure)
         solidus_density: FloatOrArray = self.solid.density(solidus_temperature, pressure)
         porosity: np.ndarray = (solidus_density - density) / (solidus_density - liquidus_density)
 
         return porosity
+
+    def solidus(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        """Solidus"""
+        return self._solidus(temperature, pressure)
+
+    def solidus_gradient(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+        """Solidus gradient"""
+        del temperature
+        return self._solidus.gradient(pressure)
 
     def thermal_conductivity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
         """Thermal conductivity of the mixed phase by linear mixing"""
@@ -331,8 +349,8 @@ class MixedPhaseEvaluator(PhaseEvaluatorProtocol):
         The first term in :cite:t:`{Equation 3,}SOLO07` is not included because it is small
         compared to the latent heat term :cite:p:`{Equation 33,}SS93`.
         """
-        liquidus_temperature: np.ndarray = self.liquidus(temperature, pressure)
-        solidus_temperature: np.ndarray = self.solidus(temperature, pressure)
+        liquidus_temperature: np.ndarray = self._liquidus(temperature, pressure)
+        solidus_temperature: np.ndarray = self._solidus(temperature, pressure)
         density: np.ndarray = self.density(temperature, pressure)
         liquidus_density: FloatOrArray = self.liquid.density(liquidus_temperature, pressure)
         solidus_density: FloatOrArray = self.solid.density(solidus_temperature, pressure)
@@ -345,8 +363,8 @@ class MixedPhaseEvaluator(PhaseEvaluatorProtocol):
 
     def viscosity(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
         """Viscosity of the mixed phase"""
-        liquidus_temperature: np.ndarray = self.liquidus(temperature, pressure)
-        solidus_temperature: np.ndarray = self.solidus(temperature, pressure)
+        liquidus_temperature: np.ndarray = self._liquidus(temperature, pressure)
+        solidus_temperature: np.ndarray = self._solidus(temperature, pressure)
         melt_fraction: np.ndarray = self.melt_fraction(temperature, pressure)
         weight: np.ndarray = tanh_weight(
             melt_fraction,
