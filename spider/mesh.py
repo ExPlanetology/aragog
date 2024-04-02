@@ -77,7 +77,9 @@ class FixedMesh:
             self.outer_boundary = np.max(self.radii)
         if self.inner_boundary is None:
             self.inner_boundary = np.min(self.radii)
-        self._eos: _AdamsWilliamsonEOS = _AdamsWilliamsonEOS(self.settings, self)
+        self._eos: _AdamsWilliamsonEOS = _AdamsWilliamsonEOS(
+            self.settings, self.radii, self.outer_boundary
+        )
 
     @cached_property
     def area(self) -> np.ndarray:
@@ -181,8 +183,6 @@ class Mesh:
         )
         self._d_dr_transform: np.ndarray = self.d_dr_transform_matrix()
         self._quantity_transform: np.ndarray = self.quantity_transform_matrix()
-        logger.warning(self._quantity_transform)
-        # sys.exit(0)
 
     def get_constant_spacing(self) -> np.ndarray:
         """Constant radius spacing across the mantle
@@ -242,17 +242,13 @@ class Mesh:
         transform: np.ndarray = np.zeros(
             (self.basic.number_of_nodes, self.staggered.number_of_nodes)
         )
-        mesh_ratio: np.ndarray = (
-            self.basic.delta_radii.flatten()[:-1] / self.staggered.delta_radii.flatten()
-        )
-        transform[1:-1, :-1] += np.diag(1 - 0.5 * mesh_ratio)  # k=0 diagonal
-        transform[1:-1:, 1:] += np.diag(0.5 * mesh_ratio)  # k=1 diagonal
+        mesh_ratio: np.ndarray = self.basic.delta_radii[:-1] / self.staggered.delta_radii
+        transform[1:-1, :-1] += np.diagflat(1 - 0.5 * mesh_ratio)  # k=0 diagonal
+        transform[1:-1:, 1:] += np.diagflat(0.5 * mesh_ratio)  # k=1 diagonal
         # Backward difference at inner radius
         transform[0, :2] = np.array([1 + 0.5 * mesh_ratio[0], -0.5 * mesh_ratio[0]]).flatten()
         # Forward difference at outer radius
-        mesh_ratio_outer: np.ndarray = (
-            self.basic.delta_radii.flatten()[-1] / self.staggered.delta_radii.flatten()[-1]
-        )
+        mesh_ratio_outer: np.ndarray = self.basic.delta_radii[-1] / self.staggered.delta_radii[-1]
         transform[-1, -2:] = np.array(
             [-0.5 * mesh_ratio_outer, 1 + 0.5 * mesh_ratio_outer]
         ).flatten()
@@ -285,15 +281,14 @@ class _AdamsWilliamsonEOS:
 
     Args:
         settings: Mesh settings
-        mesh: A fixed mesh
-
-    Attributes:
-        TODO
+        radii: Radii
+        outer_boundary: Outer radius that defines the surface
     """
 
-    def __init__(self, settings: _MeshSettings, mesh: FixedMesh):
-        self.settings: _MeshSettings = settings
-        self.mesh: FixedMesh = mesh
+    def __init__(self, settings: _MeshSettings, radii: np.ndarray, outer_boundary: float):
+        self._settings: _MeshSettings = settings
+        self._radii: np.ndarray = radii
+        self._outer_boundary = outer_boundary
 
     @cached_property
     def density(self) -> np.ndarray:
@@ -318,10 +313,10 @@ class _AdamsWilliamsonEOS:
         """
         # using pressure, expression is simpler than sketch derivation above
         density: np.ndarray = (
-            self.settings.adams_williamson_surface_density
+            self._settings.adams_williamson_surface_density
             + self.pressure
-            * self.settings.adams_williamson_beta
-            / self.settings.gravitational_acceleration
+            * self._settings.adams_williamson_beta
+            / self._settings.gravitational_acceleration
         )
 
         return density
@@ -369,25 +364,18 @@ class _AdamsWilliamsonEOS:
     @cached_property
     def pressure(self) -> np.ndarray:
         factor: float = (
-            self.settings.adams_williamson_surface_density
-            * self.settings.gravitational_acceleration
-            / self.settings.adams_williamson_beta
+            self._settings.adams_williamson_surface_density
+            * self._settings.gravitational_acceleration
+            / self._settings.adams_williamson_beta
         )
         pressure: np.ndarray = factor * (
-            np.exp(self.settings.adams_williamson_beta * (self.mesh.outer_boundary - self.radii))
-            - 1
+            np.exp(self._settings.adams_williamson_beta * (self._outer_boundary - self._radii)) - 1
         )
-        logger.debug("eos pressure = %s", pressure)
 
         return pressure
 
     @cached_property
     def pressure_gradient(self) -> np.ndarray:
-        dPdr: np.ndarray = -self.settings.gravitational_acceleration * self.density
-        logger.debug("eos dPdr = %s", dPdr)
+        dPdr: np.ndarray = -self._settings.gravitational_acceleration * self.density
 
         return dPdr
-
-    @cached_property
-    def radii(self) -> np.ndarray:
-        return self.mesh.radii
