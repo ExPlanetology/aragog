@@ -180,9 +180,9 @@ class Mesh:
             self.basic.inner_boundary,
         )
         self._d_dr_transform: np.ndarray = self.d_dr_transform_matrix()
-        logger.warning(self._d_dr_transform)
-        sys.exit(1)
         self._quantity_transform: np.ndarray = self.quantity_transform_matrix()
+        logger.warning(self._quantity_transform)
+        # sys.exit(0)
 
     def get_constant_spacing(self) -> np.ndarray:
         """Constant radius spacing across the mantle
@@ -206,11 +206,10 @@ class Mesh:
         transform: np.ndarray = np.zeros(
             (self.basic.number_of_nodes, self.staggered.number_of_nodes)
         )
-        # FIXME: Needed to flatten to return to 1-D array as before
-        transform[1:-1, :-1] += np.diag(-1 / self.staggered.delta_radii.flatten())  # k=0 diagonal
-        transform[1:-1:, 1:] += np.diag(1 / self.staggered.delta_radii.flatten())  # k=1 diagonal
-        transform[0, :] = transform[1, :]  # Backward difference at outer radius.
-        transform[-1, :] = transform[-2, :]  # Forward difference at inner radius.
+        transform[1:-1, :-1] += np.diagflat(-1 / self.staggered.delta_radii)  # k=0 diagonal
+        transform[1:-1:, 1:] += np.diagflat(1 / self.staggered.delta_radii)  # k=1 diagonal
+        transform[0, :] = transform[1, :]  # Backward difference at outer radius
+        transform[-1, :] = transform[-2, :]  # Forward difference at inner radius
         logger.debug("_d_dr_transform_matrix = %s", transform)
 
         return transform
@@ -243,13 +242,17 @@ class Mesh:
         transform: np.ndarray = np.zeros(
             (self.basic.number_of_nodes, self.staggered.number_of_nodes)
         )
-        mesh_ratio: np.ndarray = self.basic.delta_radii[:-1] / self.staggered.delta_radii
-        transform[1:-1, :-1] += np.diag(1 - 0.5 * mesh_ratio)  # k=0 diagonal.
-        transform[1:-1:, 1:] += np.diag(0.5 * mesh_ratio)  # k=1 diagonal.
-        # Backward difference at inner radius.
+        mesh_ratio: np.ndarray = (
+            self.basic.delta_radii.flatten()[:-1] / self.staggered.delta_radii.flatten()
+        )
+        transform[1:-1, :-1] += np.diag(1 - 0.5 * mesh_ratio)  # k=0 diagonal
+        transform[1:-1:, 1:] += np.diag(0.5 * mesh_ratio)  # k=1 diagonal
+        # Backward difference at inner radius
         transform[0, :2] = np.array([1 + 0.5 * mesh_ratio[0], -0.5 * mesh_ratio[0]]).flatten()
-        # Forward difference at outer radius.
-        mesh_ratio_outer: np.ndarray = self.basic.delta_radii[-1] / self.staggered.delta_radii[-1]
+        # Forward difference at outer radius
+        mesh_ratio_outer: np.ndarray = (
+            self.basic.delta_radii.flatten()[-1] / self.staggered.delta_radii.flatten()[-1]
+        )
         transform[-1, -2:] = np.array(
             [-0.5 * mesh_ratio_outer, 1 + 0.5 * mesh_ratio_outer]
         ).flatten()
