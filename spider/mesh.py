@@ -21,11 +21,14 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from functools import cached_property
+from typing import TypeVar
 
 import numpy as np
 
 from spider.parser import Parameters, _MeshSettings
-from spider.utilities import is_monotonic_increasing
+from spider.utilities import FloatOrArray, is_monotonic_increasing
+
+T = TypeVar("T", np.ndarray, float)
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -157,7 +160,6 @@ class FixedMesh:
         return 4 / 3 * np.pi * (self._mesh_cubed[-1] - self._mesh_cubed[0])
 
 
-@dataclass
 class Mesh:
     """A staggered mesh.
 
@@ -168,9 +170,8 @@ class Mesh:
         parameters: Parameters
     """
 
-    _parameters: Parameters
-
-    def __post_init__(self):
+    def __init__(self, parameters: Parameters):
+        self._parameters: Parameters = parameters
         self.settings: _MeshSettings = self._parameters.mesh
         basic_coordinates: np.ndarray = self.get_constant_spacing()
         self.basic: FixedMesh = FixedMesh(self.settings, basic_coordinates)
@@ -181,8 +182,8 @@ class Mesh:
             self.basic.outer_boundary,
             self.basic.inner_boundary,
         )
-        self._d_dr_transform: np.ndarray = self.d_dr_transform_matrix()
-        self._quantity_transform: np.ndarray = self.quantity_transform_matrix()
+        self._d_dr_transform: np.ndarray = self._get_d_dr_transform_matrix()
+        self._quantity_transform: np.ndarray = self._get_quantity_transform_matrix()
 
     def get_constant_spacing(self) -> np.ndarray:
         """Constant radius spacing across the mantle
@@ -197,7 +198,7 @@ class Mesh:
 
         return radii
 
-    def d_dr_transform_matrix(self) -> np.ndarray:
+    def _get_d_dr_transform_matrix(self) -> np.ndarray:
         """Transform matrix for determining d/dr of a staggered quantity on the basic mesh.
 
         Returns:
@@ -229,7 +230,7 @@ class Mesh:
         return d_dr_at_basic_nodes
 
     # TODO: Compatibility with conforming boundary/initial conditions?
-    def quantity_transform_matrix(self) -> np.ndarray:
+    def _get_quantity_transform_matrix(self) -> np.ndarray:
         """A transform matrix for mapping quantities on the staggered mesh to the basic mesh.
 
         Uses backward and forward differences at the inner and outer radius, respectively, to
@@ -289,37 +290,14 @@ class _AdamsWilliamsonEOS:
         self._settings: _MeshSettings = settings
         self._radii: np.ndarray = radii
         self._outer_boundary = outer_boundary
+        self._density = self.get_density(self._radii)
+        self._pressure = self.get_pressure(self._radii)
+        self._pressure_gradient = self.get_pressure_gradient(self._radii)
 
     @cached_property
     def density(self) -> np.ndarray:
-        """Density
-
-        TODO: Convert math to rst
-
-        Adams-Williamson density is a simple function of depth (radius)
-        Sketch derivation:
-            dP/dr = dP/drho * drho/dr = -rho g
-            dP/drho sim (dP/drho)_s (adiabatic)
-            drho/dr = -rho g / Si
-            then integrate to give the form rho(r) = k * exp(-(g*r)/c)
-            (g is positive)
-            apply the limit that rho = rhos at r=R
-            gives:
-            rho(z) = rhos * exp( beta * z )
-        where z = R-r
-
-        this is arguably the simplest relation to get rho directly from r, but other
-        EOSs can be envisaged
-        """
-        # using pressure, expression is simpler than sketch derivation above
-        density: np.ndarray = (
-            self._settings.adams_williamson_surface_density
-            + self.pressure
-            * self._settings.adams_williamson_beta
-            / self._settings.gravitational_acceleration
-        )
-
-        return density
+        """Density"""
+        return self._density
 
     # @cached_property
     # def mass_element(self) -> np.ndarray:
@@ -329,22 +307,24 @@ class _AdamsWilliamsonEOS:
 
     #     return mass_element
 
-    # @cached_property
-    # def mass_within_radius(self) -> np.ndarray:
-    #     """Mass contained within radii
+    @cached_property
+    def mass_within_radius(self) -> np.ndarray:
+        """Mass contained within radii
 
-    #     Returns:
-    #         Mass within a radius
-    #     """
-    #     mass: np.ndarray = (
-    #         -2 / self.settings.adams_williamson_beta**3
-    #         - np.square(self.mesh.radii) / self.settings.adams_williamson_beta
-    #         - 2 * self.mesh.radii / np.square(self.settings.adams_williamson_beta)
-    #     )
-    #     # TODO: Check because C Spider does not include 4*pi scaling
-    #     mass *= 4 * np.pi * self.density
+        Computes the integra
 
-    #     return mass
+        Returns:
+            Mass within radii
+        """
+        mass: np.ndarray = (
+            -2 / self._settings.adams_williamson_beta**3
+            - np.square(self._radii) / self._settings.adams_williamson_beta
+            - 2 * self._radii / np.square(self._settings.adams_williamson_beta)
+        )
+        # TODO: Check because C Spider does not include 4*pi scaling
+        mass *= 4 * np.pi * self.density
+
+        return mass
 
     # @cached_property
     # def mass_within_shell(self) -> np.ndarray:
@@ -361,21 +341,52 @@ class _AdamsWilliamsonEOS:
 
     #     return delta_mass
 
-    @cached_property
+    @property
     def pressure(self) -> np.ndarray:
+        return self._pressure
+
+    @property
+    def pressure_gradient(self) -> np.ndarray:
+        return self._pressure_gradient
+
+    def get_density(self, radius: FloatOrArray) -> np.ndarray:
+        """Computes the density.
+
+        Args:
+            radius: Radius
+        """
+        density: np.ndarray = (
+            self._settings.adams_williamson_surface_density
+            + self.get_pressure(radius)
+            * self._settings.adams_williamson_beta
+            / self._settings.gravitational_acceleration
+        )
+
+        return density
+
+    def get_pressure(self, radius: FloatOrArray) -> np.ndarray:
+        """Computes the pressure.
+
+        Args:
+            radius: Radius
+        """
         factor: float = (
             self._settings.adams_williamson_surface_density
             * self._settings.gravitational_acceleration
             / self._settings.adams_williamson_beta
         )
         pressure: np.ndarray = factor * (
-            np.exp(self._settings.adams_williamson_beta * (self._outer_boundary - self._radii)) - 1
+            np.exp(self._settings.adams_williamson_beta * (self._outer_boundary - radius)) - 1
         )
 
         return pressure
 
-    @cached_property
-    def pressure_gradient(self) -> np.ndarray:
-        dPdr: np.ndarray = -self._settings.gravitational_acceleration * self.density
+    def get_pressure_gradient(self, radius: FloatOrArray) -> np.ndarray:
+        """Computes the pressure gradient.
+
+        Args:
+            radius: Radius
+        """
+        dPdr: np.ndarray = -self._settings.gravitational_acceleration * self.get_density(radius)
 
         return dPdr
