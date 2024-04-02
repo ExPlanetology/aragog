@@ -378,14 +378,16 @@ class AdamsWilliamsonEOS:
         )
         logger.debug("eos pressure = %s", pressure)
 
-        return pressure
+        # FIXME: Return column
+        return np.atleast_2d(pressure).T
 
     @cached_property
     def pressure_gradient(self) -> np.ndarray:
         dPdr: np.ndarray = -self.settings.gravitational_acceleration * self.density
         logger.debug("eos dPdr = %s", dPdr)
 
-        return dPdr
+        # FIXME: Return column
+        return np.atleast_2d(dPdr).T
 
     @cached_property
     def radius(self) -> np.ndarray:

@@ -107,7 +107,7 @@ class State:
         convective_heat_flux: np.ndarray = (
             -self.evaluator.phase_basic.density()
             * self.evaluator.phase_basic.heat_capacity()
-            * self._eddy_diffusivity
+            * self.eddy_diffusivity()
             * self._super_adiabatic_temperature_gradient
         )
 
@@ -141,7 +141,6 @@ class State:
     def dTdr(self) -> np.ndarray:
         return self._dTdr
 
-    @property
     def eddy_diffusivity(self) -> np.ndarray:
         return self._eddy_diffusivity
 
@@ -275,7 +274,6 @@ class State:
             self.viscous_regime, self._viscous_velocity, self._inviscid_velocity
         )
         self._eddy_diffusivity *= self.evaluator.mesh.basic.mixing_length
-        logger.debug("Before evaluating heat flux")
         # Heat flux
         self._heat_flux = np.zeros_like(self.temperature_basic)
         if self.evaluator.parameters.energy.conduction:
