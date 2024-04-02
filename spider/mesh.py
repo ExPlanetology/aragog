@@ -21,14 +21,11 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from functools import cached_property
-from typing import TypeVar
 
 import numpy as np
 
 from spider.parser import Parameters, _MeshSettings
 from spider.utilities import FloatOrArray, is_monotonic_increasing
-
-T = TypeVar("T", np.ndarray, float)
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -69,7 +66,7 @@ class FixedMesh:
     radii: np.ndarray
     outer_boundary: float | None = None
     inner_boundary: float | None = None
-    _eos: _AdamsWilliamsonEOS = field(init=False)
+    _eos: AdamsWilliamsonEOS = field(init=False)
 
     def __post_init__(self):
         if not is_monotonic_increasing(self.radii):
@@ -80,8 +77,8 @@ class FixedMesh:
             self.outer_boundary = np.max(self.radii)
         if self.inner_boundary is None:
             self.inner_boundary = np.min(self.radii)
-        self._eos: _AdamsWilliamsonEOS = _AdamsWilliamsonEOS(
-            self.settings, self.radii, self.outer_boundary
+        self._eos = AdamsWilliamsonEOS(
+            self.settings, self.radii, self.outer_boundary, self.inner_boundary
         )
 
     @cached_property
@@ -277,116 +274,253 @@ class Mesh:
         return quantity_at_basic_nodes
 
 
-class _AdamsWilliamsonEOS:
-    """Adams-Williamson equation of state
+# @cached_property
+# def mass_element(self) -> np.ndarray:
+#     """Mass element"""
+#     # TODO: Check because C Spider does not include 4*pi scaling
+#     mass_element: np.ndarray = self.mesh.area * self.density
 
-    Args:
-        settings: Mesh settings
-        radii: Radii
-        outer_boundary: Outer radius that defines the surface
+#     return mass_element
+
+# @cached_property
+# def mass_within_shell(self) -> np.ndarray:
+#     """Mass within a spherical shell
+
+#     Returns:
+#         Mass within a spherical shell
+#     """
+#     # TODO: Check because C Spider does not include 4*pi scaling
+#     # From outer radius to inner
+#     mass_within_radius: np.ndarray = np.flip(self.mass_within_radius)
+#     # Return same order as radii
+#     delta_mass: np.ndarray = np.flip(mass_within_radius[:-1] - mass_within_radius[1:])
+
+#     return delta_mass
+
+# def get_mass_within_radius(self, radius: FloatOrArray) -> np.ndarray:
+#     """Computes the mass contained within a radius
+
+#     Returns:
+#         Mass within radii
+#     """
+#     mass: np.ndarray = (
+#         -2 / self._settings.adams_williamson_beta**3
+#         - np.square(radius) / self._settings.adams_williamson_beta
+#         - 2 * radius / np.square(self._settings.adams_williamson_beta)
+#     )
+
+#     # TODO: Check because C Spider does not include 4*pi scaling
+#     mass *= 4 * np.pi * self.get_density(radius)
+
+#     return mass
+
+
+class AdamsWilliamsonEOS:
+    r"""Adams-Williamson equation of state (EOS).
+
+    EOS due to adiabatic self-compression from the definition of the adiabatic bulk modulus:
+
+    .. math::
+
+        \left( \frac{{d\rho}}{{dP}} \right)_S = \frac{{\rho}}{{K_S}}
+
+    where :math:`\rho` is density, :math:`K_S` the adiabatic bulk modulus, and :math:`S` is
+    entropy.
     """
 
-    def __init__(self, settings: _MeshSettings, radii: np.ndarray, outer_boundary: float):
+    def __init__(
+        self,
+        settings: _MeshSettings,
+        radii: np.ndarray,
+        outer_boundary: float,
+        inner_boundary: float,
+    ):
         self._settings: _MeshSettings = settings
         self._radii: np.ndarray = radii
         self._outer_boundary = outer_boundary
-        self._density = self.get_density(self._radii)
-        self._pressure = self.get_pressure(self._radii)
-        self._pressure_gradient = self.get_pressure_gradient(self._radii)
+        self._inner_boundary = inner_boundary
+        self._surface_density: float = self._settings.surface_density
+        self._gravitational_acceleration: float = self._settings.gravitational_acceleration
+        self._adiabatic_bulk_modulus: float = self._settings.adiabatic_bulk_modulus
+        self._pressure = self.get_pressure_from_radii(radii)
+        self._pressure_gradient = self.get_pressure_gradient(self.pressure)
+        self._density = self.get_density(self.pressure)
 
-    @cached_property
+    @property
     def density(self) -> np.ndarray:
         """Density"""
         return self._density
 
-    # @cached_property
-    # def mass_element(self) -> np.ndarray:
-    #     """Mass element"""
-    #     # TODO: Check because C Spider does not include 4*pi scaling
-    #     mass_element: np.ndarray = self.mesh.area * self.density
-
-    #     return mass_element
-
-    @cached_property
-    def mass_within_radius(self) -> np.ndarray:
-        """Mass contained within radii
-
-        Computes the integra
-
-        Returns:
-            Mass within radii
-        """
-        mass: np.ndarray = (
-            -2 / self._settings.adams_williamson_beta**3
-            - np.square(self._radii) / self._settings.adams_williamson_beta
-            - 2 * self._radii / np.square(self._settings.adams_williamson_beta)
-        )
-        # TODO: Check because C Spider does not include 4*pi scaling
-        mass *= 4 * np.pi * self.density
-
-        return mass
-
-    # @cached_property
-    # def mass_within_shell(self) -> np.ndarray:
-    #     """Mass within a spherical shell
-
-    #     Returns:
-    #         Mass within a spherical shell
-    #     """
-    #     # TODO: Check because C Spider does not include 4*pi scaling
-    #     # From outer radius to inner
-    #     mass_within_radius: np.ndarray = np.flip(self.mass_within_radius)
-    #     # Return same order as radii
-    #     delta_mass: np.ndarray = np.flip(mass_within_radius[:-1] - mass_within_radius[1:])
-
-    #     return delta_mass
-
     @property
     def pressure(self) -> np.ndarray:
+        """Pressure"""
         return self._pressure
 
     @property
     def pressure_gradient(self) -> np.ndarray:
-        return self._pressure_gradient
+        """Pressure gradient"""
+        return self.pressure_gradient
 
-    def get_density(self, radius: FloatOrArray) -> np.ndarray:
-        """Computes the density.
+    def get_density(self, pressure: FloatOrArray) -> np.ndarray:
+        r"""Density
+
+        .. math::
+
+            \rho(P) = \rho_s \exp(P/K_S)
+
+        where :math:`\rho` is density, :math:`P` is pressure, :math:`\rho_s` is surface density,
+        and :math:`K_S` is adiabatic bulk modulus.
 
         Args:
-            radius: Radius
+            pressure: Pressure
+
+        Returns:
+            Density
         """
-        density: np.ndarray = (
-            self._settings.adams_williamson_surface_density
-            + self.get_pressure(radius)
-            * self._settings.adams_williamson_beta
-            / self._settings.gravitational_acceleration
+        density: np.ndarray = self._surface_density * np.exp(
+            pressure / self._adiabatic_bulk_modulus
         )
 
         return density
 
-    def get_pressure(self, radius: FloatOrArray) -> np.ndarray:
-        """Computes the pressure.
+    def get_density_from_radii(self, radii: FloatOrArray) -> FloatOrArray:
+        r"""Computes density from radii.
+
+        .. math::
+
+            \rho(r) = \frac{\rho_s K_S}{K_S + \rho_s g (r-r_s)}
+
+        where :math:`\rho` is density, :math:`r` is radius, :math:`\rho_s` is surface density,
+        :math:`K_S` is adiabatic bulk modulus, and :math:`r_s` is surface radius.
 
         Args:
-            radius: Radius
+            radii: Radii
+
+        Returns
+            Density
         """
-        factor: float = (
-            self._settings.adams_williamson_surface_density
-            * self._settings.gravitational_acceleration
-            / self._settings.adams_williamson_beta
+        density: FloatOrArray = (self._surface_density * self._adiabatic_bulk_modulus) / (
+            self._adiabatic_bulk_modulus
+            + self._surface_density
+            * self._gravitational_acceleration
+            * (radii - self._outer_boundary)
         )
-        pressure: np.ndarray = factor * (
-            np.exp(self._settings.adams_williamson_beta * (self._outer_boundary - radius)) - 1
+
+        return density
+
+    def get_mass_within_radius(self, radii: FloatOrArray) -> np.ndarray:
+        r"""Computes mass within radii.
+
+        .. math::
+
+            \int 4 \pi r^2 \rho(r) dr
+
+        The integral was evaluated using WolframAlpha.
+        """
+        a: float = self._surface_density
+        b: float = self._adiabatic_bulk_modulus
+        c: float = self._gravitational_acceleration
+        d: float = self._outer_boundary
+
+        def mass_integral(radii_: FloatOrArray) -> np.ndarray:
+
+            mass: np.ndarray = (
+                4
+                * np.pi
+                * (
+                    b
+                    * (
+                        a * c * radii_ * (a * c * (2 * d + radii_) - 2 * b)
+                        + 2 * np.square(b - a * c * d) * np.log(a * c * (radii_ - d) + b)
+                    )
+                    / (2 * np.square(a) + np.power(c, 3))
+                )
+            )
+            # + constant
+
+            return mass
+
+        mass: np.ndarray = mass_integral(radii) - mass_integral(self._inner_boundary)
+
+        return mass
+
+    def get_pressure_from_radii(self, radii: FloatOrArray) -> np.ndarray:
+        r"""Computes pressure from radii.
+
+        .. math::
+
+            P(r) = -K_S \ln \left( 1 + \frac{\rho_s g (r-r_s)}{K_S} \right)
+
+        where :math:`r` is radius, :math:`K_S` is adiabatic bulk modulus, :math:`P` is pressure,
+        :math:`\rho_s` is surface density, :math:`g` is gravitational acceleration, and
+        :math:`r_s` is surface radius.
+
+        Args:
+            radii: Radii
+
+        Returns:
+            Pressure
+        """
+        pressure: np.ndarray = -self._adiabatic_bulk_modulus * np.log(
+            (
+                self._adiabatic_bulk_modulus
+                + self._surface_density
+                * self._gravitational_acceleration
+                * (radii - self._outer_boundary)
+            )
+            / self._adiabatic_bulk_modulus
         )
 
         return pressure
 
-    def get_pressure_gradient(self, radius: FloatOrArray) -> np.ndarray:
-        """Computes the pressure gradient.
+    def get_pressure_gradient(self, pressure: FloatOrArray) -> np.ndarray:
+        r"""Computes the pressure gradient.
+
+        .. math::
+
+            \frac{dP}{dr} = -g \rho
+
+        where :math:`\rho` is density, :math:`P` is pressure, and  :math:`g` is gravitational
+        acceleration.
 
         Args:
-            radius: Radius
+            pressure: Pressure
+
+        Returns:
+            Pressure gradient
         """
-        dPdr: np.ndarray = -self._settings.gravitational_acceleration * self.get_density(radius)
+        dPdr: np.ndarray = -self._gravitational_acceleration * self.get_density(pressure)
 
         return dPdr
+
+    def get_radii_from_pressure(self, pressure: FloatOrArray) -> np.ndarray:
+        r"""Computes radii from pressure.
+
+        .. math::
+
+            P(r) = \int \frac{dP}{dr} dr = \int -g \rho_s \exp(P/K_S) dr
+
+        And apply the boundary condition :math:`P=0` at :math:`r=r_s` to get:
+
+        .. math::
+
+            r(P) = \frac{K_s \left( \exp(-P/K_S)-1 \right)}{\rho_s g} + r_s
+
+        where :math:`r` is radius, :math:`K_S` is adiabatic bulk modulus, :math:`P` is pressure,
+        :math:`\rho_s` is surface density, :math:`g` is gravitational acceleration, and
+        :math:`r_s` is surface radius.
+
+        Args:
+            pressure: Pressure
+
+        Returns:
+            Radii
+        """
+        radii: np.ndarray = (
+            self._adiabatic_bulk_modulus
+            * (np.exp(-pressure / self._adiabatic_bulk_modulus) - 1)
+            / (self._surface_density * self._gravitational_acceleration)
+            + self._outer_boundary
+        )
+
+        return radii

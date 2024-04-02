@@ -20,6 +20,30 @@ spider.interfaces module
    :undoc-members:
    :show-inheritance:
 
+spider.mesh module
+------------------
+
+.. automodule:: spider.mesh
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+spider.output module
+--------------------
+
+.. automodule:: spider.output
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+spider.parser module
+--------------------
+
+.. automodule:: spider.parser
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 spider.phase module
 -------------------
 
