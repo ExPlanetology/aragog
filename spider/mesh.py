@@ -206,8 +206,9 @@ class Mesh:
         transform: np.ndarray = np.zeros(
             (self.basic.number_of_nodes, self.staggered.number_of_nodes)
         )
-        transform[1:-1, :-1] += np.diag(-1 / self.staggered.delta_radii)  # k=0 diagonal
-        transform[1:-1:, 1:] += np.diag(1 / self.staggered.delta_radii)  # k=1 diagonal
+        # FIXME: Needed to flatten to return to 1-D array as before
+        transform[1:-1, :-1] += np.diag(-1 / self.staggered.delta_radii.flatten())  # k=0 diagonal
+        transform[1:-1:, 1:] += np.diag(1 / self.staggered.delta_radii.flatten())  # k=1 diagonal
         transform[0, :] = transform[1, :]  # Backward difference at outer radius.
         transform[-1, :] = transform[-2, :]  # Forward difference at inner radius.
         logger.debug("_d_dr_transform_matrix = %s", transform)
