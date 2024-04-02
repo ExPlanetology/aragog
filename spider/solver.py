@@ -344,9 +344,9 @@ class Evaluator:
 
         # Set the pressure since this will not change during a model run.
         self.phase_basic = copy.deepcopy(phase)
-        self.phase_basic.set_pressure(self.mesh.basic.eos.pressure)
+        self.phase_basic.set_pressure(self.mesh.basic.pressure)
         self.phase_staggered = copy.deepcopy(phase)
-        self.phase_staggered.set_pressure(self.mesh.staggered.eos.pressure)
+        self.phase_staggered.set_pressure(self.mesh.staggered.pressure)
 
     @property
     def radionuclides(self) -> list[_Radionuclide]:
