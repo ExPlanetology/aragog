@@ -585,6 +585,11 @@ class CompositePhaseEvaluator(PhaseEvaluator):
         test = getattr(self.liquid, property_name)()
         logger.debug("test = %s", test)
 
+        # logger.debug(self.temperature.shape)
+        # logger.debug(self.pressure.shape)
+        # logger.debug(mixed_phase.shape)
+        # logger.debug(single_phase.shape)
+
         try:
             single_phase[self._liquid_mask] = getattr(self.liquid, property_name)()[
                 self._liquid_mask
