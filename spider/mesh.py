@@ -34,32 +34,31 @@ logger: logging.Logger = logging.getLogger(__name__)
 class FixedMesh:
     """A fixed mesh
 
-    Some quantities are column vectors (2-D arrays) to allow vectorised calculations
-    (see scipy.integrate.solve_ivp).
-
     Args:
+        settings: Mesh settings
         radii: Radii of the mesh
-        mixing_length_profile: Profile of the mixing length. Can be nearest_boundary or
-            constant.
         outer_boundary: Outer boundary for computing depth below the surface
         inner_boundary: Inner boundary for computing height above the base
 
     Attributes:
+        settings: Mesh settings
         radii: Radii of the mesh
-        mixing_length_profile: Profile of the mixing length
         outer_boundary: Outer boundary for computing depth below the surface. Defaults to None, in
             which case the outermost radius is used.
         inner_boundary: Inner boundary for computing height above the base. Defaults to None, in
             which case the innermost radius is used.
+        area: Surface area
         delta_radii: Delta radii
+        density: Density
         depth: Depth below the outer boundary
         height: Height above the inner boundary
-        number_of_nodes: Number of nodes
-        area: Surface area
-        volume: Volume of the spherical shells defined between neighbouring radii
         mixing_length: Mixing length
         mixing_length_squared: Mixing length squared
         mixing_length_cubed: Mixing length cubed
+        number_of_nodes: Number of nodes
+        pressure: Pressure
+        pressure_gradient: Pressure gradient (dP/dr)
+        volume: Volume of the spherical shells defined between neighbouring radii
         total_volume: Total volume
     """
 
@@ -67,7 +66,7 @@ class FixedMesh:
     radii: np.ndarray
     outer_boundary: float | None = None
     inner_boundary: float | None = None
-    eos: AdamsWilliamsonEOS = field(init=False)
+    _eos: _AdamsWilliamsonEOS = field(init=False)
 
     def __post_init__(self):
         if not is_monotonic_increasing(self.radii):
@@ -75,23 +74,23 @@ class FixedMesh:
             logger.error(msg)
             raise ValueError(msg)
         if self.outer_boundary is None:
-            self.outer_boundary = self.radii[-1]
+            self.outer_boundary = np.max(self.radii)
         if self.inner_boundary is None:
-            self.inner_boundary = self.radii[0]
-        self.eos: AdamsWilliamsonEOS = AdamsWilliamsonEOS(self.settings, self)
+            self.inner_boundary = np.min(self.radii)
+        self._eos: _AdamsWilliamsonEOS = _AdamsWilliamsonEOS(self.settings, self)
 
     @cached_property
     def area(self) -> np.ndarray:
         """Includes 4*pi factor unlike C-version of SPIDER."""
-        return 4 * np.pi * np.square(self.radii).reshape(-1, 1)  # 2-D
+        return 4 * np.pi * np.square(self.radii)
 
     @cached_property
     def delta_radii(self) -> np.ndarray:
-        return np.diff(self.radii)
+        return np.diff(self.radii, axis=0)
 
     @cached_property
     def density(self) -> np.ndarray:
-        return self.eos.density
+        return self._eos.density
 
     @cached_property
     def depth(self) -> np.ndarray:
@@ -117,13 +116,11 @@ class FixedMesh:
             assert self.outer_boundary is not None
             assert self.inner_boundary is not None
             mixing_length = (
-                np.ones(self.radii.size) * 0.25 * (self.outer_boundary - self.inner_boundary)
+                np.ones_like(self.radii) * 0.25 * (self.outer_boundary - self.inner_boundary)
             )
         else:
             msg: str = f"Mixing length profile = {self.settings.mixing_length_profile} is unknown"
             raise ValueError(msg)
-
-        mixing_length = mixing_length.reshape(-1, 1)  # 2-D
 
         return mixing_length
 
@@ -137,21 +134,19 @@ class FixedMesh:
 
     @cached_property
     def number_of_nodes(self) -> int:
-        return len(self.radii)
+        return self.radii.size
 
     @cached_property
     def pressure(self) -> np.ndarray:
-        return self.eos.pressure
+        return self._eos.pressure
 
     @cached_property
     def pressure_gradient(self) -> np.ndarray:
-        return self.eos.pressure_gradient
+        return self._eos.pressure_gradient
 
     @cached_property
     def volume(self) -> np.ndarray:
-        volume: np.ndarray = (
-            4 / 3 * np.pi * (self._mesh_cubed[1:] - self._mesh_cubed[:-1]).reshape(-1, 1)
-        )  # 2-D
+        volume: np.ndarray = 4 / 3 * np.pi * (self._mesh_cubed[1:] - self._mesh_cubed[:-1])
 
         return volume
 
@@ -185,17 +180,21 @@ class Mesh:
             self.basic.inner_boundary,
         )
         self._d_dr_transform: np.ndarray = self.d_dr_transform_matrix()
+        logger.warning(self._d_dr_transform)
+        sys.exit(1)
         self._quantity_transform: np.ndarray = self.quantity_transform_matrix()
 
     def get_constant_spacing(self) -> np.ndarray:
         """Constant radius spacing across the mantle
 
         Returns:
-            Radii with constant spacing
+            Radii with constant spacing as a column vector
         """
         radii: np.ndarray = np.linspace(
             self.settings.inner_radius, self.settings.outer_radius, self.settings.number_of_nodes
         )
+        radii = np.atleast_2d(radii).T
+
         return radii
 
     def d_dr_transform_matrix(self) -> np.ndarray:
@@ -277,7 +276,7 @@ class Mesh:
         return quantity_at_basic_nodes
 
 
-class AdamsWilliamsonEOS:
+class _AdamsWilliamsonEOS:
     """Adams-Williamson equation of state
 
     Args:
@@ -321,8 +320,7 @@ class AdamsWilliamsonEOS:
             / self.settings.gravitational_acceleration
         )
 
-        # FIXME: Return column as 2-D
-        return np.atleast_2d(density).T
+        return density
 
     # @cached_property
     # def mass_element(self) -> np.ndarray:
@@ -372,24 +370,20 @@ class AdamsWilliamsonEOS:
             / self.settings.adams_williamson_beta
         )
         pressure: np.ndarray = factor * (
-            np.exp(
-                self.settings.adams_williamson_beta * (self.mesh.outer_boundary - self.mesh.radii)
-            )
+            np.exp(self.settings.adams_williamson_beta * (self.mesh.outer_boundary - self.radii))
             - 1
         )
         logger.debug("eos pressure = %s", pressure)
 
-        # FIXME: Return column as 2-D
-        return np.atleast_2d(pressure).T
+        return pressure
 
     @cached_property
     def pressure_gradient(self) -> np.ndarray:
         dPdr: np.ndarray = -self.settings.gravitational_acceleration * self.density
         logger.debug("eos dPdr = %s", dPdr)
 
-        # FIXME: Return column as 2-D
-        return np.atleast_2d(dPdr).T
+        return dPdr
 
     @cached_property
-    def radius(self) -> np.ndarray:
+    def radii(self) -> np.ndarray:
         return self.mesh.radii
