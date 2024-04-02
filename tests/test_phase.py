@@ -33,8 +33,8 @@ ATOL: float = 1e-8
 RTOL: float = 1e-8
 
 # Temperature and pressure for surface and near the CMB
-temperature: np.ndarray = np.array([1500, 4000]).reshape(-1, 1)
-pressure: np.ndarray = np.array([0, 135e9]).reshape(-1, 1)
+temperature: np.ndarray = np.atleast_2d([1500, 4000]).T
+pressure: np.ndarray = np.atleast_2d([0, 135e9]).T
 
 
 def test_version():
@@ -121,11 +121,11 @@ def test_lookup_property_1D():
     phase.update()
 
     solidus: np.ndarray = phase.solidus()
-    solidus_target: np.ndarray = np.array([[0.34515095], [1.05180909]])
+    solidus_target: np.ndarray = np.atleast_2d([0.34515095, 1.05180909]).T
     assert np.isclose(solidus, solidus_target, atol=ATOL, rtol=RTOL).all()
 
     liquidus: np.ndarray = phase.liquidus()
-    liquidus_target: np.ndarray = np.array([[0.4500425], [1.15670029]])
+    liquidus_target: np.ndarray = np.atleast_2d([0.4500425, 1.15670029]).T
     assert np.isclose(liquidus, liquidus_target, atol=ATOL, rtol=RTOL).all()
 
 
@@ -138,8 +138,10 @@ def test_lookup_property_2D():
 
     phase: PhaseEvaluator = solver.evaluator.phase_basic
 
-    temperature_: np.ndarray = np.array([1000, 1500, 2500, 2500, 2500]).reshape(-1, 1)
-    pressure_: np.ndarray = np.array([0, 1.4e11, 0, 1.4e11, 0.7e11]).reshape(-1, 1)
+    temperature_: np.ndarray = np.atleast_2d(
+        [[1000, 1500, 2500, 2500, 2500], [1250, 2000, 2000, 2250, 2500]]
+    ).T
+    pressure_: np.ndarray = np.atleast_2d([0, 1.4e11, 0, 1.4e11, 0.7e11]).T
 
     temperature_scaled = temperature_ / solver.parameters.scalings.temperature
     pressure_scaled = pressure_ / solver.parameters.scalings.pressure
@@ -151,7 +153,9 @@ def test_lookup_property_2D():
     density_melt: FloatOrArray = phase.density()
     logger.debug("density_melt = %s", density_melt)
 
-    density_melt_target: np.ndarray = np.array([0.5, 0.5625, 0.3125, 0.4375, 0.375]).reshape(-1, 1)
+    density_melt_target: np.ndarray = np.atleast_2d(
+        [[0.5, 0.5625, 0.3125, 0.4375, 0.375], [0.46875, 0.5, 0.375, 0.46875, 0.375]]
+    ).T
     assert np.isclose(density_melt, density_melt_target, atol=ATOL, rtol=RTOL).all()
 
 
@@ -163,8 +167,8 @@ def test_mixed_density():
     phase: PhaseEvaluator = solver.evaluator.phase_basic
 
     # Chosen to be the melting curve, i.e. 50% melt fraction
-    temperature_: np.ndarray = np.array([1590.3869054958254, 4521.708837963126]).reshape(-1, 1)
-    pressure_: np.ndarray = np.array([0, 1.4e11]).reshape(-1, 1)
+    temperature_: np.ndarray = np.atleast_2d([1590.3869054958254, 4521.708837963126]).T
+    pressure_: np.ndarray = np.atleast_2d([0, 1.4e11]).T
 
     temperature_scaled = temperature_ / solver.parameters.scalings.temperature
     pressure_scaled = pressure_ / solver.parameters.scalings.pressure
@@ -179,7 +183,5 @@ def test_mixed_density():
     density_mixed: FloatOrArray = phase.density()
     logger.debug("density_mixed = %s", density_mixed)
 
-    print(density_mixed)
-
-    density_mixed_target: np.ndarray = np.array([1.02439141, 1.02438914]).reshape(-1, 1)
+    density_mixed_target: np.ndarray = np.atleast_2d([1.02439141, 1.02438914]).T
     assert np.isclose(density_mixed, density_mixed_target, atol=ATOL, rtol=RTOL).all()

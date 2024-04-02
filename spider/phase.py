@@ -55,7 +55,7 @@ class ConstantProperty(PropertyProtocol):
     Attributes:
         name: Name of the property
         value: The constant value
-        ndim: Number of dimensions, which is equal to zero
+        ndim: Number of dimensions, which is equal to zero for a constant property
     """
 
     name: str
@@ -67,6 +67,12 @@ class ConstantProperty(PropertyProtocol):
         return self.value
 
     def __call__(self, temperature: np.ndarray, pressure: np.ndarray) -> float:
+        """Evaluates the property.
+
+        Args:
+            temperature: A 2-D array with temperature at constant time in columns
+            pressure: A 2-D array with pressure
+        """
         del temperature
         del pressure
         return self.eval()
@@ -78,12 +84,12 @@ class LookupProperty1D(PropertyProtocol):
 
     Args:
         name: Name of the property
-        value: The 1-D array
+        value: A 2-D array, with x values in the first column and y values in the second column.
 
     Attributes:
         name: Name of the property
-        value: The 1-D array
-        ndim: Number of dimensions, which is equal to one
+        value: A 2-D array
+        ndim: Number of dimensions, which is equal to one for a 1-D lookup
     """
 
     name: str
@@ -99,7 +105,9 @@ class LookupProperty1D(PropertyProtocol):
 
     def eval(self, pressure: np.ndarray) -> np.ndarray:
         # TODO: Will this break?  Assumes always one column
-        return np.interp(pressure, self.value[:, 0], self.value[:, 1]).reshape(-1, 1)
+        # FIXME: Removed .reshape(-1,1) to keep same output as input (remove comment once testing
+        # complete).
+        return np.interp(pressure, self.value[:, 0], self.value[:, 1])
 
     def gradient(self, pressure: np.ndarray) -> np.ndarray:
         """Computes the gradient"""
@@ -121,7 +129,7 @@ class LookupProperty2D(PropertyProtocol):
     Attributes:
         name: Name of the property
         value: The 2-D array
-        ndim: Number of dimensions, which is equal to two
+        ndim: Number of dimensions, which is equal to two for a 2-D lookup
     """
 
     name: str
@@ -576,6 +584,7 @@ class CompositePhaseEvaluator(PhaseEvaluator):
         logger.debug("_solid_mask = %s", self._solid_mask)
         test = getattr(self.liquid, property_name)()
         logger.debug("test = %s", test)
+
         try:
             single_phase[self._liquid_mask] = getattr(self.liquid, property_name)()[
                 self._liquid_mask
@@ -586,6 +595,7 @@ class CompositePhaseEvaluator(PhaseEvaluator):
             single_phase[self._solid_mask] = getattr(self.solid, property_name)()[self._solid_mask]
         except (IndexError, TypeError):
             single_phase[self._solid_mask] = getattr(self.solid, property_name)()
+
         combined: np.ndarray = combine_properties(self._blending_factor, mixed_phase, single_phase)
 
         return combined
