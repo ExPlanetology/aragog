@@ -104,9 +104,6 @@ class LookupProperty1D(PropertyProtocol):
         self._gradient = np.gradient(self.value[:, 1], self.value[:, 0])
 
     def eval(self, pressure: np.ndarray) -> np.ndarray:
-        # TODO: Will this break?  Assumes always one column
-        # FIXME: Removed .reshape(-1,1) to keep same output as input (remove comment once testing
-        # complete).
         return np.interp(pressure, self.value[:, 0], self.value[:, 1])
 
     def gradient(self, pressure: np.ndarray) -> np.ndarray:

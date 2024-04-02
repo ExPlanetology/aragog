@@ -29,7 +29,7 @@ from spider import CFG_TEST_DATA, REFERENCE_TEST_DATA, Solver, __version__, debu
 from spider.utilities import profile_decorator
 
 logger: logging.Logger = debug_logger()
-# logger.setLevel(logging.INFO)
+logger.setLevel(logging.INFO)
 
 ATOL: float = 1e-5
 RTOL: float = 1e-5

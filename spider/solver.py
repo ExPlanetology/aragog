@@ -231,7 +231,7 @@ class State:
         self._temperature_basic = self.evaluator.mesh.quantity_at_basic_nodes(temperature)
         logger.debug("temperature_basic = %s", self.temperature_basic)
         self._dTdr = self.evaluator.mesh.d_dr_at_basic_nodes(temperature)
-        logger.debug("dTdr = %s", self.dTdr)
+        logger.debug("dTdr = %s", self.dTdr())
         self.evaluator.boundary_conditions.conform_temperature_boundary_conditions(
             temperature, self._temperature_basic, self.dTdr()
         )

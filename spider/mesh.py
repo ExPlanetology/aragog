@@ -321,7 +321,8 @@ class AdamsWilliamsonEOS:
             / self.settings.gravitational_acceleration
         )
 
-        return density
+        # FIXME: Return column as 2-D
+        return np.atleast_2d(density).T
 
     # @cached_property
     # def mass_element(self) -> np.ndarray:
@@ -378,7 +379,7 @@ class AdamsWilliamsonEOS:
         )
         logger.debug("eos pressure = %s", pressure)
 
-        # FIXME: Return column
+        # FIXME: Return column as 2-D
         return np.atleast_2d(pressure).T
 
     @cached_property
@@ -386,7 +387,7 @@ class AdamsWilliamsonEOS:
         dPdr: np.ndarray = -self.settings.gravitational_acceleration * self.density
         logger.debug("eos dPdr = %s", dPdr)
 
-        # FIXME: Return column
+        # FIXME: Return column as 2-D
         return np.atleast_2d(dPdr).T
 
     @cached_property
