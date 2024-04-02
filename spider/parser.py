@@ -244,9 +244,9 @@ class _MeshSettings:
     number_of_nodes: int
     mixing_length_profile: str
     # Static pressure profile is derived from the Adams-Williamson equation of state.
-    adams_williamson_surface_density: float
-    adams_williamson_beta: float
+    surface_density: float
     gravitational_acceleration: float
+    adiabatic_bulk_modulus: float
     scalings_: _ScalingsSettings = field(init=False)
 
     def scale_attributes(self, scalings: _ScalingsSettings) -> None:
@@ -258,9 +258,9 @@ class _MeshSettings:
         self.scalings_ = scalings
         self.outer_radius /= self.scalings_.radius
         self.inner_radius /= self.scalings_.radius
-        self.adams_williamson_surface_density /= self.scalings_.density
-        self.adams_williamson_beta *= self.scalings_.radius
+        self.surface_density /= self.scalings_.density
         self.gravitational_acceleration /= self.scalings_.gravitational_acceleration
+        self.adiabatic_bulk_modulus /= self.scalings_.pressure
 
 
 @dataclass
