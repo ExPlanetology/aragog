@@ -32,7 +32,12 @@ from spider.interfaces import (
     PhaseEvaluatorProtocol,
     PropertyProtocol,
 )
-from spider.parser import Parameters, _MeshSettings, _PhaseMixedSettings, _PhaseSettings
+from spider.parser import (
+    Parameters,
+    _MeshParameters,
+    _PhaseMixedParameters,
+    _PhaseParameters,
+)
 from spider.utilities import (
     FloatOrArray,
     combine_properties,
@@ -165,8 +170,8 @@ class SinglePhaseEvaluator(PhaseEvaluatorABC):
     """Contains the objects to evaluate the EOS and transport properties of a phase.
 
     Args:
-        settings: phase settings
-        mesh: mesh settings
+        settings: Phase parameters
+        mesh: Mesh parameters
     """
 
     _density: PropertyProtocol
@@ -177,9 +182,9 @@ class SinglePhaseEvaluator(PhaseEvaluatorABC):
     _thermal_expansivity: PropertyProtocol
     _viscosity: PropertyProtocol
 
-    def __init__(self, settings: _PhaseSettings, mesh: _MeshSettings):
-        self._settings: _PhaseSettings = settings
-        self._mesh: _MeshSettings = mesh
+    def __init__(self, settings: _PhaseParameters, mesh: _MeshParameters):
+        self._settings: _PhaseParameters = settings
+        self._mesh: _MeshParameters = mesh
         cls_fields: tuple[Field, ...] = fields(self._settings)
         for field_ in cls_fields:
             name: str = field_.name
@@ -272,7 +277,7 @@ class MixedPhaseEvaluator(PhaseEvaluatorABC):
     _viscosity: np.ndarray
 
     def __init__(self, parameters: Parameters):
-        self.settings: _PhaseMixedSettings = parameters.phase_mixed
+        self.settings: _PhaseMixedParameters = parameters.phase_mixed
         self._liquid: PhaseEvaluatorProtocol = SinglePhaseEvaluator(
             parameters.phase_liquid, parameters.mesh
         )

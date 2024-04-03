@@ -24,7 +24,7 @@ from functools import cached_property
 
 import numpy as np
 
-from spider.parser import Parameters, _MeshSettings
+from spider.parser import Parameters, _MeshParameters
 from spider.utilities import FloatOrArray, is_monotonic_increasing
 
 logger: logging.Logger = logging.getLogger(__name__)
@@ -35,13 +35,13 @@ class FixedMesh:
     """A fixed mesh
 
     Args:
-        settings: Mesh settings
+        settings: Mesh parameters
         radii: Radii of the mesh
         outer_boundary: Outer boundary for computing depth below the surface
         inner_boundary: Inner boundary for computing height above the base
 
     Attributes:
-        settings: Mesh settings
+        settings: Mesh parameters
         radii: Radii of the mesh
         outer_boundary: Outer boundary for computing depth below the surface. Defaults to None, in
             which case the outermost radius is used.
@@ -62,7 +62,7 @@ class FixedMesh:
         total_volume: Total volume
     """
 
-    settings: _MeshSettings
+    settings: _MeshParameters
     radii: np.ndarray
     outer_boundary: float | None = None
     inner_boundary: float | None = None
@@ -167,8 +167,7 @@ class Mesh:
     """
 
     def __init__(self, parameters: Parameters):
-        self._parameters: Parameters = parameters
-        self.settings: _MeshSettings = self._parameters.mesh
+        self.settings: _MeshParameters = parameters.mesh
         basic_coordinates: np.ndarray = self.get_constant_spacing()
         self.basic: FixedMesh = FixedMesh(self.settings, basic_coordinates)
         staggered_coordinates: np.ndarray = self.basic.radii[:-1] + 0.5 * self.basic.delta_radii
@@ -288,12 +287,12 @@ class AdamsWilliamsonEOS:
 
     def __init__(
         self,
-        settings: _MeshSettings,
+        settings: _MeshParameters,
         radii: np.ndarray,
         outer_boundary: float,
         inner_boundary: float,
     ):
-        self._settings: _MeshSettings = settings
+        self._settings: _MeshParameters = settings
         self._radii: np.ndarray = radii
         self._outer_boundary = outer_boundary
         self._inner_boundary = inner_boundary
