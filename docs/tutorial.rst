@@ -3,13 +3,13 @@
 Tutorial
 ========
 
-You should use *Spider* because it's awesome.
+You should use *Aragog* because it's awesome. More documentation is coming soon!
 
 Here is an equation:
 
 .. code-block:: python
 
-   from spider import InteriorAtmosphereSystem
+   from aragog import InteriorAtmosphereSystem
 
 .. math::
     :label: equation1

@@ -1,17 +1,17 @@
 #
 # Copyright 2024 Dan J. Bower
 #
-# This file is part of Spider.
+# This file is part of Aragog.
 #
-# Spider is free software: you can redistribute it and/or modify it under the terms of the GNU
+# Aragog is free software: you can redistribute it and/or modify it under the terms of the GNU
 # General Public License as published by the Free Software Foundation, either version 3 of the
 # License, or (at your option) any later version.
 #
-# Spider is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
+# Aragog is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
 # even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
 # General Public License for more details.
 #
-# You should have received a copy of the GNU General Public License along with Spider. If not,
+# You should have received a copy of the GNU General Public License along with Aragog. If not,
 # see <https://www.gnu.org/licenses/>.
 #
 """Solver"""
@@ -27,12 +27,12 @@ import numpy as np
 from scipy.integrate import solve_ivp
 from scipy.optimize import OptimizeResult
 
-from spider.core import BoundaryConditions, InitialCondition
-from spider.interfaces import PhaseEvaluatorProtocol
-from spider.mesh import Mesh
-from spider.parser import Parameters, _EnergyParameters, _Radionuclide
-from spider.phase import PhaseEvaluatorCollection
-from spider.utilities import FloatOrArray
+from aragog.core import BoundaryConditions, InitialCondition
+from aragog.interfaces import PhaseEvaluatorProtocol
+from aragog.mesh import Mesh
+from aragog.parser import Parameters, _EnergyParameters, _Radionuclide
+from aragog.phase import PhaseEvaluatorCollection
+from aragog.utilities import FloatOrArray
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -351,7 +351,7 @@ class Solver:
     """
 
     def __init__(self, filename: str | Path, root: str | Path = Path()):
-        logger.info("Creating a SPIDER model")
+        logger.info("Creating an Aragog model")
         self.filename = Path(filename)
         self.root = Path(root)
         self.parameters: Parameters

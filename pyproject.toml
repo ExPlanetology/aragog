@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "spider"
+name = "aragog"
 version = "0.1.0"
 description = "A 1-D parameterised interior dynamics code for rocky or icy planets and moons with liquid and/or solid interiors"
 authors = ["Dan J Bower <djbower@users.noreply.github.com>"]

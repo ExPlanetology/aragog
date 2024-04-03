@@ -1,69 +1,69 @@
-spider package
+aragog package
 ==============
 
 Submodules
 ----------
 
-spider.core module
+aragog.core module
 ------------------
 
-.. automodule:: spider.core
+.. automodule:: aragog.core
    :members:
    :undoc-members:
    :show-inheritance:
 
-spider.interfaces module
+aragog.interfaces module
 ------------------------
 
-.. automodule:: spider.interfaces
+.. automodule:: aragog.interfaces
    :members:
    :undoc-members:
    :show-inheritance:
 
-spider.mesh module
+aragog.mesh module
 ------------------
 
-.. automodule:: spider.mesh
+.. automodule:: aragog.mesh
    :members:
    :undoc-members:
    :show-inheritance:
 
-spider.output module
+aragog.output module
 --------------------
 
-.. automodule:: spider.output
+.. automodule:: aragog.output
    :members:
    :undoc-members:
    :show-inheritance:
 
-spider.parser module
+aragog.parser module
 --------------------
 
-.. automodule:: spider.parser
+.. automodule:: aragog.parser
    :members:
    :undoc-members:
    :show-inheritance:
 
-spider.phase module
+aragog.phase module
 -------------------
 
-.. automodule:: spider.phase
+.. automodule:: aragog.phase
    :members:
    :undoc-members:
    :show-inheritance:
 
-spider.solver module
+aragog.solver module
 --------------------
 
-.. automodule:: spider.solver
+.. automodule:: aragog.solver
    :members:
    :undoc-members:
    :show-inheritance:
 
-spider.utilities module
+aragog.utilities module
 -----------------------
 
-.. automodule:: spider.utilities
+.. automodule:: aragog.utilities
    :members:
    :undoc-members:
    :show-inheritance:
@@ -71,7 +71,7 @@ spider.utilities module
 Module contents
 ---------------
 
-.. automodule:: spider
+.. automodule:: aragog
    :members:
    :undoc-members:
    :show-inheritance:
