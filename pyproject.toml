@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "aragog"
-version = "0.1.0"
+version = "0.1.0-alpha"
 description = "A 1-D parameterised interior dynamics code for rocky or icy planets and moons with liquid and/or solid interiors"
 authors = ["Dan J Bower <djbower@users.noreply.github.com>"]
 license = "GPL-3.0-or-later"

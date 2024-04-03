@@ -37,7 +37,7 @@ RTOL: float = 1e-5
 
 def test_version():
     """Test version."""
-    assert __version__ == "0.1.0"
+    assert __version__ == "0.1.0-alpha"
 
 
 @profile_decorator
