@@ -42,9 +42,11 @@ class State:
     """Stores and updates the state at temperature and pressure.
 
     Args:
+        _parameters: Parameters
         evaluator: Evaluator
 
     Attributes:
+        evaluator: Evaluator
         critical_reynolds_number: Critical Reynolds number
         gravitational_separation_flux: Gravitational separation flux at the basic nodes
         heating: Heat generation at the staggered nodes
@@ -62,7 +64,7 @@ class State:
         viscous_velocity: Viscous velocity at the basic nodes
     """
 
-    parameters: Parameters
+    _parameters: Parameters
     evaluator: Evaluator
     _dTdr: np.ndarray = field(init=False)
     _eddy_diffusivity: np.ndarray = field(init=False)
@@ -103,7 +105,7 @@ class State:
 
         return convective_heat_flux
 
-    def radiogenic_heating(self, time: np.ndarray | float) -> np.ndarray | float:
+    def radiogenic_heating(self, time: FloatOrArray) -> FloatOrArray:
         """Radiogenic heating
 
         Args:
@@ -113,11 +115,11 @@ class State:
             Radiogenic heating as a single column (in a 2-D array) if time is a float, otherwise a
                 2-D array with each column associated with a single time in the time array.
         """
-        radiogenic_heating_float: np.ndarray | float = 0
+        radiogenic_heating_float: FloatOrArray = 0
         for radionuclide in self.evaluator.radionuclides:
             radiogenic_heating_float += radionuclide.get_heating(time)
 
-        radiogenic_heating: np.ndarray | float = radiogenic_heating_float * (
+        radiogenic_heating: FloatOrArray = radiogenic_heating_float * (
             self.evaluator.phase_staggered.density() / self.capacitance_staggered()
         )
 
@@ -204,7 +206,7 @@ class State:
     def viscous_velocity(self) -> np.ndarray:
         return self._viscous_velocity
 
-    def update(self, temperature: np.ndarray, time: np.ndarray | float) -> None:
+    def update(self, temperature: np.ndarray, time: FloatOrArray) -> None:
         """Updates the state.
 
         The evaluation order matters because we want to minimise the number of evaluations.
@@ -266,17 +268,17 @@ class State:
         self._eddy_diffusivity *= self.evaluator.mesh.basic.mixing_length
         # Heat flux
         self._heat_flux = np.zeros_like(self.temperature_basic)
-        if self.parameters.energy.conduction:
+        if self._parameters.energy.conduction:
             self._heat_flux += self.conductive_heat_flux()
-        if self.parameters.energy.convection:
+        if self._parameters.energy.convection:
             self._heat_flux += self.convective_heat_flux()
-        if self.parameters.energy.gravitational_separation:
+        if self._parameters.energy.gravitational_separation:
             self._heat_flux += self.gravitational_separation_flux
-        if self.parameters.energy.mixing:
+        if self._parameters.energy.mixing:
             self._heat_flux += self.mixing_flux
         # Heating
         self._heating = np.zeros_like(self.temperature_staggered)
-        if self.parameters.energy.radionuclides:
+        if self._parameters.energy.radionuclides:
             self._heating += self.radiogenic_heating(time)
 
 
@@ -323,7 +325,7 @@ class Evaluator:
 
 
 class Solver:
-    """Creates the system and solves the interior dynamics
+    """Solves the interior dynamics
 
     Args:
         filename: Filename of a file with configuration settings
@@ -332,9 +334,9 @@ class Solver:
     Attributes:
         filename: Filename of a file with configuration settings
         root: Root path to the filename. Defaults to empty
-        config: Configuration data
-        data: Model data
-        state: Model state
+        parameters: Parameters
+        evaluator: Evaluator
+        state: State
     """
 
     def __init__(self, filename: str | Path, root: str | Path = Path()):
