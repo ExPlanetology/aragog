@@ -98,13 +98,27 @@ class State:
         return capacitance
 
     def conductive_heat_flux(self) -> np.ndarray:
-        """Conductive heat flux"""
+        r"""Conductive heat flux:
+
+        .. math::
+            J_{cond} = -k \frac{\partial T}{\partial r}
+
+        where :math:`k` is thermal conductivity, :math:`T` is temperature, and :math:`r` is radius.
+        """
         conductive_heat_flux: np.ndarray = self.phase_basic.thermal_conductivity() * -self.dTdr()
 
         return conductive_heat_flux
 
     def convective_heat_flux(self) -> np.ndarray:
-        """Convective heat flux"""
+        r"""Convective heat flux:
+
+        .. math::
+            J_{conv} = -\rho c_p \kappa_h \left( \frac{\partial T}{\partial r} - \left( \frac{\partial T}{\partial r} \right)_S \right)
+
+        where :math:`\rho` is density, :math:`c_p` is heat capacity at constant pressure,
+        :math:`\kappa_h` is eddy diffusivity, :math:`T` is temperature, :math:`r` is radius, and
+        :math:`S` is entropy.
+        """
         convective_heat_flux: np.ndarray = (
             self.phase_basic.density()
             * self.phase_basic.heat_capacity()
