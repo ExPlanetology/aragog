@@ -33,7 +33,7 @@ from spider.parser import Parameters, _Radionuclide
 from spider.phase import (
     CompositePhaseEvaluator,
     MixedPhaseEvaluator,
-    PhaseEvaluator,
+    PhaseEvaluatorABC,
     SinglePhaseEvaluator,
 )
 from spider.utilities import FloatOrArray
@@ -311,8 +311,8 @@ class Evaluator:
     boundary_conditions: BoundaryConditions = field(init=False)
     initial_condition: InitialCondition = field(init=False)
     mesh: Mesh = field(init=False)
-    phase_basic: PhaseEvaluator = field(init=False)
-    phase_staggered: PhaseEvaluator = field(init=False)
+    phase_basic: PhaseEvaluatorABC = field(init=False)
+    phase_staggered: PhaseEvaluatorABC = field(init=False)
 
     def __post_init__(self):
         self.mesh = Mesh(self.parameters)
@@ -323,7 +323,7 @@ class Evaluator:
 
         # Set the phase evaluator
         if phase_to_use == "liquid":
-            phase: PhaseEvaluator = SinglePhaseEvaluator(
+            phase: PhaseEvaluatorABC = SinglePhaseEvaluator(
                 self.parameters.phase_liquid, self.parameters.mesh
             )
 
