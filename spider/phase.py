@@ -21,17 +21,18 @@ from __future__ import annotations
 import copy
 import logging
 import sys
-from dataclasses import KW_ONLY, Field, dataclass, field, fields
+from dataclasses import KW_ONLY, Field, InitVar, dataclass, field, fields
 
 import numpy as np
 from scipy.interpolate import RectBivariateSpline
 
 from spider.interfaces import (
+    MixedPhaseEvaluatorProtocol,
     PhaseEvaluatorABC,
     PhaseEvaluatorProtocol,
     PropertyProtocol,
 )
-from spider.parser import _MeshSettings, _PhaseMixedSettings, _PhaseSettings
+from spider.parser import Parameters, _MeshSettings, _PhaseMixedSettings, _PhaseSettings
 from spider.utilities import (
     FloatOrArray,
     combine_properties,
@@ -270,17 +271,15 @@ class MixedPhaseEvaluator(PhaseEvaluatorABC):
     _thermal_expansivity: np.ndarray
     _viscosity: np.ndarray
 
-    def __init__(
-        self,
-        settings: _PhaseMixedSettings,
-        solid: PhaseEvaluatorProtocol,
-        liquid: PhaseEvaluatorProtocol,
-    ):
-        self.settings: _PhaseMixedSettings = settings
-        # TODO: Might not be necessary to copy, but since the temperature is fixed to the melting
-        # curves this might prevent problems and eliminates unneccesary updating
-        self._solid: PhaseEvaluatorProtocol = copy.deepcopy(solid)
-        self._liquid: PhaseEvaluatorProtocol = copy.deepcopy(liquid)
+    def __init__(self, parameters: Parameters):
+        self.settings: _PhaseMixedSettings = parameters.phase_mixed
+        self._liquid: PhaseEvaluatorProtocol = SinglePhaseEvaluator(
+            parameters.phase_liquid, parameters.mesh
+        )
+        self._solid: PhaseEvaluatorProtocol = SinglePhaseEvaluator(
+            parameters.phase_solid, parameters.mesh
+        )
+
         self._solidus: LookupProperty1D = self._get_melting_curve_lookup(
             "solidus", self.settings.solidus
         )
@@ -524,6 +523,9 @@ class CompositePhaseEvaluator(PhaseEvaluatorABC):
     def liquidus(self) -> np.ndarray:
         return self.mixed.liquidus()
 
+    def liquidus_gradient(self) -> np.ndarray:
+        return self.mixed.liquidus_gradient()
+
     @override
     def melt_fraction(self) -> np.ndarray:
         """Melt fraction"""
@@ -531,6 +533,9 @@ class CompositePhaseEvaluator(PhaseEvaluatorABC):
 
     def solidus(self) -> np.ndarray:
         return self.mixed.solidus()
+
+    def solidus_gradient(self) -> np.ndarray:
+        return self.mixed.solidus_gradient()
 
     @override
     def thermal_conductivity(self) -> np.ndarray:
@@ -605,3 +610,48 @@ class CompositePhaseEvaluator(PhaseEvaluatorABC):
         combined: np.ndarray = combine_properties(self._blending_factor, mixed_phase, single_phase)
 
         return combined
+
+
+@dataclass
+class PhaseEvaluatorCollection:
+    """A collection of phase evaluators
+
+    Creates the phase evaluators and selects the active phase based on configuration data.
+
+    Args:
+        parameters: Parameters
+
+    Attributes:
+        liquid: Liquid evaluator
+        solid: Solid evaluator
+        mixed: Mixed evaluator
+        composite: Composite evaluator
+        active: The active evaluator, which is defined by configuration data
+    """
+
+    parameters: InitVar[Parameters]
+    liquid: PhaseEvaluatorProtocol = field(init=False)
+    solid: PhaseEvaluatorProtocol = field(init=False)
+    mixed: MixedPhaseEvaluatorProtocol = field(init=False)
+    composite: MixedPhaseEvaluatorProtocol = field(init=False)
+    active: PhaseEvaluatorProtocol = field(init=False)
+
+    def __post_init__(self, parameters: Parameters):
+        self.liquid = SinglePhaseEvaluator(parameters.phase_liquid, parameters.mesh)
+        self.solid = SinglePhaseEvaluator(parameters.phase_solid, parameters.mesh)
+        self.mixed = MixedPhaseEvaluator(parameters)
+        self.composite = CompositePhaseEvaluator(self.solid, self.liquid, self.mixed)
+
+        # Configuration data defines which phase to use for the model.
+        phase_to_use: str = parameters.phase_mixed.phase
+
+        if phase_to_use == "liquid":
+            self.active = self.liquid
+        elif phase_to_use == "solid":
+            self.active = self.solid
+        # Allowing selection of self.mixed doesn't really make sense because it will probably give
+        # crazy results outside the mixed phase region. Hence just use composite.
+        elif phase_to_use == "mixed" or phase_to_use == "composite":
+            self.active = self.composite
+        else:
+            raise ValueError(f"Phase = {phase_to_use} is not a valid selection")

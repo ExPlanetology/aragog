@@ -31,12 +31,7 @@ from spider.core import BoundaryConditions, InitialCondition
 from spider.interfaces import PhaseEvaluatorProtocol
 from spider.mesh import Mesh
 from spider.parser import Parameters, _Radionuclide
-from spider.phase import (
-    CompositePhaseEvaluator,
-    MixedPhaseEvaluator,
-    PhaseEvaluatorABC,
-    SinglePhaseEvaluator,
-)
+from spider.phase import PhaseEvaluatorCollection
 from spider.utilities import FloatOrArray
 
 logger: logging.Logger = logging.getLogger(__name__)
@@ -46,18 +41,11 @@ logger: logging.Logger = logging.getLogger(__name__)
 class State:
     """Stores and updates the state at temperature and pressure.
 
-    update() minimises the number of function calls by only updating what is required to integrate
-    the energy balance.
-
     Args:
         evaluator: Evaluator
 
     Attributes:
-        conductive_heat_flux: Conductive heat flux at the basic nodes
-        convective_heat_flux: Convective heat flux at the basic nodes
         critical_reynolds_number: Critical Reynolds number
-        dTdr: Temperature gradient at the basic nodes with respect to radius
-        eddy_diffusivity: Eddy diffusivity at the basic nodes
         gravitational_separation_flux: Gravitational separation flux at the basic nodes
         heating: Heat generation at the staggered nodes
         heat_flux: Heat flux at the basic nodes
@@ -303,6 +291,7 @@ class Evaluator:
         boundary_conditions: Boundary conditions
         initial_condition: Initial condition
         mesh: Mesh
+        phase_evaluators: Evaluators for all phases
         phase_basic: Phase evaluator for the basic mesh
         phase_staggered: Phase evaluator for the staggered mesh
         radionuclides: Radionuclides
@@ -312,6 +301,7 @@ class Evaluator:
     boundary_conditions: BoundaryConditions = field(init=False)
     initial_condition: InitialCondition = field(init=False)
     mesh: Mesh = field(init=False)
+    phase_evaluators: PhaseEvaluatorCollection = field(init=False)
     phase_basic: PhaseEvaluatorProtocol = field(init=False)
     phase_staggered: PhaseEvaluatorProtocol = field(init=False)
 
@@ -319,34 +309,12 @@ class Evaluator:
         self.mesh = Mesh(self.parameters)
         self.boundary_conditions = BoundaryConditions(self.parameters, self.mesh)
         self.initial_condition = InitialCondition(self.parameters, self.mesh)
-
-        phase_to_use: str = self.parameters.phase_mixed.phase
-
-        # Set the phase evaluator
-        if phase_to_use == "liquid":
-            phase: PhaseEvaluatorABC = SinglePhaseEvaluator(
-                self.parameters.phase_liquid, self.parameters.mesh
-            )
-
-        elif phase_to_use == "solid":
-            phase = SinglePhaseEvaluator(self.parameters.phase_solid, self.parameters.mesh)
-
-        elif phase_to_use == "mixed":
-            solid: SinglePhaseEvaluator = SinglePhaseEvaluator(
-                self.parameters.phase_solid, self.parameters.mesh
-            )
-            liquid: SinglePhaseEvaluator = SinglePhaseEvaluator(
-                self.parameters.phase_liquid, self.parameters.mesh
-            )
-            mixed: MixedPhaseEvaluator = MixedPhaseEvaluator(
-                self.parameters.phase_mixed, solid, liquid
-            )
-            phase = CompositePhaseEvaluator(solid, liquid, mixed)
-
-        # Set the pressure since this will not change during a model run.
-        self.phase_basic = copy.deepcopy(phase)
+        self.phase_evaluators = PhaseEvaluatorCollection(self.parameters)
+        # Sets the pressure since this will not change during a model run. Must deepcopy first
+        # because pressure is set as an attribute.
+        self.phase_basic = copy.deepcopy(self.phase_evaluators.active)
         self.phase_basic.set_pressure(self.mesh.basic.pressure)
-        self.phase_staggered = copy.deepcopy(phase)
+        self.phase_staggered = copy.deepcopy(self.phase_evaluators.active)
         self.phase_staggered.set_pressure(self.mesh.staggered.pressure)
 
     @property
@@ -453,12 +421,12 @@ class Solver:
     def solve(self) -> None:
         """Solves the system of ODEs to determine the interior temperature profile."""
 
-        start_time: float = self.evaluator.parameters.solver.start_time
+        start_time: float = self.parameters.solver.start_time
         logger.debug("start_time = %f", start_time)
-        end_time: float = self.evaluator.parameters.solver.end_time
+        end_time: float = self.parameters.solver.end_time
         logger.debug("end_time = %f", end_time)
-        atol: float = self.evaluator.parameters.solver.atol
-        rtol: float = self.evaluator.parameters.solver.rtol
+        atol: float = self.parameters.solver.atol
+        rtol: float = self.parameters.solver.rtol
 
         self._solution = solve_ivp(
             self.dTdt,
