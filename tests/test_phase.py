@@ -39,7 +39,7 @@ pressure: np.ndarray = np.atleast_2d([0, 135e9]).T
 
 def test_version():
     """Test version."""
-    assert __version__ == "0.1.0"
+    assert __version__ == "0.1.0-alpha"
 
 
 def test_liquid_constant_properties():
