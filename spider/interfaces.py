@@ -35,8 +35,50 @@ class PropertyProtocol(Protocol):
     def __call__(self, temperature: np.ndarray, pressure: np.ndarray) -> FloatOrArray: ...
 
 
-class PhaseEvaluator(ABC):
-    """Phase evaluator"""
+class PhaseEvaluatorProtocol(Protocol):
+    """Phase evaluator protocol"""
+
+    def set_temperature(self, temperature: np.ndarray) -> None: ...
+
+    def set_pressure(self, pressure: np.ndarray) -> None: ...
+
+    def update(self) -> None: ...
+
+    def density(self) -> FloatOrArray: ...
+
+    def dTdPs(self) -> np.ndarray: ...
+
+    def dTdrs(self) -> np.ndarray: ...
+
+    def gravitational_acceleration(self) -> FloatOrArray: ...
+
+    def heat_capacity(self) -> FloatOrArray: ...
+
+    def kinematic_viscosity(self) -> FloatOrArray: ...
+
+    def melt_fraction(self) -> FloatOrArray: ...
+
+    def thermal_conductivity(self) -> FloatOrArray: ...
+
+    def thermal_expansivity(self) -> FloatOrArray: ...
+
+    def viscosity(self) -> FloatOrArray: ...
+
+
+class MixedPhaseEvaluatorProtocol(PhaseEvaluatorProtocol, Protocol):
+    """Mixed phase evaluator protocol"""
+
+    def liquidus(self) -> np.ndarray: ...
+
+    def liquidus_gradient(self) -> np.ndarray: ...
+
+    def solidus(self) -> np.ndarray: ...
+
+    def solidus_gradient(self) -> np.ndarray: ...
+
+
+class PhaseEvaluatorABC(ABC):
+    """Phase evaluator ABC"""
 
     temperature: np.ndarray
     pressure: np.ndarray
@@ -52,7 +94,10 @@ class PhaseEvaluator(ABC):
         self.pressure = pressure
 
     def update(self) -> None:
-        """Precompute quantities to avoid duplicate calculations"""
+        """Updates quantities to avoid repeat, possibly expensive, calculations."""
+
+    @abstractmethod
+    def density(self) -> FloatOrArray: ...
 
     def dTdPs(self) -> np.ndarray:
         """TODO: Update reference to sphinx: Solomatov (2007), Treatise on Geophysics, Eq. 3.2"""
@@ -72,19 +117,16 @@ class PhaseEvaluator(ABC):
 
         return dTdrs
 
-    def kinematic_viscosity(self) -> FloatOrArray:
-        viscosity: FloatOrArray = self.viscosity() / self.density()
-
-        return viscosity
-
-    @abstractmethod
-    def density(self) -> FloatOrArray: ...
-
     @abstractmethod
     def gravitational_acceleration(self) -> FloatOrArray: ...
 
     @abstractmethod
     def heat_capacity(self) -> FloatOrArray: ...
+
+    def kinematic_viscosity(self) -> FloatOrArray:
+        viscosity: FloatOrArray = self.viscosity() / self.density()
+
+        return viscosity
 
     @abstractmethod
     def melt_fraction(self) -> FloatOrArray: ...
