@@ -83,6 +83,7 @@ class FixedMesh:
 
     @cached_property
     def area(self) -> np.ndarray:
+        """Area"""
         return 4 * np.pi * np.square(self.radii)
 
     @cached_property

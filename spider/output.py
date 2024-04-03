@@ -25,6 +25,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.optimize import OptimizeResult
 
+from spider.parser import Parameters
 from spider.solver import Evaluator
 
 logger: logging.Logger = logging.getLogger(__name__)
@@ -38,8 +39,9 @@ class Output:
 
     def __init__(self, solver: Solver):
         self.solver: Solver = solver
+        self.parameters: Parameters = solver.parameters
         self.solution: OptimizeResult = self.solver.solution
-        self.data: Evaluator = self.solver.data
+        self.evaluator: Evaluator = self.solver.evaluator
         self.state: State = self.solver.state
 
     @property
@@ -55,46 +57,43 @@ class Output:
     @property
     def convective_heat_flux_basic(self) -> np.ndarray:
         """Convective heat flux"""
-        return self.state.convective_heat_flux() * self.data.parameters.scalings.heat_flux
+        return self.state.convective_heat_flux() * self.parameters.scalings.heat_flux
 
     @property
     def density_basic(self) -> np.ndarray:
         """Density"""
         return (
-            self.solver.state.phase_basic.density
+            self.evaluator.phase_basic.density()
             * np.ones(self.shape_basic)
-            * self.data.parameters.scalings.density
+            * self.parameters.scalings.density
         )
 
     @property
     def dTdr(self) -> np.ndarray:
         """dTdr"""
-        return self.solver.state.dTdr * self.data.parameters.scalings.temperature_gradient
+        return self.solver.state.dTdr() * self.parameters.scalings.temperature_gradient
 
     @property
     def dTdrs(self) -> np.ndarray:
         """dTdrs"""
-        return (
-            self.solver.state.phase_basic.dTdrs
-            * self.data.parameters.scalings.temperature_gradient
+        return (  # FIXME
+            self.solver.evaluator.phase_basic.dTdrs()
+            * self.parameters.scalings.temperature_gradient
         )
 
     @property
     def heat_capacity_basic(self) -> np.ndarray:
         """Heat capacity"""
         return (
-            self.solver.state.phase_basic.heat_capacity
+            self.solver.evaluator.phase_basic.heat_capacity()
             * np.ones(self.shape_basic)
-            * self.data.parameters.scalings.heat_capacity
+            * self.parameters.scalings.heat_capacity
         )
 
     @property
     def liquidus_K_staggered(self) -> np.ndarray:
         """Liquidus"""
-        return (
-            self.data.mixed.liquidus(self.solution.y, self.data.mesh.staggered.eos.pressure)
-            * self.data.parameters.scalings.temperature
-        )
+        return self.evaluator.phases.mixed.liquidus() * self.parameters.scalings.temperature
 
     @property
     def melt_fraction_staggered(self) -> np.ndarray:
