@@ -1,13 +1,13 @@
-Spider Documentation
+Aragog Documentation
 ########################
 
 | Author: Dan J. Bower
 | Institute of Geochemistry and Petrology
 | ETH Zurich, Switzerland
 
-*Spider* is available at https://github.com/ExPlanetology/pyspider
+*Aragog* is available at https://github.com/ExPlanetology/aragog
 
-If you use *Spider* please cite :cite:t:`BSW18`
+If you use *Aragog* please cite :cite:t:`BSW18`
 
 .. toctree::
    :maxdepth: 2

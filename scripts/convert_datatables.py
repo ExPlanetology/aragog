@@ -20,7 +20,7 @@ import numpy as np
 from matplotlib.axes._axes import Axes
 from scipy import interpolate
 
-from spider import debug_logger
+from aragog import debug_logger
 
 # Paths should not usually be hard-coded, but the data conversion is only done once
 entropy_data: Path = Path("/Users/dan/Programs/pyspider/data/1TPa-dK09-elec-free/entropy")

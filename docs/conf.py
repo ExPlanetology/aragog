@@ -19,7 +19,7 @@ import sphinx.builders.latex.transforms
 
 # -- Project information -----------------------------------------------------
 
-project = "Spider"
+project = "Aragog"
 copyright = "2024, Dan J. Bower"  # Created by Sphinx, so pylint: disable=W0622
 author = "Dan J. Bower"
 

@@ -1,7 +1,7 @@
-spider
+aragog
 ======
 
 .. toctree::
    :maxdepth: 4
 
-   spider
+   aragog
