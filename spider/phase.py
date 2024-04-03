@@ -26,7 +26,7 @@ from dataclasses import KW_ONLY, Field, dataclass, field, fields
 import numpy as np
 from scipy.interpolate import RectBivariateSpline
 
-from spider.interfaces import PhaseEvaluator, PropertyProtocol
+from spider.interfaces import PhaseEvaluatorABC, PropertyProtocol
 from spider.parser import _MeshSettings, _PhaseMixedSettings, _PhaseSettings
 from spider.utilities import (
     FloatOrArray,
@@ -156,7 +156,7 @@ class LookupProperty2D(PropertyProtocol):
         return self.eval(temperature, pressure)
 
 
-class SinglePhaseEvaluator(PhaseEvaluator):
+class SinglePhaseEvaluator(PhaseEvaluatorABC):
     """Contains the objects to evaluate the EOS and transport properties of a phase.
 
     Args:
@@ -242,7 +242,7 @@ class SinglePhaseEvaluator(PhaseEvaluator):
         return self._viscosity(self.temperature, self.pressure)
 
 
-class MixedPhaseEvaluator(PhaseEvaluator):
+class MixedPhaseEvaluator(PhaseEvaluatorABC):
     """Evaluates the EOS and transport properties of a mixed phase.
 
     This only computes quantities within the mixed phase region between the solidus and the
@@ -269,14 +269,14 @@ class MixedPhaseEvaluator(PhaseEvaluator):
     def __init__(
         self,
         settings: _PhaseMixedSettings,
-        solid: PhaseEvaluator,
-        liquid: PhaseEvaluator,
+        solid: PhaseEvaluatorABC,
+        liquid: PhaseEvaluatorABC,
     ):
         self.settings: _PhaseMixedSettings = settings
         # TODO: Might not be necessary to copy, but since the temperature is fixed to the melting
         # curves this might prevent problems and eliminates unneccesary updating
-        self._solid: PhaseEvaluator = copy.deepcopy(solid)
-        self._liquid: PhaseEvaluator = copy.deepcopy(liquid)
+        self._solid: PhaseEvaluatorABC = copy.deepcopy(solid)
+        self._liquid: PhaseEvaluatorABC = copy.deepcopy(liquid)
         self._solidus: LookupProperty1D = self._get_melting_curve_lookup(
             "solidus", self.settings.solidus
         )
@@ -424,7 +424,7 @@ class MixedPhaseEvaluator(PhaseEvaluator):
         return LookupProperty1D(name=name, value=value_array)
 
 
-class CompositePhaseEvaluator(PhaseEvaluator):
+class CompositePhaseEvaluator(PhaseEvaluatorABC):
     """Evaluates the EOS and transport properties of a composite phase.
 
     This combines the single phase evaluators for the liquid and solid regions with the mixed phase
@@ -450,12 +450,12 @@ class CompositePhaseEvaluator(PhaseEvaluator):
 
     def __init__(
         self,
-        solid: PhaseEvaluator,
-        liquid: PhaseEvaluator,
+        solid: PhaseEvaluatorABC,
+        liquid: PhaseEvaluatorABC,
         mixed: MixedPhaseEvaluator,
     ):
-        self.solid: PhaseEvaluator = copy.deepcopy(solid)
-        self.liquid: PhaseEvaluator = copy.deepcopy(liquid)
+        self.solid: PhaseEvaluatorABC = copy.deepcopy(solid)
+        self.liquid: PhaseEvaluatorABC = copy.deepcopy(liquid)
         self.mixed: MixedPhaseEvaluator = copy.deepcopy(mixed)
 
     @override
