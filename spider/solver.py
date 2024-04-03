@@ -28,6 +28,7 @@ from scipy.integrate import solve_ivp
 from scipy.optimize import OptimizeResult
 
 from spider.core import BoundaryConditions, InitialCondition
+from spider.interfaces import PhaseEvaluatorProtocol
 from spider.mesh import Mesh
 from spider.parser import Parameters, _Radionuclide
 from spider.phase import (
@@ -97,7 +98,7 @@ class State:
     def conductive_heat_flux(self) -> np.ndarray:
         """Conductive heat flux"""
         conductive_heat_flux: np.ndarray = (
-            -self.evaluator.phase_basic.thermal_conductivity() * self.dTdr()
+            self.evaluator.phase_basic.thermal_conductivity() * -self.dTdr()
         )
 
         return conductive_heat_flux
@@ -105,10 +106,10 @@ class State:
     def convective_heat_flux(self) -> np.ndarray:
         """Convective heat flux"""
         convective_heat_flux: np.ndarray = (
-            -self.evaluator.phase_basic.density()
+            self.evaluator.phase_basic.density()
             * self.evaluator.phase_basic.heat_capacity()
             * self.eddy_diffusivity()
-            * self._super_adiabatic_temperature_gradient
+            * -self._super_adiabatic_temperature_gradient
         )
 
         return convective_heat_flux
@@ -246,9 +247,9 @@ class State:
         )
         self._is_convective = self._super_adiabatic_temperature_gradient < 0
         velocity_prefactor: np.ndarray = (
-            -self.evaluator.phase_basic.gravitational_acceleration()
+            self.evaluator.phase_basic.gravitational_acceleration()
             * self.evaluator.phase_basic.thermal_expansivity()
-            * self._super_adiabatic_temperature_gradient
+            * -self._super_adiabatic_temperature_gradient
         )
         # Viscous velocity
         self._viscous_velocity = (
@@ -311,8 +312,8 @@ class Evaluator:
     boundary_conditions: BoundaryConditions = field(init=False)
     initial_condition: InitialCondition = field(init=False)
     mesh: Mesh = field(init=False)
-    phase_basic: PhaseEvaluatorABC = field(init=False)
-    phase_staggered: PhaseEvaluatorABC = field(init=False)
+    phase_basic: PhaseEvaluatorProtocol = field(init=False)
+    phase_staggered: PhaseEvaluatorProtocol = field(init=False)
 
     def __post_init__(self):
         self.mesh = Mesh(self.parameters)
