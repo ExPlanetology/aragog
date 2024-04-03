@@ -111,7 +111,7 @@ def test_lookup_property_1D():
 
     solver: Solver = Solver("abe_mixed_lookup.cfg", CFG_TEST_DATA)
     solver.initialize()
-    phase: MixedPhaseEvaluatorProtocol = solver.evaluator.phase_basic
+    phase: MixedPhaseEvaluatorProtocol = solver.evaluator.phases.composite
 
     temperature_scaled = temperature / solver.parameters.scalings.temperature
     pressure_scaled = pressure / solver.parameters.scalings.pressure

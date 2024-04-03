@@ -293,7 +293,7 @@ class Evaluator:
         boundary_conditions: Boundary conditions
         initial_condition: Initial condition
         mesh: Mesh
-        phase_evaluators: Evaluators for all phases
+        phases: Evaluators for all phases
         phase_basic: Phase evaluator for the basic mesh
         phase_staggered: Phase evaluator for the staggered mesh
         radionuclides: Radionuclides
@@ -303,7 +303,7 @@ class Evaluator:
     boundary_conditions: BoundaryConditions = field(init=False)
     initial_condition: InitialCondition = field(init=False)
     mesh: Mesh = field(init=False)
-    phase_evaluators: PhaseEvaluatorCollection = field(init=False)
+    phases: PhaseEvaluatorCollection = field(init=False)
     phase_basic: PhaseEvaluatorProtocol = field(init=False)
     phase_staggered: PhaseEvaluatorProtocol = field(init=False)
 
@@ -311,12 +311,12 @@ class Evaluator:
         self.mesh = Mesh(self._parameters)
         self.boundary_conditions = BoundaryConditions(self._parameters, self.mesh)
         self.initial_condition = InitialCondition(self._parameters, self.mesh)
-        self.phase_evaluators = PhaseEvaluatorCollection(self._parameters)
+        self.phases = PhaseEvaluatorCollection(self._parameters)
         # Sets the pressure since this will not change during a model run. Must deepcopy first
         # because pressure is set as an attribute.
-        self.phase_basic = copy.deepcopy(self.phase_evaluators.active)
+        self.phase_basic = copy.deepcopy(self.phases.active)
         self.phase_basic.set_pressure(self.mesh.basic.pressure)
-        self.phase_staggered = copy.deepcopy(self.phase_evaluators.active)
+        self.phase_staggered = copy.deepcopy(self.phases.active)
         self.phase_staggered.set_pressure(self.mesh.staggered.pressure)
 
     @property
