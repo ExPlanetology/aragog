@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License along with Spider. If not,
 # see <https://www.gnu.org/licenses/>.
 #
-"""Parses the configuration file, and scales and stores the settings."""
+"""Parses the configuration file and scales and stores the parameters."""
 
 from __future__ import annotations
 
@@ -39,15 +39,15 @@ logger: logging.Logger = logging.getLogger(__name__)
 def _get_dataclass_from_section_name() -> dict[str, Any]:
     """Maps the section names in the configuration data to the dataclasses that stores the data."""
     mapping: dict[str, Any] = {
-        "scalings": _ScalingsSettings,
-        "solver": _SolverSettings,
-        "boundary_conditions": _BoundaryConditionsSettings,
-        "mesh": _MeshSettings,
-        "energy": _EnergySettings,
-        "initial_condition": _InitialConditionSettings,
-        "phase_liquid": _PhaseSettings,
-        "phase_solid": _PhaseSettings,
-        "phase_mixed": _PhaseMixedSettings,
+        "scalings": _ScalingsParameters,
+        "solver": _SolverParameters,
+        "boundary_conditions": _BoundaryConditionsParameters,
+        "mesh": _MeshParameters,
+        "energy": _EnergyParameters,
+        "initial_condition": _InitialConditionParameters,
+        "phase_liquid": _PhaseParameters,
+        "phase_solid": _PhaseParameters,
+        "phase_mixed": _PhaseMixedParameters,
         # radionuclides are dealt with separately
     }
 
@@ -55,8 +55,8 @@ def _get_dataclass_from_section_name() -> dict[str, Any]:
 
 
 @dataclass
-class _ScalingsSettings:
-    """Stores settings from the scalings section in the configuration data. All units are SI.
+class _ScalingsParameters:
+    """Stores parameters in the scalings section in the configuration data. All units are SI.
 
     Args:
         radius: Radius in metres. Defaults to 1.
@@ -133,8 +133,8 @@ class _ScalingsSettings:
 
 
 @dataclass
-class _BoundaryConditionsSettings:
-    """Stores settings from the boundary_conditions section in the configuration data."""
+class _BoundaryConditionsParameters:
+    """Stores parameters in the boundary_conditions section in the configuration data."""
 
     outer_boundary_condition: int
     outer_boundary_value: float
@@ -145,9 +145,9 @@ class _BoundaryConditionsSettings:
     core_radius: float
     core_density: float
     core_heat_capacity: float
-    scalings_: _ScalingsSettings = field(init=False)
+    scalings_: _ScalingsParameters = field(init=False)
 
-    def scale_attributes(self, scalings: _ScalingsSettings) -> None:
+    def scale_attributes(self, scalings: _ScalingsParameters) -> None:
         """Scales the attributes.
 
         Args:
@@ -205,8 +205,8 @@ class _BoundaryConditionsSettings:
 
 
 @dataclass
-class _EnergySettings:
-    """Stores settings from the energy section"""
+class _EnergyParameters:
+    """Stores parameters in the energy section"""
 
     conduction: bool
     convection: bool
@@ -217,14 +217,14 @@ class _EnergySettings:
 
 
 @dataclass
-class _InitialConditionSettings:
-    """Stores the settings from the initial_condition section in the configuration data."""
+class _InitialConditionParameters:
+    """Stores the settings in the initial_condition section in the configuration data."""
 
     surface_temperature: float
     basal_temperature: float
-    scalings_: _ScalingsSettings = field(init=False)
+    scalings_: _ScalingsParameters = field(init=False)
 
-    def scale_attributes(self, scalings: _ScalingsSettings) -> None:
+    def scale_attributes(self, scalings: _ScalingsParameters) -> None:
         """Scales the attributes.
 
         Args:
@@ -236,8 +236,8 @@ class _InitialConditionSettings:
 
 
 @dataclass
-class _MeshSettings:
-    """Stores settings from the mesh section in the configuration data."""
+class _MeshParameters:
+    """Stores parameters in the mesh section in the configuration data."""
 
     outer_radius: float
     inner_radius: float
@@ -247,9 +247,9 @@ class _MeshSettings:
     surface_density: float
     gravitational_acceleration: float
     adiabatic_bulk_modulus: float
-    scalings_: _ScalingsSettings = field(init=False)
+    scalings_: _ScalingsParameters = field(init=False)
 
-    def scale_attributes(self, scalings: _ScalingsSettings) -> None:
+    def scale_attributes(self, scalings: _ScalingsParameters) -> None:
         """Scales the attributes
 
         Args:
@@ -264,8 +264,8 @@ class _MeshSettings:
 
 
 @dataclass
-class _PhaseMixedSettings:
-    """Stores settings from the phase_mixed section in the configuration data."""
+class _PhaseMixedParameters:
+    """Stores settings in the phase_mixed section in the configuration data."""
 
     latent_heat_of_fusion: float
     rheological_transition_melt_fraction: float
@@ -275,9 +275,9 @@ class _PhaseMixedSettings:
     phase: str
     phase_transition_width: float
     grain_size: float
-    scalings_: _ScalingsSettings = field(init=False)
+    scalings_: _ScalingsParameters = field(init=False)
 
-    def scale_attributes(self, scalings: _ScalingsSettings) -> None:
+    def scale_attributes(self, scalings: _ScalingsParameters) -> None:
         """Scales the attributes
 
         Args:
@@ -289,8 +289,8 @@ class _PhaseMixedSettings:
 
 
 @dataclass
-class _PhaseSettings:
-    """Stores settings from a phase section in the configuration data.
+class _PhaseParameters:
+    """Stores settings in a phase section in the configuration data.
 
     This is used to store settings from phase_liquid and phase_solid.
     """
@@ -304,7 +304,7 @@ class _PhaseSettings:
     # TODO: Below currently breaks the code
     # scalings_: scalings = field(init=False)
 
-    def scale_attributes(self, scalings: _ScalingsSettings) -> None:
+    def scale_attributes(self, scalings: _ScalingsParameters) -> None:
         """Scales the attributes if they are numbers.
 
         Args:
@@ -336,7 +336,7 @@ class _PhaseSettings:
 
 @dataclass
 class _Radionuclide:
-    """Stores the settings from a radionuclide section in the configuration data."""
+    """Stores the settings in a radionuclide section in the configuration data."""
 
     name: str
     t0_years: float
@@ -344,9 +344,9 @@ class _Radionuclide:
     concentration: float
     heat_production: float
     half_life_years: float
-    scalings_: _ScalingsSettings = field(init=False)
+    scalings_: _ScalingsParameters = field(init=False)
 
-    def scale_attributes(self, scalings: _ScalingsSettings) -> None:
+    def scale_attributes(self, scalings: _ScalingsParameters) -> None:
         """Scales the attributes.
 
         Args:
@@ -377,16 +377,16 @@ class _Radionuclide:
 
 
 @dataclass
-class _SolverSettings:
-    """Stores settings from the solver section in the configuration data."""
+class _SolverParameters:
+    """Stores settings in the solver section in the configuration data."""
 
     start_time: float
     end_time: float
     atol: float
     rtol: float
-    scalings_: _ScalingsSettings = field(init=False)
+    scalings_: _ScalingsParameters = field(init=False)
 
-    def scale_attributes(self, scalings: _ScalingsSettings) -> None:
+    def scale_attributes(self, scalings: _ScalingsParameters) -> None:
         self.scalings_ = scalings
         self.start_time /= self.scalings_.time_years
         self.end_time /= self.scalings_.time_years
@@ -396,20 +396,20 @@ class _SolverSettings:
 class Parameters:
     """Assembles all the parameters.
 
-    The settings from each section are scaled here to ensure that all the settings are scaled
+    The parameters in each section are scaled here to ensure that all the parameters are scaled
     (non-dimensionalised) consistently with each other.
     """
 
-    boundary_conditions: _BoundaryConditionsSettings
-    energy: _EnergySettings
-    initial_condition: _InitialConditionSettings
-    mesh: _MeshSettings
-    phase_solid: _PhaseSettings
-    phase_liquid: _PhaseSettings
-    phase_mixed: _PhaseMixedSettings
+    boundary_conditions: _BoundaryConditionsParameters
+    energy: _EnergyParameters
+    initial_condition: _InitialConditionParameters
+    mesh: _MeshParameters
+    phase_solid: _PhaseParameters
+    phase_liquid: _PhaseParameters
+    phase_mixed: _PhaseMixedParameters
     radionuclides: list[_Radionuclide]
-    scalings: _ScalingsSettings
-    solver: _SolverSettings
+    scalings: _ScalingsParameters
+    solver: _SolverParameters
 
     def __post_init__(self):
         cls_fields: tuple[Field, ...] = fields(self.__class__)
@@ -426,7 +426,7 @@ class Parameters:
 
     @classmethod
     def from_file(cls, *filenames) -> Self:
-        """Parses the parameters from a configuration file(s)
+        """Parses the parameters in a configuration file(s)
 
         Args:
             *filenames: Filenames of the configuration data

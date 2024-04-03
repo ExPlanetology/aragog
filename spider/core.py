@@ -27,8 +27,8 @@ import numpy as np
 from spider.mesh import Mesh
 from spider.parser import (
     Parameters,
-    _BoundaryConditionsSettings,
-    _InitialConditionSettings,
+    _BoundaryConditionsParameters,
+    _InitialConditionParameters,
 )
 
 if TYPE_CHECKING:
@@ -50,7 +50,7 @@ class BoundaryConditions:
     _mesh: Mesh
 
     def __post_init__(self):
-        self._settings: _BoundaryConditionsSettings = self._parameters.boundary_conditions
+        self._settings: _BoundaryConditionsParameters = self._parameters.boundary_conditions
 
     def conform_temperature_boundary_conditions(
         self, temperature: np.ndarray, temperature_basic: np.ndarray, dTdr: np.ndarray
@@ -171,7 +171,7 @@ class InitialCondition:
     _mesh: Mesh
 
     def __post_init__(self):
-        self._settings: _InitialConditionSettings = self._parameters.initial_condition
+        self._settings: _InitialConditionParameters = self._parameters.initial_condition
         self._temperature: np.ndarray = self.get_linear()
 
     @property
