@@ -83,7 +83,6 @@ class FixedMesh:
 
     @cached_property
     def area(self) -> np.ndarray:
-        """Includes 4*pi factor unlike C-version of SPIDER."""
         return 4 * np.pi * np.square(self.radii)
 
     @cached_property
@@ -274,47 +273,6 @@ class Mesh:
         return quantity_at_basic_nodes
 
 
-# @cached_property
-# def mass_element(self) -> np.ndarray:
-#     """Mass element"""
-#     # TODO: Check because C Spider does not include 4*pi scaling
-#     mass_element: np.ndarray = self.mesh.area * self.density
-
-#     return mass_element
-
-# @cached_property
-# def mass_within_shell(self) -> np.ndarray:
-#     """Mass within a spherical shell
-
-#     Returns:
-#         Mass within a spherical shell
-#     """
-#     # TODO: Check because C Spider does not include 4*pi scaling
-#     # From outer radius to inner
-#     mass_within_radius: np.ndarray = np.flip(self.mass_within_radius)
-#     # Return same order as radii
-#     delta_mass: np.ndarray = np.flip(mass_within_radius[:-1] - mass_within_radius[1:])
-
-#     return delta_mass
-
-# def get_mass_within_radius(self, radius: FloatOrArray) -> np.ndarray:
-#     """Computes the mass contained within a radius
-
-#     Returns:
-#         Mass within radii
-#     """
-#     mass: np.ndarray = (
-#         -2 / self._settings.adams_williamson_beta**3
-#         - np.square(radius) / self._settings.adams_williamson_beta
-#         - 2 * radius / np.square(self._settings.adams_williamson_beta)
-#     )
-
-#     # TODO: Check because C Spider does not include 4*pi scaling
-#     mass *= 4 * np.pi * self.get_density(radius)
-
-#     return mass
-
-
 class AdamsWilliamsonEOS:
     r"""Adams-Williamson equation of state (EOS).
 
@@ -362,7 +320,7 @@ class AdamsWilliamsonEOS:
         return self.pressure_gradient
 
     def get_density(self, pressure: FloatOrArray) -> np.ndarray:
-        r"""Density
+        r"""Computes density from pressure:
 
         .. math::
 
@@ -384,7 +342,7 @@ class AdamsWilliamsonEOS:
         return density
 
     def get_density_from_radii(self, radii: FloatOrArray) -> FloatOrArray:
-        r"""Computes density from radii.
+        r"""Computes density from radii:
 
         .. math::
 
@@ -408,14 +366,44 @@ class AdamsWilliamsonEOS:
 
         return density
 
-    def get_mass_within_radius(self, radii: FloatOrArray) -> np.ndarray:
-        r"""Computes mass within radii.
+    def get_mass_element(self, radii: FloatOrArray) -> np.ndarray:
+        r"""Computes the mass element:
 
         .. math::
 
-            \int 4 \pi r^2 \rho(r) dr
+            \frac{\delta m}{\delta r} = 4 \pi r^2 \rho
+
+        where :math:`\delta m` is the mass element, :math:`r` is radius, and :math:`\rho` is
+        density.
+
+        Args:
+            radii: Radii
+
+        Returns:
+            The mass element at radii
+        """
+        mass_element: np.ndarray = (
+            4 * np.pi * np.square(radii) * self.get_density_from_radii(radii)
+        )
+
+        return mass_element
+
+    def get_mass_within_radii(self, radii: FloatOrArray) -> np.ndarray:
+        r"""Computes mass within radii:
+
+        .. math::
+
+            m(r) = \int 4 \pi r^2 \rho dr
+
+        where :math:`m` is mass, :math:`r` is radius, and :math:`\rho` is density.
 
         The integral was evaluated using WolframAlpha.
+
+        Args:
+            radii: Radii
+
+        Returns:
+            Mass within radii
         """
         a: float = self._surface_density
         b: float = self._adiabatic_bulk_modulus
@@ -423,6 +411,14 @@ class AdamsWilliamsonEOS:
         d: float = self._outer_boundary
 
         def mass_integral(radii_: FloatOrArray) -> np.ndarray:
+            """Mass within radii including arbitrary constant of integration.
+
+            Args:
+                radii_: Radii
+
+            Returns:
+                Mass within radii
+            """
 
             mass: np.ndarray = (
                 4
@@ -444,8 +440,23 @@ class AdamsWilliamsonEOS:
 
         return mass
 
+    def get_mass_within_shell(self, radii: np.ndarray) -> np.ndarray:
+        """Computes the mass within spherical shells bounded by radii.
+
+        Args:
+            radii: Radii
+
+        Returns:
+            Mass within the bounded spherical shells
+        """
+        mass: np.ndarray = self.get_mass_within_radii(radii[1:]) - self.get_mass_within_radii(
+            radii[:-1]
+        )
+
+        return mass
+
     def get_pressure_from_radii(self, radii: FloatOrArray) -> np.ndarray:
-        r"""Computes pressure from radii.
+        r"""Computes pressure from radii:
 
         .. math::
 
@@ -474,7 +485,7 @@ class AdamsWilliamsonEOS:
         return pressure
 
     def get_pressure_gradient(self, pressure: FloatOrArray) -> np.ndarray:
-        r"""Computes the pressure gradient.
+        r"""Computes the pressure gradient:
 
         .. math::
 
@@ -494,7 +505,7 @@ class AdamsWilliamsonEOS:
         return dPdr
 
     def get_radii_from_pressure(self, pressure: FloatOrArray) -> np.ndarray:
-        r"""Computes radii from pressure.
+        r"""Computes radii from pressure:
 
         .. math::
 
