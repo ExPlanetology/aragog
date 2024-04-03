@@ -301,8 +301,7 @@ class _PhaseParameters:
     thermal_conductivity: float | str
     thermal_expansivity: float | str
     viscosity: float | str
-    # TODO: Below currently breaks the code
-    # scalings_: scalings = field(init=False)
+    scalings_: _ScalingsParameters = field(init=False)
 
     def scale_attributes(self, scalings: _ScalingsParameters) -> None:
         """Scales the attributes if they are numbers.

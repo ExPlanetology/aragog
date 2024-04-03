@@ -210,8 +210,7 @@ class SinglePhaseEvaluator(PhaseEvaluatorABC):
                 else:
                     raise ValueError(f"Lookup data must have 2 or 3 dimensions, not {ndim}")
             else:
-                msg: str = f"Cannot interpret value ({value}): not a number or a file"
-                raise ValueError(msg)
+                logger.info("Cannot interpret value (%s): not a number or a file", value)
 
         self._gravitational_acceleration = ConstantProperty(
             "gravitational_acceleration", value=gravitational_acceleration
