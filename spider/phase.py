@@ -32,12 +32,7 @@ from spider.interfaces import (
     PhaseEvaluatorProtocol,
     PropertyProtocol,
 )
-from spider.parser import (
-    Parameters,
-    _MeshParameters,
-    _PhaseMixedParameters,
-    _PhaseParameters,
-)
+from spider.parser import Parameters, _PhaseMixedParameters, _PhaseParameters
 from spider.utilities import (
     FloatOrArray,
     combine_properties,
@@ -171,7 +166,7 @@ class SinglePhaseEvaluator(PhaseEvaluatorABC):
 
     Args:
         settings: Phase parameters
-        mesh: Mesh parameters
+        gravitational_acceleration: Gravitational acceleration
     """
 
     _density: PropertyProtocol
@@ -182,9 +177,8 @@ class SinglePhaseEvaluator(PhaseEvaluatorABC):
     _thermal_expansivity: PropertyProtocol
     _viscosity: PropertyProtocol
 
-    def __init__(self, settings: _PhaseParameters, mesh: _MeshParameters):
+    def __init__(self, settings: _PhaseParameters, gravitational_acceleration: float):
         self._settings: _PhaseParameters = settings
-        self._mesh: _MeshParameters = mesh
         cls_fields: tuple[Field, ...] = fields(self._settings)
         for field_ in cls_fields:
             name: str = field_.name
@@ -220,7 +214,7 @@ class SinglePhaseEvaluator(PhaseEvaluatorABC):
                 raise ValueError(msg)
 
         self._gravitational_acceleration = ConstantProperty(
-            "gravitational_acceleration", value=self._mesh.gravitational_acceleration
+            "gravitational_acceleration", value=gravitational_acceleration
         )
 
     @override
@@ -279,10 +273,10 @@ class MixedPhaseEvaluator(PhaseEvaluatorABC):
     def __init__(self, parameters: Parameters):
         self.settings: _PhaseMixedParameters = parameters.phase_mixed
         self._liquid: PhaseEvaluatorProtocol = SinglePhaseEvaluator(
-            parameters.phase_liquid, parameters.mesh
+            parameters.phase_liquid, parameters.mesh.gravitational_acceleration
         )
         self._solid: PhaseEvaluatorProtocol = SinglePhaseEvaluator(
-            parameters.phase_solid, parameters.mesh
+            parameters.phase_solid, parameters.mesh.gravitational_acceleration
         )
 
         self._solidus: LookupProperty1D = self._get_melting_curve_lookup(
@@ -642,8 +636,9 @@ class PhaseEvaluatorCollection:
     active: PhaseEvaluatorProtocol = field(init=False)
 
     def __post_init__(self, parameters: Parameters):
-        self.liquid = SinglePhaseEvaluator(parameters.phase_liquid, parameters.mesh)
-        self.solid = SinglePhaseEvaluator(parameters.phase_solid, parameters.mesh)
+        gravitation_acceleration: float = parameters.mesh.gravitational_acceleration
+        self.liquid = SinglePhaseEvaluator(parameters.phase_liquid, gravitation_acceleration)
+        self.solid = SinglePhaseEvaluator(parameters.phase_solid, gravitation_acceleration)
         self.mixed = MixedPhaseEvaluator(parameters)
         self.composite = CompositePhaseEvaluator(self.solid, self.liquid, self.mixed)
 

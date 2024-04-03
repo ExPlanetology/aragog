@@ -62,6 +62,7 @@ class State:
         viscous_velocity: Viscous velocity at the basic nodes
     """
 
+    parameters: Parameters
     evaluator: Evaluator
     _dTdr: np.ndarray = field(init=False)
     _eddy_diffusivity: np.ndarray = field(init=False)
@@ -265,17 +266,17 @@ class State:
         self._eddy_diffusivity *= self.evaluator.mesh.basic.mixing_length
         # Heat flux
         self._heat_flux = np.zeros_like(self.temperature_basic)
-        if self.evaluator.parameters.energy.conduction:
+        if self.parameters.energy.conduction:
             self._heat_flux += self.conductive_heat_flux()
-        if self.evaluator.parameters.energy.convection:
+        if self.parameters.energy.convection:
             self._heat_flux += self.convective_heat_flux()
-        if self.evaluator.parameters.energy.gravitational_separation:
+        if self.parameters.energy.gravitational_separation:
             self._heat_flux += self.gravitational_separation_flux
-        if self.evaluator.parameters.energy.mixing:
+        if self.parameters.energy.mixing:
             self._heat_flux += self.mixing_flux
         # Heating
         self._heating = np.zeros_like(self.temperature_staggered)
-        if self.evaluator.parameters.energy.radionuclides:
+        if self.parameters.energy.radionuclides:
             self._heating += self.radiogenic_heating(time)
 
 
@@ -284,10 +285,9 @@ class Evaluator:
     """Contains classes that evaluate quantities necessary to compute the interior evolution.
 
     Args:
-        parameters: Parameters
+        _parameters: Parameters
 
     Attributes:
-        parameters: Parameters
         boundary_conditions: Boundary conditions
         initial_condition: Initial condition
         mesh: Mesh
@@ -297,7 +297,7 @@ class Evaluator:
         radionuclides: Radionuclides
     """
 
-    parameters: Parameters
+    _parameters: Parameters
     boundary_conditions: BoundaryConditions = field(init=False)
     initial_condition: InitialCondition = field(init=False)
     mesh: Mesh = field(init=False)
@@ -306,10 +306,10 @@ class Evaluator:
     phase_staggered: PhaseEvaluatorProtocol = field(init=False)
 
     def __post_init__(self):
-        self.mesh = Mesh(self.parameters)
-        self.boundary_conditions = BoundaryConditions(self.parameters, self.mesh)
-        self.initial_condition = InitialCondition(self.parameters, self.mesh)
-        self.phase_evaluators = PhaseEvaluatorCollection(self.parameters)
+        self.mesh = Mesh(self._parameters)
+        self.boundary_conditions = BoundaryConditions(self._parameters, self.mesh)
+        self.initial_condition = InitialCondition(self._parameters, self.mesh)
+        self.phase_evaluators = PhaseEvaluatorCollection(self._parameters)
         # Sets the pressure since this will not change during a model run. Must deepcopy first
         # because pressure is set as an attribute.
         self.phase_basic = copy.deepcopy(self.phase_evaluators.active)
@@ -319,7 +319,7 @@ class Evaluator:
 
     @property
     def radionuclides(self) -> list[_Radionuclide]:
-        return self.parameters.radionuclides
+        return self._parameters.radionuclides
 
 
 class Solver:
@@ -357,7 +357,7 @@ class Solver:
         """Initializes the model."""
         logger.info("Initializing %s", self.__class__.__name__)
         self.evaluator = Evaluator(self.parameters)
-        self.state = State(self.evaluator)
+        self.state = State(self.parameters, self.evaluator)
 
     @property
     def temperature_basic(self) -> np.ndarray:
@@ -367,7 +367,7 @@ class Solver:
     @property
     def temperature_staggered(self) -> np.ndarray:
         """Temperature of the staggered mesh in K"""
-        temperature: np.ndarray = self.solution.y * self.evaluator.parameters.scalings.temperature
+        temperature: np.ndarray = self.solution.y * self.parameters.scalings.temperature
 
         return temperature
 
