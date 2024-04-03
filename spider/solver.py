@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import copy
 import logging
-from dataclasses import dataclass, field
+from dataclasses import InitVar, dataclass, field
 from pathlib import Path
 
 import numpy as np
@@ -30,7 +30,7 @@ from scipy.optimize import OptimizeResult
 from spider.core import BoundaryConditions, InitialCondition
 from spider.interfaces import PhaseEvaluatorProtocol
 from spider.mesh import Mesh
-from spider.parser import Parameters, _Radionuclide
+from spider.parser import Parameters, _EnergyParameters, _Radionuclide
 from spider.phase import PhaseEvaluatorCollection
 from spider.utilities import FloatOrArray
 
@@ -42,7 +42,7 @@ class State:
     """Stores and updates the state at temperature and pressure.
 
     Args:
-        _parameters: Parameters
+        parameters: Parameters
         evaluator: Evaluator
 
     Attributes:
@@ -64,8 +64,11 @@ class State:
         viscous_velocity: Viscous velocity at the basic nodes
     """
 
-    _parameters: Parameters
-    evaluator: Evaluator
+    parameters: InitVar[Parameters]
+    _evaluator: Evaluator
+    _settings: _EnergyParameters = field(init=False)
+    phase_basic: PhaseEvaluatorProtocol = field(init=False)
+    phase_staggered: PhaseEvaluatorProtocol = field(init=False)
     _dTdr: np.ndarray = field(init=False)
     _eddy_diffusivity: np.ndarray = field(init=False)
     _heat_flux: np.ndarray = field(init=False)
@@ -78,27 +81,33 @@ class State:
     _viscous_velocity: np.ndarray = field(init=False)
     _inviscid_velocity: np.ndarray = field(init=False)
 
+    def __post_init__(self, parameters: Parameters):
+        self._settings = parameters.energy
+        # Sets the pressure since this will not change during a model run. Must deepcopy first
+        # because pressure is set as an attribute.
+        self.phase_basic = copy.deepcopy(self._evaluator.phases.active)
+        self.phase_basic.set_pressure(self._evaluator.mesh.basic.pressure)
+        self.phase_staggered = copy.deepcopy(self._evaluator.phases.active)
+        self.phase_staggered.set_pressure(self._evaluator.mesh.staggered.pressure)
+
     def capacitance_staggered(self) -> FloatOrArray:
         capacitance: FloatOrArray = (
-            self.evaluator.phase_staggered.density()
-            * self.evaluator.phase_staggered.heat_capacity()
+            self.phase_staggered.density() * self.phase_staggered.heat_capacity()
         )
 
         return capacitance
 
     def conductive_heat_flux(self) -> np.ndarray:
         """Conductive heat flux"""
-        conductive_heat_flux: np.ndarray = (
-            self.evaluator.phase_basic.thermal_conductivity() * -self.dTdr()
-        )
+        conductive_heat_flux: np.ndarray = self.phase_basic.thermal_conductivity() * -self.dTdr()
 
         return conductive_heat_flux
 
     def convective_heat_flux(self) -> np.ndarray:
         """Convective heat flux"""
         convective_heat_flux: np.ndarray = (
-            self.evaluator.phase_basic.density()
-            * self.evaluator.phase_basic.heat_capacity()
+            self.phase_basic.density()
+            * self.phase_basic.heat_capacity()
             * self.eddy_diffusivity()
             * -self._super_adiabatic_temperature_gradient
         )
@@ -116,11 +125,11 @@ class State:
                 2-D array with each column associated with a single time in the time array.
         """
         radiogenic_heating_float: FloatOrArray = 0
-        for radionuclide in self.evaluator.radionuclides:
+        for radionuclide in self._evaluator.radionuclides:
             radiogenic_heating_float += radionuclide.get_heating(time)
 
         radiogenic_heating: FloatOrArray = radiogenic_heating_float * (
-            self.evaluator.phase_staggered.density() / self.capacitance_staggered()
+            self.phase_staggered.density() / self.capacitance_staggered()
         )
 
         return radiogenic_heating
@@ -220,36 +229,34 @@ class State:
 
         logger.debug("Setting the temperature profile")
         self._temperature_staggered = temperature
-        self._temperature_basic = self.evaluator.mesh.quantity_at_basic_nodes(temperature)
+        self._temperature_basic = self._evaluator.mesh.quantity_at_basic_nodes(temperature)
         logger.debug("temperature_basic = %s", self.temperature_basic)
-        self._dTdr = self.evaluator.mesh.d_dr_at_basic_nodes(temperature)
+        self._dTdr = self._evaluator.mesh.d_dr_at_basic_nodes(temperature)
         logger.debug("dTdr = %s", self.dTdr())
-        self.evaluator.boundary_conditions.conform_temperature_boundary_conditions(
+        self._evaluator.boundary_conditions.conform_temperature_boundary_conditions(
             temperature, self._temperature_basic, self.dTdr()
         )
 
-        self.evaluator.phase_staggered.set_temperature(temperature)
-        self.evaluator.phase_staggered.update()
-        self.evaluator.phase_basic.set_temperature(self._temperature_basic)
-        self.evaluator.phase_basic.update()
+        self.phase_staggered.set_temperature(temperature)
+        self.phase_staggered.update()
+        self.phase_basic.set_temperature(self._temperature_basic)
+        self.phase_basic.update()
 
-        self._super_adiabatic_temperature_gradient = (
-            self.dTdr() - self.evaluator.phase_basic.dTdrs()
-        )
+        self._super_adiabatic_temperature_gradient = self.dTdr() - self.phase_basic.dTdrs()
         self._is_convective = self._super_adiabatic_temperature_gradient < 0
         velocity_prefactor: np.ndarray = (
-            self.evaluator.phase_basic.gravitational_acceleration()
-            * self.evaluator.phase_basic.thermal_expansivity()
+            self.phase_basic.gravitational_acceleration()
+            * self.phase_basic.thermal_expansivity()
             * -self._super_adiabatic_temperature_gradient
         )
         # Viscous velocity
         self._viscous_velocity = (
-            velocity_prefactor * self.evaluator.mesh.basic.mixing_length_cubed
-        ) / (18 * self.evaluator.phase_basic.kinematic_viscosity())
+            velocity_prefactor * self._evaluator.mesh.basic.mixing_length_cubed
+        ) / (18 * self.phase_basic.kinematic_viscosity())
         self._viscous_velocity[~self.is_convective] = 0  # Must be super-adiabatic
         # Inviscid velocity
         self._inviscid_velocity = (
-            velocity_prefactor * self.evaluator.mesh.basic.mixing_length_squared
+            velocity_prefactor * self._evaluator.mesh.basic.mixing_length_squared
         ) / 16
         self._inviscid_velocity[~self.is_convective] = 0  # Must be super-adiabatic
         self._inviscid_velocity[self._is_convective] = np.sqrt(
@@ -258,27 +265,27 @@ class State:
         # Reynolds number
         self._reynolds_number = (
             self._viscous_velocity
-            * self.evaluator.mesh.basic.mixing_length
-            / self.evaluator.phase_basic.kinematic_viscosity()
+            * self._evaluator.mesh.basic.mixing_length
+            / self.phase_basic.kinematic_viscosity()
         )
         # Eddy diffusivity
         self._eddy_diffusivity = np.where(
             self.viscous_regime, self._viscous_velocity, self._inviscid_velocity
         )
-        self._eddy_diffusivity *= self.evaluator.mesh.basic.mixing_length
+        self._eddy_diffusivity *= self._evaluator.mesh.basic.mixing_length
         # Heat flux
         self._heat_flux = np.zeros_like(self.temperature_basic)
-        if self._parameters.energy.conduction:
+        if self._settings.conduction:
             self._heat_flux += self.conductive_heat_flux()
-        if self._parameters.energy.convection:
+        if self._settings.convection:
             self._heat_flux += self.convective_heat_flux()
-        if self._parameters.energy.gravitational_separation:
+        if self._settings.gravitational_separation:
             self._heat_flux += self.gravitational_separation_flux
-        if self._parameters.energy.mixing:
+        if self._settings.mixing:
             self._heat_flux += self.mixing_flux
         # Heating
         self._heating = np.zeros_like(self.temperature_staggered)
-        if self._parameters.energy.radionuclides:
+        if self._settings.radionuclides:
             self._heating += self.radiogenic_heating(time)
 
 
@@ -294,8 +301,6 @@ class Evaluator:
         initial_condition: Initial condition
         mesh: Mesh
         phases: Evaluators for all phases
-        phase_basic: Phase evaluator for the basic mesh
-        phase_staggered: Phase evaluator for the staggered mesh
         radionuclides: Radionuclides
     """
 
@@ -304,20 +309,12 @@ class Evaluator:
     initial_condition: InitialCondition = field(init=False)
     mesh: Mesh = field(init=False)
     phases: PhaseEvaluatorCollection = field(init=False)
-    phase_basic: PhaseEvaluatorProtocol = field(init=False)
-    phase_staggered: PhaseEvaluatorProtocol = field(init=False)
 
     def __post_init__(self):
         self.mesh = Mesh(self._parameters)
         self.boundary_conditions = BoundaryConditions(self._parameters, self.mesh)
         self.initial_condition = InitialCondition(self._parameters, self.mesh)
         self.phases = PhaseEvaluatorCollection(self._parameters)
-        # Sets the pressure since this will not change during a model run. Must deepcopy first
-        # because pressure is set as an attribute.
-        self.phase_basic = copy.deepcopy(self.phases.active)
-        self.phase_basic.set_pressure(self.mesh.basic.pressure)
-        self.phase_staggered = copy.deepcopy(self.phases.active)
-        self.phase_staggered.set_pressure(self.mesh.staggered.pressure)
 
     @property
     def radionuclides(self) -> list[_Radionuclide]:
