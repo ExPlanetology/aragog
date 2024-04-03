@@ -26,7 +26,11 @@ from dataclasses import KW_ONLY, Field, dataclass, field, fields
 import numpy as np
 from scipy.interpolate import RectBivariateSpline
 
-from spider.interfaces import PhaseEvaluatorABC, PropertyProtocol
+from spider.interfaces import (
+    PhaseEvaluatorABC,
+    PhaseEvaluatorProtocol,
+    PropertyProtocol,
+)
 from spider.parser import _MeshSettings, _PhaseMixedSettings, _PhaseSettings
 from spider.utilities import (
     FloatOrArray,
@@ -269,14 +273,14 @@ class MixedPhaseEvaluator(PhaseEvaluatorABC):
     def __init__(
         self,
         settings: _PhaseMixedSettings,
-        solid: PhaseEvaluatorABC,
-        liquid: PhaseEvaluatorABC,
+        solid: PhaseEvaluatorProtocol,
+        liquid: PhaseEvaluatorProtocol,
     ):
         self.settings: _PhaseMixedSettings = settings
         # TODO: Might not be necessary to copy, but since the temperature is fixed to the melting
         # curves this might prevent problems and eliminates unneccesary updating
-        self._solid: PhaseEvaluatorABC = copy.deepcopy(solid)
-        self._liquid: PhaseEvaluatorABC = copy.deepcopy(liquid)
+        self._solid: PhaseEvaluatorProtocol = copy.deepcopy(solid)
+        self._liquid: PhaseEvaluatorProtocol = copy.deepcopy(liquid)
         self._solidus: LookupProperty1D = self._get_melting_curve_lookup(
             "solidus", self.settings.solidus
         )
@@ -450,12 +454,12 @@ class CompositePhaseEvaluator(PhaseEvaluatorABC):
 
     def __init__(
         self,
-        solid: PhaseEvaluatorABC,
-        liquid: PhaseEvaluatorABC,
+        solid: PhaseEvaluatorProtocol,
+        liquid: PhaseEvaluatorProtocol,
         mixed: MixedPhaseEvaluator,
     ):
-        self.solid: PhaseEvaluatorABC = copy.deepcopy(solid)
-        self.liquid: PhaseEvaluatorABC = copy.deepcopy(liquid)
+        self.solid: PhaseEvaluatorProtocol = copy.deepcopy(solid)
+        self.liquid: PhaseEvaluatorProtocol = copy.deepcopy(liquid)
         self.mixed: MixedPhaseEvaluator = copy.deepcopy(mixed)
 
     @override
