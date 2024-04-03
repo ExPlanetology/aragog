@@ -79,7 +79,7 @@ def is_number(value: Any) -> bool:
         float(value)
         return True
 
-    except ValueError:
+    except (TypeError, ValueError):
         return False
 
 
