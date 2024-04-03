@@ -565,6 +565,7 @@ class CompositePhaseEvaluator(PhaseEvaluatorABC):
         # logger.debug(mixed_phase.shape)
         # logger.debug(single_phase.shape)
 
+        # TODO: This is ugly.  Clean up logic.
         try:
             single_phase[self._liquid_mask] = getattr(self._liquid, property_name)()[
                 self._liquid_mask
