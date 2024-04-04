@@ -1,11 +1,14 @@
 [tool.poetry]
 name = "aragog"
 version = "0.1.0-alpha"
-description = "A 1-D parameterised interior dynamics code for rocky or icy planets and moons with liquid and/or solid interiors"
+description = "1-D interior dynamics of rocky or icy mantles that are solid or liquid"
 authors = ["Dan J Bower <djbower@users.noreply.github.com>"]
 license = "GPL-3.0-or-later"
 readme = "README.md"
-include = ["notebooks"]
+packages = [
+    { include = "aragog" },
+    { include = "notebooks", to = "aragog" },
+]
 
 [tool.poetry.dependencies]
 python = ">=3.10,<3.13"

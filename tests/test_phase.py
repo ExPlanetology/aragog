@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License along with Aragog. If not,
 # see <https://www.gnu.org/licenses/>.
 #
-"""Tests phases"""
+"""Tests properties of phases."""
 
 from __future__ import annotations
 
@@ -27,10 +27,7 @@ from aragog.interfaces import MixedPhaseEvaluatorProtocol, PhaseEvaluatorProtoco
 from aragog.utilities import FloatOrArray
 
 logger: logging.Logger = debug_logger()
-# logger.setLevel(logging.INFO)
-
-ATOL: float = 1e-8
-RTOL: float = 1e-8
+logger.setLevel(logging.INFO)
 
 # Temperature and pressure for surface and near the CMB
 temperature: np.ndarray = np.atleast_2d([1500, 4000]).T
@@ -60,19 +57,21 @@ def test_liquid_constant_properties(helper):
     phase.update()
 
     density: FloatOrArray = phase.density()
-    assert np.isclose(density, 1, atol=ATOL, rtol=RTOL).all()
+    assert np.isclose(density, 1, atol=helper.atol, rtol=helper.rtol).all()
 
     heat_capacity: FloatOrArray = phase.heat_capacity()
-    assert np.isclose(heat_capacity, 981415.05391486, atol=ATOL, rtol=RTOL).all()
+    assert np.isclose(heat_capacity, 981415.05391486, atol=helper.atol, rtol=helper.rtol).all()
 
     thermal_conductivity: FloatOrArray = phase.thermal_conductivity()
-    assert np.isclose(thermal_conductivity, 7.630297519858265e-08, atol=ATOL, rtol=RTOL).all()
+    assert np.isclose(
+        thermal_conductivity, 7.630297519858265e-08, atol=helper.atol, rtol=helper.rtol
+    ).all()
 
     thermal_expansivity: FloatOrArray = phase.thermal_expansivity()
-    assert np.isclose(thermal_expansivity, 0.04, atol=ATOL, rtol=RTOL).all()
+    assert np.isclose(thermal_expansivity, 0.04, atol=helper.atol, rtol=helper.rtol).all()
 
     viscosity: FloatOrArray = phase.viscosity()
-    assert np.isclose(viscosity, 1.9436979006540116e-09, atol=ATOL, rtol=RTOL).all()
+    assert np.isclose(viscosity, 1.9436979006540116e-09, atol=helper.atol, rtol=helper.rtol).all()
 
 
 def test_solid_constant_properties(helper):
@@ -93,19 +92,21 @@ def test_solid_constant_properties(helper):
     phase.update()
 
     density: FloatOrArray = phase.density()
-    assert np.isclose(density, 1.05, atol=ATOL, rtol=RTOL).all()
+    assert np.isclose(density, 1.05, atol=helper.atol, rtol=helper.rtol).all()
 
     heat_capacity: FloatOrArray = phase.heat_capacity()
-    assert np.isclose(heat_capacity, 981415.05391486, atol=ATOL, rtol=RTOL).all()
+    assert np.isclose(heat_capacity, 981415.05391486, atol=helper.atol, rtol=helper.rtol).all()
 
     thermal_conductivity: FloatOrArray = phase.thermal_conductivity()
-    assert np.isclose(thermal_conductivity, 7.630297519858265e-08, atol=ATOL, rtol=RTOL).all()
+    assert np.isclose(
+        thermal_conductivity, 7.630297519858265e-08, atol=helper.atol, rtol=helper.rtol
+    ).all()
 
     thermal_expansivity: FloatOrArray = phase.thermal_expansivity()
-    assert np.isclose(thermal_expansivity, 0.04, atol=ATOL, rtol=RTOL).all()
+    assert np.isclose(thermal_expansivity, 0.04, atol=helper.atol, rtol=helper.rtol).all()
 
     viscosity: FloatOrArray = phase.viscosity()
-    assert np.isclose(viscosity, 1.9436979e10, atol=ATOL, rtol=RTOL).all()
+    assert np.isclose(viscosity, 1.9436979e10, atol=helper.atol, rtol=helper.rtol).all()
 
 
 def test_lookup_property_1D(helper):
@@ -125,11 +126,11 @@ def test_lookup_property_1D(helper):
 
     solidus: np.ndarray = phase.solidus()
     solidus_target: np.ndarray = np.atleast_2d([0.34515095, 1.05180909]).T
-    assert np.isclose(solidus, solidus_target, atol=ATOL, rtol=RTOL).all()
+    assert np.isclose(solidus, solidus_target, atol=helper.atol, rtol=helper.rtol).all()
 
     liquidus: np.ndarray = phase.liquidus()
     liquidus_target: np.ndarray = np.atleast_2d([0.4500425, 1.15670029]).T
-    assert np.isclose(liquidus, liquidus_target, atol=ATOL, rtol=RTOL).all()
+    assert np.isclose(liquidus, liquidus_target, atol=helper.atol, rtol=helper.rtol).all()
 
 
 def test_lookup_property_2D(helper):
@@ -160,7 +161,7 @@ def test_lookup_property_2D(helper):
     density_melt_target: np.ndarray = np.atleast_2d(
         [[0.5, 0.5625, 0.3125, 0.4375, 0.375], [0.46875, 0.5, 0.375, 0.46875, 0.375]]
     ).T
-    assert np.isclose(density_melt, density_melt_target, atol=ATOL, rtol=RTOL).all()
+    assert np.isclose(density_melt, density_melt_target, atol=helper.atol, rtol=helper.rtol).all()
 
 
 def test_mixed_density(helper):
@@ -189,4 +190,6 @@ def test_mixed_density(helper):
     logger.debug("density_mixed = %s", density_mixed)
 
     density_mixed_target: np.ndarray = np.atleast_2d([1.02439141, 1.02438914]).T
-    assert np.isclose(density_mixed, density_mixed_target, atol=ATOL, rtol=RTOL).all()
+    assert np.isclose(
+        density_mixed, density_mixed_target, atol=helper.atol, rtol=helper.rtol
+    ).all()
