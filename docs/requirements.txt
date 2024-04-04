@@ -1,4 +1,5 @@
 # Defining the exact version will make sure things don't break
+aragog
 sphinx-rtd-theme
 sphinx
 sphinxcontrib-bibtex
