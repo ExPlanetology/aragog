@@ -26,12 +26,6 @@ from importlib.abc import Traversable
 from importlib.resources import as_file
 from pathlib import Path
 
-TEST_DATA: Traversable = importlib.resources.files("tests")
-with as_file(TEST_DATA.joinpath("reference")) as reference:
-    REFERENCE_TEST_DATA: Path = reference
-with as_file(TEST_DATA.joinpath("cfg")) as cfg:
-    CFG_TEST_DATA: Path = cfg
-
 CFG_DATA = importlib.resources.files("aragog.cfg")
 
 # Create the package logger.

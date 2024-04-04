@@ -19,20 +19,16 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 
 import numpy as np
 
-from aragog import REFERENCE_TEST_DATA, Solver, __version__, debug_logger
+from aragog import Solver, __version__, debug_logger
 
 # from aragog.output import Output
 from aragog.utilities import profile_decorator
 
 logger: logging.Logger = debug_logger()
 logger.setLevel(logging.INFO)
-
-ATOL: float = 1e-5
-RTOL: float = 1e-5
 
 
 def test_version():
@@ -51,15 +47,15 @@ def test_liquid_no_heating(helper):
     solver.solve()
     calculated: np.ndarray = solver.temperature_staggered[:, -1]
     # np.savetxt("abe_liquid_no_heating.dat", calculated)
-
     # output: Output = Output(solver)
     # output.plot()
 
-    expected: np.ndarray = np.loadtxt(REFERENCE_TEST_DATA / Path("abe_liquid_no_heating.dat"))
+    with helper.get_reference_file("abe_liquid_no_heating.dat") as reference_file:
+        expected: np.ndarray = np.loadtxt(reference_file)
     logger.info("calculated = %s", calculated)
     logger.info("expected = %s", expected)
 
-    assert np.isclose(calculated, expected, atol=ATOL, rtol=RTOL).all()
+    assert np.isclose(calculated, expected, atol=helper.atol, rtol=helper.rtol).all()
 
 
 @profile_decorator
@@ -73,15 +69,15 @@ def test_solid_no_heating(helper):
     solver.solve()
     calculated: np.ndarray = solver.temperature_staggered[:, -1]
     # np.savetxt("abe_solid_no_heating.dat", calculated)
-
     # output: Output = Output(solver)
     # output.plot()
 
-    expected: np.ndarray = np.loadtxt(REFERENCE_TEST_DATA / Path("abe_solid_no_heating.dat"))
+    with helper.get_reference_file("abe_solid_no_heating.dat") as reference_file:
+        expected: np.ndarray = np.loadtxt(reference_file)
     logger.info("calculated = %s", calculated)
     logger.info("expected = %s", expected)
 
-    assert np.isclose(calculated, expected, atol=ATOL, rtol=RTOL).all()
+    assert np.isclose(calculated, expected, atol=helper.atol, rtol=helper.rtol).all()
 
 
 @profile_decorator
@@ -96,15 +92,15 @@ def test_solid_with_heating(helper):
     solver.solve()
     calculated: np.ndarray = solver.temperature_staggered[:, -1]
     # np.savetxt("abe_solid_with_heating.dat", calculated)
-
     # output: Output = Output(solver)
     # output.plot()
 
-    expected: np.ndarray = np.loadtxt(REFERENCE_TEST_DATA / Path("abe_solid_with_heating.dat"))
+    with helper.get_reference_file("abe_solid_with_heating.dat") as reference_file:
+        expected: np.ndarray = np.loadtxt(reference_file)
     logger.info("calculated = %s", calculated)
     logger.info("expected = %s", expected)
 
-    assert np.isclose(calculated, expected, atol=ATOL, rtol=RTOL).all()
+    assert np.isclose(calculated, expected, atol=helper.atol, rtol=helper.rtol).all()
 
 
 @profile_decorator
@@ -118,12 +114,12 @@ def test_mixed(helper):
     solver.solve()
     calculated: np.ndarray = solver.temperature_staggered[:, -1]
     # np.savetxt("abe_mixed.dat", calculated)
-
     # output: Output = Output(solver)
     # output.plot()
 
-    expected: np.ndarray = np.loadtxt(REFERENCE_TEST_DATA / Path("abe_mixed.dat"))
+    with helper.get_reference_file("abe_mixed.dat") as reference_file:
+        expected: np.ndarray = np.loadtxt(reference_file)
     logger.info("calculated = %s", calculated)
     logger.info("expected = %s", expected)
 
-    assert np.isclose(calculated, expected, atol=ATOL, rtol=RTOL).all()
+    assert np.isclose(calculated, expected, atol=helper.atol, rtol=helper.rtol).all()

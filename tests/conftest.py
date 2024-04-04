@@ -17,22 +17,28 @@
 """Utilities for tests"""
 
 import importlib.resources
+from contextlib import AbstractContextManager
+from importlib.abc import Traversable
+from pathlib import Path
 
 import pytest
 
 from aragog import CFG_DATA
 
-# Tolerances to compare the test results with target output.
-RTOL: float = 1.0e-8
-ATOL: float = 1.0e-8
-
 
 class Helper:
-    """Helper class with methods to check and confirm values."""
+    """Helper class for tests"""
+
+    atol: float = 1.0e-8
+    rtol: float = 1.0e-8
+    TEST_DATA: Traversable = importlib.resources.files("tests.reference")
 
     @staticmethod
-    def get_cfg_file(filename: str):
+    def get_cfg_file(filename: str) -> AbstractContextManager[Path]:
         return importlib.resources.as_file(CFG_DATA.joinpath(filename))
+
+    def get_reference_file(self, filename: str) -> AbstractContextManager[Path]:
+        return importlib.resources.as_file(self.TEST_DATA.joinpath(filename))
 
 
 @pytest.fixture(scope="module")
