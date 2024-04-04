@@ -22,7 +22,7 @@ import logging
 
 import numpy as np
 
-from aragog import CFG_TEST_DATA, Solver, __version__, debug_logger
+from aragog import Solver, __version__, debug_logger
 from aragog.interfaces import MixedPhaseEvaluatorProtocol, PhaseEvaluatorProtocol
 from aragog.utilities import FloatOrArray
 
@@ -42,10 +42,11 @@ def test_version():
     assert __version__ == "0.1.0-alpha"
 
 
-def test_liquid_constant_properties():
+def test_liquid_constant_properties(helper):
     """Constant liquid properties"""
 
-    solver: Solver = Solver("abe_mixed.cfg", CFG_TEST_DATA)
+    with helper.get_cfg_file("abe_liquid.cfg") as cfg_file:
+        solver: Solver = Solver(cfg_file)
     solver.parameters.phase_mixed.phase = "liquid"
     solver.initialize()
 
@@ -74,10 +75,11 @@ def test_liquid_constant_properties():
     assert np.isclose(viscosity, 1.9436979006540116e-09, atol=ATOL, rtol=RTOL).all()
 
 
-def test_solid_constant_properties():
+def test_solid_constant_properties(helper):
     """Constant solid properties"""
 
-    solver: Solver = Solver("abe_mixed.cfg", CFG_TEST_DATA)
+    with helper.get_cfg_file("abe_mixed.cfg") as cfg_file:
+        solver: Solver = Solver(cfg_file)
     solver.parameters.phase_mixed.phase = "solid"
     solver.initialize()
 
@@ -106,10 +108,11 @@ def test_solid_constant_properties():
     assert np.isclose(viscosity, 1.9436979e10, atol=ATOL, rtol=RTOL).all()
 
 
-def test_lookup_property_1D():
+def test_lookup_property_1D(helper):
     """1D lookup property"""
 
-    solver: Solver = Solver("abe_mixed_lookup.cfg", CFG_TEST_DATA)
+    with helper.get_cfg_file("abe_mixed.cfg") as cfg_file:
+        solver: Solver = Solver(cfg_file)
     solver.initialize()
     phase: MixedPhaseEvaluatorProtocol = solver.evaluator.phases.composite
 
@@ -129,10 +132,11 @@ def test_lookup_property_1D():
     assert np.isclose(liquidus, liquidus_target, atol=ATOL, rtol=RTOL).all()
 
 
-def test_lookup_property_2D():
+def test_lookup_property_2D(helper):
     """2D lookup property"""
 
-    solver: Solver = Solver("abe_mixed_lookup.cfg", CFG_TEST_DATA)
+    with helper.get_cfg_file("abe_mixed_lookup.cfg") as cfg_file:
+        solver: Solver = Solver(cfg_file)
     solver.parameters.phase_mixed.phase = "liquid"
     solver.initialize()
 
@@ -159,10 +163,11 @@ def test_lookup_property_2D():
     assert np.isclose(density_melt, density_melt_target, atol=ATOL, rtol=RTOL).all()
 
 
-def test_mixed_density():
+def test_mixed_density(helper):
     """Mixed phase density"""
 
-    solver: Solver = Solver("abe_mixed.cfg", CFG_TEST_DATA)
+    with helper.get_cfg_file("abe_mixed.cfg") as cfg_file:
+        solver: Solver = Solver(cfg_file)
     solver.initialize()
     phase: PhaseEvaluatorProtocol = solver.evaluator.phases.active
 
