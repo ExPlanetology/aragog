@@ -23,7 +23,7 @@ from pathlib import Path
 
 import numpy as np
 
-from aragog import CFG_TEST_DATA, REFERENCE_TEST_DATA, Solver, __version__, debug_logger
+from aragog import REFERENCE_TEST_DATA, Solver, __version__, debug_logger
 
 # from aragog.output import Output
 from aragog.utilities import profile_decorator
@@ -41,10 +41,12 @@ def test_version():
 
 
 @profile_decorator
-def test_liquid_no_heating():
+def test_liquid_no_heating(helper):
     """Cooling of a purely molten magma ocean."""
 
-    solver: Solver = Solver("abe_liquid.cfg", CFG_TEST_DATA)
+    with helper.get_cfg_file("abe_liquid.cfg") as cfg_file:
+        solver: Solver = Solver(cfg_file)
+
     solver.initialize()
     solver.solve()
     calculated: np.ndarray = solver.temperature_staggered[:, -1]
@@ -61,10 +63,12 @@ def test_liquid_no_heating():
 
 
 @profile_decorator
-def test_solid_no_heating():
+def test_solid_no_heating(helper):
     """Cooling of a purely solid mantle."""
 
-    solver: Solver = Solver(Path("abe_solid.cfg"), CFG_TEST_DATA)
+    with helper.get_cfg_file("abe_solid.cfg") as cfg_file:
+        solver: Solver = Solver(cfg_file)
+
     solver.initialize()
     solver.solve()
     calculated: np.ndarray = solver.temperature_staggered[:, -1]
@@ -81,10 +85,12 @@ def test_solid_no_heating():
 
 
 @profile_decorator
-def test_solid_with_heating():
+def test_solid_with_heating(helper):
     """Cooling of a purely solid mantle with radiogenic heating."""
 
-    solver: Solver = Solver(Path("abe_solid.cfg"), CFG_TEST_DATA)
+    with helper.get_cfg_file("abe_solid.cfg") as cfg_file:
+        solver: Solver = Solver(cfg_file)
+
     solver.parameters.energy.radionuclides = True
     solver.initialize()
     solver.solve()
@@ -102,10 +108,12 @@ def test_solid_with_heating():
 
 
 @profile_decorator
-def test_mixed():
+def test_mixed(helper):
     """Test Abe (1993."""
 
-    solver: Solver = Solver(Path("abe_mixed.cfg"), CFG_TEST_DATA)
+    with helper.get_cfg_file("abe_mixed.cfg") as cfg_file:
+        solver: Solver = Solver(cfg_file)
+
     solver.initialize()
     solver.solve()
     calculated: np.ndarray = solver.temperature_staggered[:, -1]
