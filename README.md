@@ -19,7 +19,11 @@ Source code: <https://github.com/ExPlanetology/aragog>
 
 If you use Aragog (or for that matter the original [SPIDER code](https://github.com/djbower/spider)) please cite:
 
-- Bower, D.J., P. Sanan, and A.S. Wolf (2018), Numerical solution of a non-linear conservation law applicable to the interior dynamics of partially molten planets, Phys. Earth Planet. Inter., 274, 49-62, doi: <https://doi.org/10.1016/j.pepi.2017.11.004>, arXiv: <https://arxiv.org/abs/1711.07303>, EarthArXiv: <https://eartharxiv.org/k6tgf>
+- Bower, D.J., P. Sanan, and A.S. Wolf (2018), Numerical solution of a non-linear conservation law applicable to the interior dynamics of partially molten planets, Phys. Earth Planet. Inter., 274, 49-62, doi: <https://doi.org/10.1016/j.pepi.2017.11.004>.
+
+Open access versions of the publication are available:
+- arXiv: <https://arxiv.org/abs/1711.07303>
+- EarthArXiv: <https://eartharxiv.org/k6tgf>
 
 ## Installation
 
@@ -57,12 +61,3 @@ Install Aragog into the environment using either (a) [Poetry](https://python-poe
 		pip install -e ".[docs]"
 
 	If desired, you will need to manually install the dependencies for the tests, which are automatically installed by Poetry but not by `pip`. See the additional dependencies to install in `pyproject.toml`.
-
-
-## Other references
-
-- Wolf, A.S. and D.J. Bower (2018), An equation of state for high pressure-temperature liquids (RTpress) with application to MgSiO3 melt, Phys. Earth Planet. Inter., 278, 59-74, doi: 10.1016/j.pepi.2018.02.004, EarthArXiv: <https://eartharxiv.org/4c2s5>
-
-- Bower, D.J., Kitzmann, D., Wolf, A.S., Sanan, P., Dorn, C., and Oza, A.V. (2019), Linking the evolution of terrestrial interiors and an early outgassed atmosphere to astrophysical observations, Astron. Astrophys., 631, A103, doi: 10.1051/0004-6361/201935710, arXiv: <https://arxiv.org/abs/1904.08300>
-
-- Bower, D.J., Hakim, K., Sossi, P.A., and Sanan, P. (2022), Retention of water in terrestrial magma oceans and carbon-rich early atmospheres, Planet. Sci. J., 3, 93, doi: 10.3847/PSJ/ac5fb1, arXiv: <https://arxiv.org/abs/2110.08029>

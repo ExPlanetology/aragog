@@ -5,7 +5,7 @@ About
 
 If you use *Aragog* please cite :cite:t:`BSW18`:
 
-* D.J. Bower, P. Sanan, and A.S. Wolf (2018). Numerical solution of a non-linear conservation law applicable to the interior dynamics of partially molten planets. Physics of the Earth and Planetary Interiors, 274:49-62, doi: https://doi.org/10.1016/j.pepi.2017.11.004.
+* D.J. Bower, P. Sanan, and A.S. Wolf (2018), Numerical solution of a non-linear conservation law applicable to the interior dynamics of partially molten planets, Physics of the Earth and Planetary Interiors, 274, 49-62, doi: https://doi.org/10.1016/j.pepi.2017.11.004.
 
 Open access versions of the publication are available:
 
