@@ -61,7 +61,7 @@ html_static_path = ["_static"]
 numfig = True
 
 bibtex_default_style = "alpha"
-# bibtex_reference_style = "author_year"
+bibtex_reference_style = "author_year"
 
 pygments_style = "sphinx"
 
