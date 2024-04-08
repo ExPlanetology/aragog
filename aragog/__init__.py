@@ -22,20 +22,21 @@ __version__: str = "0.1.0-alpha"
 
 import importlib.resources
 import logging
-from importlib.abc import Traversable
-from importlib.resources import as_file
-from pathlib import Path
 
 CFG_DATA = importlib.resources.files("aragog.cfg")
 
-# Create the package logger.
+# Creates the package logger.
 # https://docs.python.org/3/howto/logging.html#library-config
 logger: logging.Logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
 
 
 def complex_formatter() -> logging.Formatter:
-    """Complex formatter"""
+    """Complex formatter for logging
+
+    Returns:
+        Formatter for logging
+    """
     fmt: str = "[%(asctime)s - %(name)-30s - %(lineno)03d - %(levelname)-9s - %(funcName)s()]"
     fmt += " - %(message)s"
     datefmt: str = "%Y-%m-%d %H:%M:%S"
@@ -45,7 +46,11 @@ def complex_formatter() -> logging.Formatter:
 
 
 def simple_formatter() -> logging.Formatter:
-    """Simple formatter"""
+    """Simple formatter for logging
+
+    Returns:
+        Formatter for logging
+    """
     fmt: str = "[%(asctime)s - %(name)-30s - %(levelname)-9s] - %(message)s"
     datefmt: str = "%H:%M:%S"
     formatter: logging.Formatter = logging.Formatter(fmt, datefmt=datefmt)
@@ -54,8 +59,11 @@ def simple_formatter() -> logging.Formatter:
 
 
 def debug_logger() -> logging.Logger:
-    """Sets up the logging for debugging: debug to the console."""
-    # Console logger
+    """Sets up debug logging to the console.
+
+    Returns:
+        A logger
+    """
     package_logger: logging.Logger = logging.getLogger(__name__)
     package_logger.setLevel(logging.DEBUG)
     logger.handlers = []
