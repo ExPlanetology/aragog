@@ -1,6 +1,7 @@
 # Aragog
 
 [![Documentation Status](https://readthedocs.org/projects/aragog/badge/?version=latest)](https://aragog.readthedocs.io/en/latest/?badge=latest)
+![Python Package Status](https://github.com/explanetology/aragog/.github/workflows/python-package.yml/badge.svg)
 
 ## Under development
 
