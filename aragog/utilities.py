@@ -88,20 +88,19 @@ def tanh_weight(value: FloatOrArray, threshold: float, width: float) -> np.ndarr
 
     Args:
         value: Value
-        threshold: Threshold
+        threshold: Threshold value
         width: Width of smoothing
 
     Returns:
         weight
     """
-
     arg: FloatOrArray = (value - threshold) / width
     weight: np.ndarray = 0.5 * (1.0 + np.tanh(arg))
 
     return weight
 
 
-def combine_properties(weight, property1, property2):
+def combine_properties(weight: Any, property1: Any, property2: Any) -> Any:
     """Linear weighting of two quantities.
 
     Args:
