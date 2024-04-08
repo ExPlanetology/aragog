@@ -22,8 +22,9 @@ __version__: str = "0.1.0-alpha"
 
 import importlib.resources
 import logging
+from importlib.abc import Traversable
 
-CFG_DATA = importlib.resources.files("aragog.cfg")
+CFG_DATA: Traversable = importlib.resources.files(f"{__package__}.cfg")
 
 # Creates the package logger.
 # https://docs.python.org/3/howto/logging.html#library-config
@@ -76,7 +77,11 @@ def debug_logger() -> logging.Logger:
 
 
 def debug_file_logger() -> logging.Logger:
-    """Sets up the logging to a file (debug) and to the console (info)."""
+    """Sets up info logging to the console and debug logging to a file.
+
+    Returns:
+        A logger
+    """
     # Console logger
     package_logger: logging.Logger = logging.getLogger(__name__)
     package_logger.setLevel(logging.DEBUG)
