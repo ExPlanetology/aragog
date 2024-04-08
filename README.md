@@ -38,7 +38,7 @@ Finally, install Aragog into the activated environment:
 ### Developer install
 
 > - See this [guide](https://gist.github.com/djbower/c66474000029730ac9f8b73b96071db3) to develop Aragog using [VS Code](https://code.visualstudio.com) and [Poetry](https://python-poetry.org).
-> - See this [guide](https://gist.github.com/djbower/c82b4a70a3c3c74ad26dc572edefdd34) if you are a Windows or Spyder user.
+> - See this [guide](https://gist.github.com/djbower/c82b4a70a3c3c74ad26dc572edefdd34) to develop Aragog if you are a Windows or Spyder user.
 
 Navigate to a location on your computer and obtain the source code using git:
 
