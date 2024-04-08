@@ -1,5 +1,7 @@
 # Aragog
 
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/release/python-3100/)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Documentation Status](https://readthedocs.org/projects/aragog/badge/?version=latest)](https://aragog.readthedocs.io/en/latest/?badge=latest)
 [![Python package](https://github.com/ExPlanetology/aragog/actions/workflows/python-package.yml/badge.svg)](https://github.com/ExPlanetology/aragog/actions/workflows/python-package.yml)
 
@@ -17,11 +19,12 @@ Source code: <https://github.com/ExPlanetology/aragog>
 
 ## Citation
 
-If you use Aragog (or for that matter the original [SPIDER code](https://github.com/djbower/spider)) please cite:
+If you use Aragog (or the original [SPIDER code](https://github.com/djbower/spider)) please cite:
 
 - Bower, D.J., P. Sanan, and A.S. Wolf (2018), Numerical solution of a non-linear conservation law applicable to the interior dynamics of partially molten planets, Phys. Earth Planet. Inter., 274, 49-62, doi: <https://doi.org/10.1016/j.pepi.2017.11.004>.
 
 Open access versions of the publication are available:
+
 - arXiv: <https://arxiv.org/abs/1711.07303>
 - EarthArXiv: <https://eartharxiv.org/k6tgf>
 
