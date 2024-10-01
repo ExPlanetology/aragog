@@ -49,3 +49,18 @@ More comprehensive set up guides are available here:
 
 - `VS Code and Poetry guide <https://gist.github.com/djbower/c66474000029730ac9f8b73b96071db3>`_
 - `Windows and Spyder guide <https://gist.github.com/djbower/c82b4a70a3c3c74ad26dc572edefdd34>`_
+
+Download data from the OSF repository
+-------------------------------------
+
+Aragog requires lookup table data storing thermophysics properties of the liquid and solid matter. These data are stored in the `OSF repository <https://osf.io/phsxf/>`_. You can download it with the command:
+
+.. code-block:: shell
+
+   aragog download all
+
+The command `aragog env` will give you the path where the data have been downloaded. If you want to setup your own path, setup the environment variable `FWL_DATA` before running the download command:
+
+.. code-block:: shell
+
+   export FWL_DATA=your_absolute_path/
