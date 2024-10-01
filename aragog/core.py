@@ -172,7 +172,12 @@ class InitialCondition:
 
     def __post_init__(self):
         self._settings: _InitialConditionParameters = self._parameters.initial_condition
-        self._temperature: np.ndarray = self.get_linear()
+
+        if self._settings.from_field:
+            self._temperature = self._settings.init_temperature
+        else:
+            self._temperature: np.ndarray = self.get_linear()
+        logger.debug("initial staggered temperature = %s", self._temperature)
 
     @property
     def temperature(self) -> np.ndarray:
