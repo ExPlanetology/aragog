@@ -220,8 +220,10 @@ class _EnergyParameters:
 class _InitialConditionParameters:
     """Stores the settings in the initial_condition section in the configuration data."""
 
-    surface_temperature: float
-    basal_temperature: float
+    surface_temperature: float = 4000
+    basal_temperature: float = 4000
+    init_file: str = ""
+    from_field: bool = False
     scalings_: _ScalingsParameters = field(init=False)
 
     def scale_attributes(self, scalings: _ScalingsParameters) -> None:
@@ -234,6 +236,10 @@ class _InitialConditionParameters:
         self.surface_temperature /= self.scalings_.temperature
         self.basal_temperature /= self.scalings_.temperature
 
+        if self.init_file:
+            self.from_field = True
+            self.init_temperature = np.loadtxt(self.init_file)
+            self.init_temperature /= self.scalings_.temperature
 
 @dataclass
 class _MeshParameters:

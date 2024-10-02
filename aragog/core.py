@@ -172,7 +172,20 @@ class InitialCondition:
 
     def __post_init__(self):
         self._settings: _InitialConditionParameters = self._parameters.initial_condition
-        self._temperature: np.ndarray = self.get_linear()
+
+        if self._settings.from_field:
+            if (self._mesh.staggered.number_of_nodes == len(self._settings.init_temperature)):
+                self._temperature = self._settings.init_temperature
+            else:
+                msg: str = (
+                        f"the size of the provided init temperature field does not match \
+                    the number of staggered points {self._mesh.staggered.number_of_nodes}"
+                )
+                raise ValueError(msg)
+        else:
+            self._temperature: np.ndarray = self.get_linear()
+
+        logger.debug("initial staggered temperature = %s", self._temperature)
 
     @property
     def temperature(self) -> np.ndarray:
