@@ -222,13 +222,8 @@ class _InitialConditionParameters:
 
     surface_temperature: float = 4000
     basal_temperature: float = 4000
-    init_file: str = None
+    init_file: str = ""
     from_field: bool = False
-
-    if (init_file != None):
-        from_field = True
-        init_temperature = np.loadtxt(init_file)
-
     scalings_: _ScalingsParameters = field(init=False)
 
     def scale_attributes(self, scalings: _ScalingsParameters) -> None:
@@ -240,9 +235,11 @@ class _InitialConditionParameters:
         self.scalings_ = scalings
         self.surface_temperature /= self.scalings_.temperature
         self.basal_temperature /= self.scalings_.temperature
-        if self.from_field:
-            self.init_temperature /= self.scalings_.temperature
 
+        if self.init_file:
+            self.from_field = True
+            self.init_temperature = np.loadtxt(self.init_file)
+            self.init_temperature /= self.scalings_.temperature
 
 @dataclass
 class _MeshParameters:
