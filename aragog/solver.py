@@ -350,21 +350,20 @@ class Solver:
         state: State
     """
 
-    def __init__(self, filename: str | Path, root: str | Path = Path()):
+    def __init__(self, param: Parameters):
         logger.info("Creating an Aragog model")
-        self.filename = Path(filename)
-        self.root = Path(root)
-        self.parameters: Parameters
+        self.parameters: Parameters = param
         self.evaluator: Evaluator
         self.state: State
         self._solution: OptimizeResult
-        self.parse_configuration()
 
-    def parse_configuration(self) -> None:
+    @classmethod
+    def from_file(solver, filename: str | Path, root: str | Path = Path()):
         """Parses a configuration file"""
-        configuration_file: Path = self.root / self.filename
+        configuration_file: Path = root / filename
         logger.info("Parsing configuration file = %s", configuration_file)
-        self.parameters = Parameters.from_file(configuration_file)
+        param = Parameters.from_file(configuration_file)
+        return solver(param)
 
     def initialize(self) -> None:
         """Initializes the model."""
