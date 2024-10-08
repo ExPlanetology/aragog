@@ -43,7 +43,7 @@ def test_liquid_constant_properties(helper):
     """Constant liquid properties"""
 
     with helper.get_cfg_file("abe_liquid.cfg") as cfg_file:
-        solver: Solver = Solver(cfg_file)
+        solver: Solver = Solver.from_file(cfg_file)
     solver.parameters.phase_mixed.phase = "liquid"
     solver.initialize()
 
@@ -78,7 +78,7 @@ def test_solid_constant_properties(helper):
     """Constant solid properties"""
 
     with helper.get_cfg_file("abe_mixed.cfg") as cfg_file:
-        solver: Solver = Solver(cfg_file)
+        solver: Solver = Solver.from_file(cfg_file)
     solver.parameters.phase_mixed.phase = "solid"
     solver.initialize()
 
@@ -113,7 +113,7 @@ def test_lookup_property_1D(helper):
     """1D lookup property"""
 
     with helper.get_cfg_file("abe_mixed.cfg") as cfg_file:
-        solver: Solver = Solver(cfg_file)
+        solver: Solver = Solver.from_file(cfg_file)
     solver.initialize()
     phase: MixedPhaseEvaluatorProtocol = solver.evaluator.phases.composite
 
@@ -137,7 +137,7 @@ def test_lookup_property_2D(helper):
     """2D lookup property"""
 
     with helper.get_cfg_file("abe_mixed_lookup.cfg") as cfg_file:
-        solver: Solver = Solver(cfg_file)
+        solver: Solver = Solver.from_file(cfg_file)
     solver.parameters.phase_mixed.phase = "liquid"
     solver.initialize()
 
@@ -168,7 +168,7 @@ def test_mixed_density(helper):
     """Mixed phase density"""
 
     with helper.get_cfg_file("abe_mixed.cfg") as cfg_file:
-        solver: Solver = Solver(cfg_file)
+        solver: Solver = Solver.from_file(cfg_file)
     solver.initialize()
     phase: PhaseEvaluatorProtocol = solver.evaluator.phases.active
 
