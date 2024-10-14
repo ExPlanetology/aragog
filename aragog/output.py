@@ -105,18 +105,18 @@ class Output:
     @property
     def radii_km_basic(self) -> np.ndarray:
         """Radii of the basic mesh in km"""
-        return self.data.mesh.basic.radii * self.data.parameters.scalings.radius * 1.0e-3
+        return self.data.mesh.basic.radii * self.parameters.scalings.radius * 1.0e-3
 
     @property
     def pressure_GPa_basic(self) -> np.ndarray:
         """Pressure of the basic mesh in GPa"""
-        return self.data.mesh.basic.eos.pressure * self.data.parameters.scalings.pressure * 1.0e-9
+        return self.data.mesh.basic.eos.pressure * self.parameters.scalings.pressure * 1.0e-9
 
     @property
     def pressure_GPa_staggered(self) -> np.ndarray:
         """Pressure of the staggered mesh in GPa"""
         return (
-            self.data.mesh.staggered.eos.pressure * self.data.parameters.scalings.pressure * 1.0e-9
+            self.data.mesh.staggered.eos.pressure * self.parameters.scalings.pressure * 1.0e-9
         )
 
     @property
@@ -124,7 +124,7 @@ class Output:
         """Solidus"""
         return (
             self.data.mixed.solidus(self.solution.y, self.data.mesh.staggered.eos.pressure)
-            * self.data.parameters.scalings.temperature
+            * self.parameters.scalings.temperature
         )
 
     @property
@@ -132,13 +132,13 @@ class Output:
         """Super adiabatic temperature gradient"""
         return (
             self.state.super_adiabatic_temperature_gradient
-            * self.data.parameters.scalings.temperature_gradient
+            * self.parameters.scalings.temperature_gradient
         )
 
     @property
     def temperature_K_basic(self) -> np.ndarray:
         """Temperature of the basic mesh in K"""
-        return self.state.temperature_basic * self.data.parameters.scalings.temperature
+        return self.state.temperature_basic * self.parameters.scalings.temperature
 
     @property
     def temperature_K_staggered(self) -> np.ndarray:
@@ -151,7 +151,7 @@ class Output:
         return (
             self.solver.state.phase_basic.thermal_expansivity
             * np.ones(self.shape_basic)
-            * self.data.parameters.scalings.thermal_expansivity
+            * self.parameters.scalings.thermal_expansivity
         )
 
     @property
@@ -159,14 +159,19 @@ class Output:
         """Viscosity of the basic mesh"""
         return np.log10(
             self.state.phase_basic.viscosity
-            * self.data.parameters.scalings.viscosity
+            * self.parameters.scalings.viscosity
             * np.ones(self.shape_basic)
         )
 
     @property
+    def solution_top_temperature(self) -> float:
+        """Solution temperature at the top of the domain (planet surface)"""
+        return self.temperature_K_basic[-1, -1]
+
+    @property
     def times(self) -> np.ndarray:
         """Times in years"""
-        return self.solution.t * self.data.parameters.scalings.time_years
+        return self.solution.t * self.parameters.scalings.time_years
 
     @property
     def time_range(self) -> float:
