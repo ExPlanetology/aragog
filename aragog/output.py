@@ -98,9 +98,12 @@ class Output:
     @property
     def melt_fraction_staggered(self) -> np.ndarray:
         """Melt fraction"""
-        return self.solver.data.phase.melt_fraction(
-            self.solution.y, self.data.mesh.staggered.eos.pressure
-        ) * np.ones(self.shape_staggered)
+        return self.state.phase_staggered.melt_fraction()
+
+    @property
+    def melt_fraction_global(self) -> float:
+        """Volume-averaged melt fraction"""
+        return self.state._evaluator.mesh.volume_average(self.melt_fraction_staggered)
 
     @property
     def radii_km_basic(self) -> np.ndarray:
@@ -165,7 +168,7 @@ class Output:
 
     @property
     def solution_top_temperature(self) -> float:
-        """Solution temperature at the top of the domain (planet surface)"""
+        """Solution (last iteration) temperature at the top of the domain (planet surface)"""
         return self.temperature_K_basic[-1, -1]
 
     @property
