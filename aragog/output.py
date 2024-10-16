@@ -103,32 +103,38 @@ class Output:
     @property
     def melt_fraction_global(self) -> float:
         """Volume-averaged melt fraction"""
-        return self.state._evaluator.mesh.volume_average(self.melt_fraction_staggered)
+        return self.evaluator.mesh.volume_average(self.melt_fraction_staggered)
 
     @property
     def radii_km_basic(self) -> np.ndarray:
         """Radii of the basic mesh in km"""
-        return self.data.mesh.basic.radii * self.parameters.scalings.radius * 1.0e-3
+        return self.evaluator.mesh.basic.radii * self.parameters.scalings.radius * 1.0e-3
 
     @property
     def pressure_GPa_basic(self) -> np.ndarray:
         """Pressure of the basic mesh in GPa"""
-        return self.data.mesh.basic.eos.pressure * self.parameters.scalings.pressure * 1.0e-9
+        return self.evaluator.mesh.basic._eos.pressure * self.parameters.scalings.pressure * 1.0e-9
 
     @property
     def pressure_GPa_staggered(self) -> np.ndarray:
         """Pressure of the staggered mesh in GPa"""
         return (
-            self.data.mesh.staggered.eos.pressure * self.parameters.scalings.pressure * 1.0e-9
+            self.evaluator.mesh.staggered._eos.pressure * self.parameters.scalings.pressure * 1.0e-9
+        )
+
+    @property
+    def mantle_mass(self) -> float:
+        """Mantle mass comptuted from the AdamsWilliamsonEOS"""
+        return (
+            self.evaluator.mesh.basic._eos.get_mass_within_radii(self.evaluator.mesh.basic.outer_boundary)
+            * self.parameters.scalings.density
+            * np.power(self.parameters.scalings.radius, 3)
         )
 
     @property
     def solidus_K_staggered(self) -> np.ndarray:
         """Solidus"""
-        return (
-            self.data.mixed.solidus(self.solution.y, self.data.mesh.staggered.eos.pressure)
-            * self.parameters.scalings.temperature
-        )
+        return self.evaluator.phases.mixed.solidus() * self.parameters.scalings.temperature
 
     @property
     def super_adiabatic_temperature_gradient_basic(self) -> np.ndarray:
