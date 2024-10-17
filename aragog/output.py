@@ -63,7 +63,7 @@ class Output:
     def density_basic(self) -> np.ndarray:
         """Density"""
         return (
-            self.evaluator.phase_basic.density()
+            self.state.phase_basic.density()
             * np.ones(self.shape_basic)
             * self.parameters.scalings.density
         )
@@ -77,7 +77,7 @@ class Output:
     def dTdrs(self) -> np.ndarray:
         """dTdrs"""
         return (  # FIXME
-            self.solver.evaluator.phase_basic.dTdrs()
+            self.state.phase_basic.dTdrs()
             * self.parameters.scalings.temperature_gradient
         )
 
@@ -85,7 +85,7 @@ class Output:
     def heat_capacity_basic(self) -> np.ndarray:
         """Heat capacity"""
         return (
-            self.solver.evaluator.phase_basic.heat_capacity()
+            self.state.phase_basic.heat_capacity()
             * np.ones(self.shape_basic)
             * self.parameters.scalings.heat_capacity
         )
@@ -158,7 +158,7 @@ class Output:
     def thermal_expansivity_basic(self) -> np.ndarray:
         """Thermal expansivity"""
         return (
-            self.solver.state.phase_basic.thermal_expansivity
+            self.state.phase_basic.thermal_expansivity()
             * np.ones(self.shape_basic)
             * self.parameters.scalings.thermal_expansivity
         )
@@ -167,7 +167,7 @@ class Output:
     def log10_viscosity_basic(self) -> np.ndarray:
         """Viscosity of the basic mesh"""
         return np.log10(
-            self.state.phase_basic.viscosity
+            self.state.phase_basic.viscosity()
             * self.parameters.scalings.viscosity
             * np.ones(self.shape_basic)
         )
