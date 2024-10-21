@@ -97,8 +97,24 @@ class Output:
 
     @property
     def melt_fraction_staggered(self) -> np.ndarray:
-        """Melt fraction"""
+        """Melt fraction on the staggered mesh"""
         return self.state.phase_staggered.melt_fraction()
+
+    @property
+    def melt_fraction_basic(self) -> np.ndarray:
+        """Melt fraction on the basic mesh"""
+        return self.state.phase_basic.melt_fraction()
+
+    @property
+    def rheological_front(self) -> float:
+        """Rheological front at the last solve iteration given user defined threshold.
+           It is defined as a dimensionless distance with respect to the outer radius.
+        """
+        idx = np.argmin(abs(self.melt_fraction_basic[:,-1]-self.parameters.phase_mixed.rheological_transition_melt_fraction))
+        return (
+                (self.evaluator.mesh.basic.radii[-1] - self.evaluator.mesh.basic.radii[idx]) /
+                 self.evaluator.mesh.basic.radii[-1]
+                )
 
     @property
     def melt_fraction_global(self) -> float:
