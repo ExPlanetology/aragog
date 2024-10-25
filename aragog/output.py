@@ -64,7 +64,7 @@ class Output:
     def density_basic(self) -> np.ndarray:
         """Density"""
         return (
-            self.evaluator.phase_basic.density()
+            self.state.phase_basic.density()
             * np.ones(self.shape_basic)
             * self.parameters.scalings.density
         )
@@ -78,7 +78,7 @@ class Output:
     def dTdrs(self) -> np.ndarray:
         """dTdrs"""
         return (  # FIXME
-            self.solver.evaluator.phase_basic.dTdrs()
+            self.state.phase_basic.dTdrs()
             * self.parameters.scalings.temperature_gradient
         )
 
@@ -86,7 +86,7 @@ class Output:
     def heat_capacity_basic(self) -> np.ndarray:
         """Heat capacity"""
         return (
-            self.solver.evaluator.phase_basic.heat_capacity()
+            self.state.phase_basic.heat_capacity()
             * np.ones(self.shape_basic)
             * self.parameters.scalings.heat_capacity
         )
@@ -98,48 +98,73 @@ class Output:
 
     @property
     def melt_fraction_staggered(self) -> np.ndarray:
-        """Melt fraction"""
-        return self.solver.data.phase.melt_fraction(
-            self.solution.y, self.data.mesh.staggered.eos.pressure
-        ) * np.ones(self.shape_staggered)
+        """Melt fraction on the staggered mesh"""
+        return self.state.phase_staggered.melt_fraction()
+
+    @property
+    def melt_fraction_basic(self) -> np.ndarray:
+        """Melt fraction on the basic mesh"""
+        return self.state.phase_basic.melt_fraction()
+
+    @property
+    def rheological_front(self) -> float:
+        """Rheological front at the last solve iteration given user defined threshold.
+           It is defined as a dimensionless distance with respect to the outer radius.
+        """
+        idx = np.argmin(abs(self.melt_fraction_basic[:,-1]-self.parameters.phase_mixed.rheological_transition_melt_fraction))
+        return (
+                (self.evaluator.mesh.basic.radii[-1] - self.evaluator.mesh.basic.radii[idx]) /
+                 self.evaluator.mesh.basic.radii[-1]
+                )
+
+    @property
+    def melt_fraction_global(self) -> float:
+        """Volume-averaged melt fraction"""
+        return self.evaluator.mesh.volume_average(self.melt_fraction_staggered)
 
     @property
     def radii_km_basic(self) -> np.ndarray:
         """Radii of the basic mesh in km"""
-        return self.data.mesh.basic.radii * self.data.parameters.scalings.radius * 1.0e-3
+        return self.evaluator.mesh.basic.radii * self.parameters.scalings.radius * 1.0e-3
 
     @property
     def pressure_GPa_basic(self) -> np.ndarray:
         """Pressure of the basic mesh in GPa"""
-        return self.data.mesh.basic.eos.pressure * self.data.parameters.scalings.pressure * 1.0e-9
+        return self.evaluator.mesh.basic._eos.pressure * self.parameters.scalings.pressure * 1.0e-9
 
     @property
     def pressure_GPa_staggered(self) -> np.ndarray:
         """Pressure of the staggered mesh in GPa"""
         return (
-            self.data.mesh.staggered.eos.pressure * self.data.parameters.scalings.pressure * 1.0e-9
+            self.evaluator.mesh.staggered._eos.pressure * self.parameters.scalings.pressure * 1.0e-9
+        )
+
+    @property
+    def mantle_mass(self) -> float:
+        """Mantle mass comptuted from the AdamsWilliamsonEOS"""
+        return (
+            self.evaluator.mesh.basic._eos.get_mass_within_radii(self.evaluator.mesh.basic.outer_boundary)
+            * self.parameters.scalings.density
+            * np.power(self.parameters.scalings.radius, 3)
         )
 
     @property
     def solidus_K_staggered(self) -> np.ndarray:
         """Solidus"""
-        return (
-            self.data.mixed.solidus(self.solution.y, self.data.mesh.staggered.eos.pressure)
-            * self.data.parameters.scalings.temperature
-        )
+        return self.evaluator.phases.mixed.solidus() * self.parameters.scalings.temperature
 
     @property
     def super_adiabatic_temperature_gradient_basic(self) -> np.ndarray:
         """Super adiabatic temperature gradient"""
         return (
             self.state.super_adiabatic_temperature_gradient
-            * self.data.parameters.scalings.temperature_gradient
+            * self.parameters.scalings.temperature_gradient
         )
 
     @property
     def temperature_K_basic(self) -> np.ndarray:
         """Temperature of the basic mesh in K"""
-        return self.state.temperature_basic * self.data.parameters.scalings.temperature
+        return self.state.temperature_basic * self.parameters.scalings.temperature
 
     @property
     def temperature_K_staggered(self) -> np.ndarray:
@@ -150,24 +175,29 @@ class Output:
     def thermal_expansivity_basic(self) -> np.ndarray:
         """Thermal expansivity"""
         return (
-            self.solver.state.phase_basic.thermal_expansivity
+            self.state.phase_basic.thermal_expansivity()
             * np.ones(self.shape_basic)
-            * self.data.parameters.scalings.thermal_expansivity
+            * self.parameters.scalings.thermal_expansivity
         )
 
     @property
     def log10_viscosity_basic(self) -> np.ndarray:
         """Viscosity of the basic mesh"""
         return np.log10(
-            self.state.phase_basic.viscosity
-            * self.data.parameters.scalings.viscosity
+            self.state.phase_basic.viscosity()
+            * self.parameters.scalings.viscosity
             * np.ones(self.shape_basic)
         )
 
     @property
+    def solution_top_temperature(self) -> float:
+        """Solution (last iteration) temperature at the top of the domain (planet surface)"""
+        return self.temperature_K_basic[-1, -1]
+
+    @property
     def times(self) -> np.ndarray:
         """Times in years"""
-        return self.solution.t * self.data.parameters.scalings.time_years
+        return self.solution.t * self.parameters.scalings.time_years
 
     @property
     def time_range(self) -> float:

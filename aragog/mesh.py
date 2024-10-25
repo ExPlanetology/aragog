@@ -272,6 +272,10 @@ class Mesh:
 
         return quantity_at_basic_nodes
 
+    def volume_average(self, staggered_quantity: np.ndarray) -> float:
+
+        return np.dot(staggered_quantity.T, self.basic.volume) / self.basic.total_volume
+
 
 class AdamsWilliamsonEOS:
     r"""Adams-Williamson equation of state (EOS).
