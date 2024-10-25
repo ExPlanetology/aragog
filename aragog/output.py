@@ -22,10 +22,11 @@ import logging
 from typing import TYPE_CHECKING
 
 import matplotlib.pyplot as plt
-import numpy as np
 import netCDF4 as nc
+import numpy as np
 from scipy.optimize import OptimizeResult
 
+from aragog import __version__
 from aragog.parser import Parameters
 from aragog.solver import Evaluator
 
@@ -202,7 +203,7 @@ class Output:
     @property
     def time_range(self) -> float:
         return self.times[-1] - self.times[0]
-    
+
     def write(self,file_path:str,time_idx:int=-1) -> None:
         """Write the state of the model at a particular time to a NetCDF4 file on the disk.
 
@@ -214,9 +215,33 @@ class Output:
         logger.debug(f"Writing i={time_idx} NetCDF file to {file_path}")
 
         # Open the dataset
-        ds = nc.Dataset(file_path)
+        ds = nc.Dataset(file_path,mode='w')
 
-        
+        # Metadata
+        ds.description  = "Aragog output data"
+        ds.argog_version = __version__
+
+        # Scalar quantities
+        ds.createVariable('time',np.float64)
+        ds["time"][0] = self.times[time_idx]
+        ds["time"].units = "yr"
+
+        # Create dimensions (just basic nodes for now)
+        lev_b = self.shape_basic[0]
+        dim_b = ds.createDimension('basic', lev_b)
+
+        # Function to save vector quantities
+        def _add_basic_variable(key,property,units):
+            ds.createVariable(key,np.float64,("basic",), )
+            ds[key][:] = property[:,time_idx]
+            ds[key].units = units
+
+        # Save vector quantities
+        _add_basic_variable("radius_b",         self.radii_km_basic,             "km")
+        _add_basic_variable("pressure_b",       self.pressure_GPa_basic,         "GPa")
+        _add_basic_variable("temperature_b",    self.temperature_K_basic,        "K")
+        _add_basic_variable("meltfraction_b",   self.melt_fraction_basic,        "")
+        _add_basic_variable("Fconvect_b",       self.convective_heat_flux_basic, "W m-2")
 
         # Close the dataset
         ds.close()
