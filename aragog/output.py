@@ -173,13 +173,23 @@ class Output:
     def time_range(self) -> float:
         return self.times[-1] - self.times[0]
     
-    def _write(self,fpath:str) -> None:
-        """Write the output to a file on the disk.
+    def write(self,file_path:str,time_idx:int=-1) -> None:
+        """Write the state of the model at a particular time to a NetCDF4 file on the disk.
 
         Args:
-            fpath: Path to the output file.
+            file_path: Path to the output file.
+            time_idx: Index on the time axis at which to access the data.
         """
-        logger.debug(f"Writing netCDF file to {fpath}")
+
+        logger.debug(f"Writing i={time_idx} NetCDF file to {file_path}")
+
+        # Open the dataset
+        ds = nc.Dataset(file_path)
+
+        
+
+        # Close the dataset
+        ds.close()
 
 
     def plot(self, num_lines: int = 11) -> None:
