@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING
 
 import matplotlib.pyplot as plt
 import numpy as np
+import netCDF4 as nc
 from scipy.optimize import OptimizeResult
 
 from aragog.parser import Parameters
@@ -171,6 +172,15 @@ class Output:
     @property
     def time_range(self) -> float:
         return self.times[-1] - self.times[0]
+    
+    def _write(self,fpath:str) -> None:
+        """Write the output to a file on the disk.
+
+        Args:
+            fpath: Path to the output file.
+        """
+        logger.debug(f"Writing netCDF file to {fpath}")
+
 
     def plot(self, num_lines: int = 11) -> None:
         """Plots the solution with labelled lines according to time.
