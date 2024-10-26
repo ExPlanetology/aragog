@@ -214,6 +214,10 @@ class Output:
 
         logger.debug(f"Writing i={time_idx} NetCDF file to {file_path}")
 
+        # Update the state
+        assert self.solution is not None
+        self.state.update(self.solution.y, self.solution.t)
+
         # Open the dataset
         ds = nc.Dataset(file_path,mode='w')
 
@@ -228,7 +232,7 @@ class Output:
 
         # Create dimensions (just basic nodes for now)
         lev_b = self.shape_basic[0]
-        dim_b = ds.createDimension('basic', lev_b)
+        ds.createDimension('basic', lev_b)
 
         # Function to save vector quantities
         def _add_basic_variable(key,property,units):
@@ -237,11 +241,14 @@ class Output:
             ds[key].units = units
 
         # Save vector quantities
-        _add_basic_variable("radius_b",         self.radii_km_basic,             "km")
-        _add_basic_variable("pressure_b",       self.pressure_GPa_basic,         "GPa")
-        _add_basic_variable("temperature_b",    self.temperature_K_basic,        "K")
-        _add_basic_variable("meltfraction_b",   self.melt_fraction_basic,        "")
-        _add_basic_variable("Fconvect_b",       self.convective_heat_flux_basic, "W m-2")
+        _add_basic_variable("radius_b",     self.radii_km_basic,             "km")
+        _add_basic_variable("pres_b",       self.pressure_GPa_basic,         "GPa")
+        _add_basic_variable("temp_b",       self.temperature_K_basic,        "K")
+        _add_basic_variable("phi_b",        self.melt_fraction_basic,        "")
+        _add_basic_variable("Fconv_b",      self.convective_heat_flux_basic, "W m-2")
+        _add_basic_variable("log10visc_b",  self.log10_viscosity_basic,      "Pa s")
+        _add_basic_variable("density_b",    self.density_basic,              "kg m-3")
+        _add_basic_variable("heatcap_b",    self.heat_capacity_basic,        "J kg-1 K-1")
 
         # Close the dataset
         ds.close()
