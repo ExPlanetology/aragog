@@ -204,15 +204,15 @@ class Output:
     def time_range(self) -> float:
         return self.times[-1] - self.times[0]
 
-    def write(self,file_path:str,time_idx:int=-1) -> None:
+    def write_at_time(self,file_path:str,tidx:int=-1) -> None:
         """Write the state of the model at a particular time to a NetCDF4 file on the disk.
 
         Args:
             file_path: Path to the output file.
-            time_idx: Index on the time axis at which to access the data.
+            tidx: Index on the time axis at which to access the data.
         """
 
-        logger.debug(f"Writing i={time_idx} NetCDF file to {file_path}")
+        logger.debug(f"Writing i={tidx} NetCDF file to {file_path}")
 
         # Update the state
         assert self.solution is not None
@@ -232,10 +232,10 @@ class Output:
             ds[key].units = units
 
         # Save scalar quantities
-        _add_scalar_variable("time",        self.times[time_idx],       "yr")
-        _add_scalar_variable("phi_global",  self.melt_fraction_global,  "")
-        _add_scalar_variable("mantle_mass", self.mantle_mass,           "kg")
-        _add_scalar_variable("rheo_front",  self.rheological_front,     "")
+        _add_scalar_variable("time",        self.times[tidx],                "yr")
+        _add_scalar_variable("phi_global",  self.melt_fraction_global[tidx], "")
+        _add_scalar_variable("mantle_mass", self.mantle_mass,                "kg")
+        _add_scalar_variable("rheo_front",  self.rheological_front,          "")
 
         # Create dimensions (just basic nodes for now)
         lev_b = self.shape_basic[0]
@@ -244,7 +244,7 @@ class Output:
         # Function to save vector quantities
         def _add_basic_variable(key:str,property,units:str):
             ds.createVariable(key,np.float64,("basic",), )
-            ds[key][:] = property[:,time_idx]
+            ds[key][:] = property[:,tidx]
             ds[key].units = units
 
         # Save vector quantities
