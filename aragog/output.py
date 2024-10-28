@@ -225,17 +225,24 @@ class Output:
         ds.description  = "Aragog output data"
         ds.argog_version = __version__
 
-        # Scalar quantities
-        ds.createVariable('time',np.float64)
-        ds["time"][0] = self.times[time_idx]
-        ds["time"].units = "yr"
+        # Function to save scalar quantities
+        def _add_scalar_variable(key:str,value:float,units:str):
+            ds.createVariable(key,np.float64)
+            ds[key][0] = float(value)
+            ds[key].units = units
+
+        # Save scalar quantities
+        _add_scalar_variable("time",        self.times[time_idx],       "yr")
+        _add_scalar_variable("phi_global",  self.melt_fraction_global,  "")
+        _add_scalar_variable("mantle_mass", self.mantle_mass,           "kg")
+        _add_scalar_variable("rheo_front",  self.rheological_front,     "")
 
         # Create dimensions (just basic nodes for now)
         lev_b = self.shape_basic[0]
         ds.createDimension('basic', lev_b)
 
         # Function to save vector quantities
-        def _add_basic_variable(key,property,units):
+        def _add_basic_variable(key:str,property,units:str):
             ds.createVariable(key,np.float64,("basic",), )
             ds[key][:] = property[:,time_idx]
             ds[key].units = units
