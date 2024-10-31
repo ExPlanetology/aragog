@@ -241,6 +241,7 @@ class _InitialConditionParameters:
             self.init_temperature = np.loadtxt(self.init_file)
             self.init_temperature /= self.scalings_.temperature
 
+
 @dataclass
 class _MeshParameters:
     """Stores parameters in the mesh section in the configuration data."""
