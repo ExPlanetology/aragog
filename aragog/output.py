@@ -22,9 +22,11 @@ import logging
 from typing import TYPE_CHECKING
 
 import matplotlib.pyplot as plt
+import netCDF4 as nc
 import numpy as np
 from scipy.optimize import OptimizeResult
 
+from aragog import __version__
 from aragog.parser import Parameters
 from aragog.solver import Evaluator
 
@@ -201,6 +203,63 @@ class Output:
     @property
     def time_range(self) -> float:
         return self.times[-1] - self.times[0]
+
+    def write_at_time(self,file_path:str,tidx:int=-1) -> None:
+        """Write the state of the model at a particular time to a NetCDF4 file on the disk.
+
+        Args:
+            file_path: Path to the output file.
+            tidx: Index on the time axis at which to access the data.
+        """
+
+        logger.debug(f"Writing i={tidx} NetCDF file to {file_path}")
+
+        # Update the state
+        assert self.solution is not None
+        self.state.update(self.solution.y, self.solution.t)
+
+        # Open the dataset
+        ds = nc.Dataset(file_path,mode='w')
+
+        # Metadata
+        ds.description  = "Aragog output data"
+        ds.argog_version = __version__
+
+        # Function to save scalar quantities
+        def _add_scalar_variable(key:str,value:float,units:str):
+            ds.createVariable(key,np.float64)
+            ds[key][0] = float(value)
+            ds[key].units = units
+
+        # Save scalar quantities
+        _add_scalar_variable("time",        self.times[tidx],                "yr")
+        _add_scalar_variable("phi_global",  self.melt_fraction_global[tidx], "")
+        _add_scalar_variable("mantle_mass", self.mantle_mass,                "kg")
+        _add_scalar_variable("rheo_front",  self.rheological_front,          "")
+
+        # Create dimensions (just basic nodes for now)
+        lev_b = self.shape_basic[0]
+        ds.createDimension('basic', lev_b)
+
+        # Function to save vector quantities
+        def _add_basic_variable(key:str,property,units:str):
+            ds.createVariable(key,np.float64,("basic",), )
+            ds[key][:] = property[:,tidx]
+            ds[key].units = units
+
+        # Save vector quantities
+        _add_basic_variable("radius_b",     self.radii_km_basic,             "km")
+        _add_basic_variable("pres_b",       self.pressure_GPa_basic,         "GPa")
+        _add_basic_variable("temp_b",       self.temperature_K_basic,        "K")
+        _add_basic_variable("phi_b",        self.melt_fraction_basic,        "")
+        _add_basic_variable("Fconv_b",      self.convective_heat_flux_basic, "W m-2")
+        _add_basic_variable("log10visc_b",  self.log10_viscosity_basic,      "Pa s")
+        _add_basic_variable("density_b",    self.density_basic,              "kg m-3")
+        _add_basic_variable("heatcap_b",    self.heat_capacity_basic,        "J kg-1 K-1")
+
+        # Close the dataset
+        ds.close()
+
 
     def plot(self, num_lines: int = 11) -> None:
         """Plots the solution with labelled lines according to time.
