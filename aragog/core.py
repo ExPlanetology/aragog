@@ -145,7 +145,7 @@ class BoundaryConditions:
             3: Prescribed temperature
         """
         if self._settings.inner_boundary_condition == 1:
-            raise NotImplementedError
+            self.core_cooling(state)
         elif self._settings.inner_boundary_condition == 2:
             state.heat_flux[0, :] = self._settings.inner_boundary_value
         elif self._settings.inner_boundary_condition == 3:
@@ -157,6 +157,22 @@ class BoundaryConditions:
             )
             raise ValueError(msg)
 
+    def core_cooling(self, state: State) -> None:
+        """Applies a core cooling heat flux according to Eq. (37) of Bower et al., 2018
+
+        Args:
+            state: The state to apply the boundary conditions to
+        """
+
+        core_capacity = 4 / 3 * np.pi * pow(state._evaluator.mesh.basic.radii[0], 3) \
+                * self._settings.core_density * self._settings.core_heat_capacity
+
+        cell_capacity = state._evaluator.mesh.basic.volume[0] * state.capacitance_staggered()[0,-1]
+        radius_ratio = state._evaluator.mesh.basic.radii[1] / state._evaluator.mesh.basic.radii[0]
+
+        alpha = pow(radius_ratio,2) / ((cell_capacity / (core_capacity * 1.147)) + 1)
+
+        state.heat_flux[0,-1] = alpha * state.heat_flux[1,-1]
 
 @dataclass
 class InitialCondition:

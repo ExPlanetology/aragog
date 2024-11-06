@@ -142,7 +142,6 @@ class _BoundaryConditionsParameters:
     inner_boundary_value: float
     emissivity: float
     equilibrium_temperature: float
-    core_radius: float
     core_density: float
     core_heat_capacity: float
     scalings_: _ScalingsParameters = field(init=False)
@@ -155,7 +154,6 @@ class _BoundaryConditionsParameters:
         """
         self.scalings_ = scalings
         self.equilibrium_temperature /= self.scalings_.temperature
-        self.core_radius /= self.scalings_.radius
         self.core_density /= self.scalings_.density
         self.core_heat_capacity /= self.scalings_.heat_capacity
         self._scale_inner_boundary_condition()
