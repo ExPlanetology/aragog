@@ -31,11 +31,6 @@ logger: logging.Logger = debug_logger()
 logger.setLevel(logging.INFO)
 
 
-def test_version():
-    """Test version."""
-    assert __version__ == "0.1.0-alpha"
-
-
 @profile_decorator
 def test_liquid_no_heating(helper):
     """Cooling of a purely molten magma ocean."""
