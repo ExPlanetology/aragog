@@ -281,7 +281,7 @@ class MixedPhaseEvaluator(PhaseEvaluatorABC):
         # order to evaluate mixed properties
         self._solid.set_temperature(self.solidus())
         self._solid.set_pressure(pressure)
-        self._liquid.set_temperature(self.solidus())
+        self._liquid.set_temperature(self.liquidus())
         self._liquid.set_pressure(pressure)
         self._delta_density = self._solid.density() - self._liquid.density()
         self._delta_fusion = self.liquidus() - self.solidus()
