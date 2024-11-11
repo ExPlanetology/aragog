@@ -144,22 +144,20 @@ class Output:
     @property
     def pressure_GPa_basic(self) -> np.ndarray:
         """Pressure of the basic mesh in GPa"""
-        return self.evaluator.mesh.basic._eos.pressure * self.parameters.scalings.pressure * 1.0e-9
+        return self.evaluator.mesh.basic.eos.pressure * self.parameters.scalings.pressure * 1.0e-9
 
     @property
     def pressure_GPa_staggered(self) -> np.ndarray:
         """Pressure of the staggered mesh in GPa"""
         return (
-            self.evaluator.mesh.staggered._eos.pressure
-            * self.parameters.scalings.pressure
-            * 1.0e-9
+            self.evaluator.mesh.staggered.eos.pressure * self.parameters.scalings.pressure * 1.0e-9
         )
 
     @property
     def mantle_mass(self) -> float:
         """Mantle mass comptuted from the AdamsWilliamsonEOS"""
         return (
-            self.evaluator.mesh.basic._eos.get_mass_within_radii(
+            self.evaluator.mesh.basic.eos.get_mass_within_radii(
                 self.evaluator.mesh.basic.outer_boundary
             )
             * self.parameters.scalings.density
