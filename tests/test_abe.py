@@ -21,6 +21,7 @@ from __future__ import annotations
 import logging
 
 import numpy as np
+import numpy.typing as npt
 
 from aragog import Solver, __version__, debug_logger
 
@@ -40,13 +41,13 @@ def test_liquid_no_heating(helper):
 
     solver.initialize()
     solver.solve()
-    calculated: np.ndarray = solver.temperature_staggered[:, -1]
+    calculated: npt.NDArray = solver.temperature_staggered[:, -1]
     # np.savetxt("abe_liquid_no_heating.dat", calculated)
     # output: Output = Output(solver)
     # output.plot()
 
     with helper.get_reference_file("abe_liquid_no_heating.dat") as reference_file:
-        expected: np.ndarray = np.loadtxt(reference_file)
+        expected: npt.NDArray = np.loadtxt(reference_file)
     logger.info("calculated = %s", calculated)
     logger.info("expected = %s", expected)
 
@@ -62,13 +63,13 @@ def test_solid_no_heating(helper):
 
     solver.initialize()
     solver.solve()
-    calculated: np.ndarray = solver.temperature_staggered[:, -1]
+    calculated: npt.NDArray = solver.temperature_staggered[:, -1]
     # np.savetxt("abe_solid_no_heating.dat", calculated)
     # output: Output = Output(solver)
     # output.plot()
 
     with helper.get_reference_file("abe_solid_no_heating.dat") as reference_file:
-        expected: np.ndarray = np.loadtxt(reference_file)
+        expected: npt.NDArray = np.loadtxt(reference_file)
     logger.info("calculated = %s", calculated)
     logger.info("expected = %s", expected)
 
@@ -85,13 +86,13 @@ def test_solid_with_heating(helper):
     solver.parameters.energy.radionuclides = True
     solver.initialize()
     solver.solve()
-    calculated: np.ndarray = solver.temperature_staggered[:, -1]
+    calculated: npt.NDArray = solver.temperature_staggered[:, -1]
     # np.savetxt("abe_solid_with_heating.dat", calculated)
     # output: Output = Output(solver)
     # output.plot()
 
     with helper.get_reference_file("abe_solid_with_heating.dat") as reference_file:
-        expected: np.ndarray = np.loadtxt(reference_file)
+        expected: npt.NDArray = np.loadtxt(reference_file)
     logger.info("calculated = %s", calculated)
     logger.info("expected = %s", expected)
 
@@ -107,13 +108,13 @@ def test_mixed(helper):
 
     solver.initialize()
     solver.solve()
-    calculated: np.ndarray = solver.temperature_staggered[:, -1]
+    calculated: npt.NDArray = solver.temperature_staggered[:, -1]
     # np.savetxt("abe_mixed.dat", calculated)
     # output: Output = Output(solver)
     # output.plot()
 
     with helper.get_reference_file("abe_mixed.dat") as reference_file:
-        expected: np.ndarray = np.loadtxt(reference_file)
+        expected: npt.NDArray = np.loadtxt(reference_file)
     logger.info("calculated = %s", calculated)
     logger.info("expected = %s", expected)
 

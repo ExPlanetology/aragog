@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import numpy as np
+import numpy.typing as npt
 
 from aragog.mesh import Mesh
 from aragog.parser import (
@@ -53,7 +54,7 @@ class BoundaryConditions:
         self._settings: _BoundaryConditionsParameters = self._parameters.boundary_conditions
 
     def conform_temperature_boundary_conditions(
-        self, temperature: np.ndarray, temperature_basic: np.ndarray, dTdr: np.ndarray
+        self, temperature: npt.NDArray, temperature_basic: npt.NDArray, dTdr: npt.NDArray
     ) -> None:
         """Conforms the temperature and dTdr at the basic nodes to temperature boundary conditions.
 
@@ -203,23 +204,23 @@ class InitialCondition:
                 )
                 raise ValueError(msg)
         else:
-            self._temperature: np.ndarray = self.get_linear()
+            self._temperature: npt.NDArray = self.get_linear()
 
         logger.debug("initial staggered temperature = %s", self._temperature)
 
     @property
-    def temperature(self) -> np.ndarray:
+    def temperature(self) -> npt.NDArray:
         return self._temperature
 
     # TODO: Clunky. Set the staggered and basic temperature together, or be clear which one is
     # being set.
-    def get_linear(self) -> np.ndarray:
+    def get_linear(self) -> npt.NDArray:
         """Gets a linear temperature profile
 
         Returns:
             Linear temperature profile for the staggered nodes
         """
-        temperature: np.ndarray = np.linspace(
+        temperature: npt.NDArray = np.linspace(
             self._settings.basal_temperature,
             self._settings.surface_temperature,
             self._mesh.staggered.number_of_nodes,
