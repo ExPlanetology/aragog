@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-__version__: str = "0.1.0-alpha"
+__version__: str = "0.1.1-alpha"
 
 import importlib.resources
 import logging
@@ -102,8 +102,6 @@ def debug_file_logger() -> logging.Logger:
 
 
 # Expose public API so pylint: disable = C0413
-from aragog.solver import Solver
-
 from aragog.data import DownloadLookupTableData
-
 from aragog.output import Output
+from aragog.solver import Solver
