@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import copy
 import logging
+import sys
 from dataclasses import InitVar, dataclass, field
 from pathlib import Path
 
@@ -33,6 +34,11 @@ from aragog.mesh import Mesh
 from aragog.parser import Parameters, _EnergyParameters, _Radionuclide
 from aragog.phase import PhaseEvaluatorCollection
 from aragog.utilities import FloatOrArray
+
+if sys.version_info < (3, 11):
+    from typing_extensions import Self
+else:
+    from typing import Self
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -113,7 +119,8 @@ class State:
         r"""Convective heat flux:
 
         .. math::
-            J_{conv} = -\rho c_p \kappa_h \left( \frac{\partial T}{\partial r} - \left( \frac{\partial T}{\partial r} \right)_S \right)
+            J_{conv} = -\rho c_p \kappa_h \left( \frac{\partial T}{\partial r}
+                - \left( \frac{\partial T}{\partial r} \right)_S \right)
 
         where :math:`\rho` is density, :math:`c_p` is heat capacity at constant pressure,
         :math:`\kappa_h` is eddy diffusivity, :math:`T` is temperature, :math:`r` is radius, and
@@ -358,12 +365,21 @@ class Solver:
         self._solution: OptimizeResult
 
     @classmethod
-    def from_file(solver, filename: str | Path, root: str | Path = Path()):
-        """Parses a configuration file"""
-        configuration_file: Path = root / filename
+    def from_file(cls, filename: str | Path, root: str | Path = Path()) -> Self:
+        """Parses a configuration file
+
+        Args:
+            filename: Filename
+            root: Root of the filename
+
+        Returns:
+            Parameters
+        """
+        configuration_file: Path = Path(root) / Path(filename)
         logger.info("Parsing configuration file = %s", configuration_file)
-        param = Parameters.from_file(configuration_file)
-        return solver(param)
+        parameters: Parameters = Parameters.from_file(configuration_file)
+
+        return cls(parameters)
 
     def initialize(self) -> None:
         """Initializes the model."""

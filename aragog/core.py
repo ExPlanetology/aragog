@@ -145,7 +145,7 @@ class BoundaryConditions:
             3: Prescribed temperature
         """
         if self._settings.inner_boundary_condition == 1:
-            raise NotImplementedError
+            self.core_cooling(state)
         elif self._settings.inner_boundary_condition == 2:
             state.heat_flux[0, :] = self._settings.inner_boundary_value
         elif self._settings.inner_boundary_condition == 3:
@@ -156,6 +156,26 @@ class BoundaryConditions:
                 f"inner_boundary_condition = {self._settings.inner_boundary_condition} is unknown"
             )
             raise ValueError(msg)
+
+    def core_cooling(self, state: State) -> None:
+        """Applies a core cooling heat flux according to Eq. (37) of Bower et al., 2018
+
+        Args:
+            state: The state to apply the boundary condition to
+        """
+        core_capacity: float = (
+            4
+            / 3
+            * np.pi
+            * np.power(self._mesh.basic.radii[0], 3)
+            * self._settings.core_density
+            * self._settings.core_heat_capacity
+        )
+        cell_capacity = self._mesh.basic.volume[0] * state.capacitance_staggered()[0, -1]
+        radius_ratio: float = self._mesh.basic.radii[1] / self._mesh.basic.radii[0]
+        alpha = np.power(radius_ratio, 2) / ((cell_capacity / (core_capacity * 1.147)) + 1)
+
+        state.heat_flux[0, -1] = alpha * state.heat_flux[1, -1]
 
 
 @dataclass
@@ -174,11 +194,11 @@ class InitialCondition:
         self._settings: _InitialConditionParameters = self._parameters.initial_condition
 
         if self._settings.from_field:
-            if (self._mesh.staggered.number_of_nodes == len(self._settings.init_temperature)):
+            if self._mesh.staggered.number_of_nodes == len(self._settings.init_temperature):
                 self._temperature = self._settings.init_temperature
             else:
                 msg: str = (
-                        f"the size of the provided init temperature field does not match \
+                    f"the size of the provided init temperature field does not match \
                     the number of staggered points {self._mesh.staggered.number_of_nodes}"
                 )
                 raise ValueError(msg)
