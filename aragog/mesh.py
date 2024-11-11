@@ -74,9 +74,11 @@ class FixedMesh:
             logger.error(msg)
             raise ValueError(msg)
         if self.outer_boundary is None:
-            self.outer_boundary = np.max(self.radii)
+            outer_boundary_: float = np.max(self.radii)
+            self.outer_boundary = outer_boundary_
         if self.inner_boundary is None:
-            self.inner_boundary = np.min(self.radii)
+            inner_boundary_: float = np.min(self.radii)
+            self.inner_boundary = inner_boundary_
         self._eos = AdamsWilliamsonEOS(
             self.settings, self.radii, self.outer_boundary, self.inner_boundary
         )
