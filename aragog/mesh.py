@@ -72,7 +72,7 @@ class FixedMesh:
             msg: str = "Mesh must be monotonically increasing"
             logger.error(msg)
             raise ValueError(msg)
-        self._eos = AdamsWilliamsonEOS(
+        self.eos = AdamsWilliamsonEOS(
             self.settings, self.radii, self.outer_boundary, self.inner_boundary
         )
 
@@ -87,7 +87,7 @@ class FixedMesh:
 
     @cached_property
     def density(self) -> npt.NDArray:
-        return self._eos.density
+        return self.eos.density
 
     @cached_property
     def depth(self) -> npt.NDArray:
@@ -135,11 +135,11 @@ class FixedMesh:
 
     @cached_property
     def pressure(self) -> npt.NDArray:
-        return self._eos.pressure
+        return self.eos.pressure
 
     @cached_property
     def pressure_gradient(self) -> npt.NDArray:
-        return self._eos.pressure_gradient
+        return self.eos.pressure_gradient
 
     @cached_property
     def volume(self) -> npt.NDArray:
