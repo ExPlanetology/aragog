@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import numpy as np
+import numpy.typing as npt
 
 from aragog.mesh import Mesh
 from aragog.parser import (
@@ -53,7 +54,7 @@ class BoundaryConditions:
         self._settings: _BoundaryConditionsParameters = self._parameters.boundary_conditions
 
     def conform_temperature_boundary_conditions(
-        self, temperature: np.ndarray, temperature_basic: np.ndarray, dTdr: np.ndarray
+        self, temperature: npt.NDArray, temperature_basic: npt.NDArray, dTdr: npt.NDArray
     ) -> None:
         """Conforms the temperature and dTdr at the basic nodes to temperature boundary conditions.
 
@@ -161,18 +162,22 @@ class BoundaryConditions:
         """Applies a core cooling heat flux according to Eq. (37) of Bower et al., 2018
 
         Args:
-            state: The state to apply the boundary conditions to
+            state: The state to apply the boundary condition to
         """
+        core_capacity: float = (
+            4
+            / 3
+            * np.pi
+            * np.power(self._mesh.basic.radii[0], 3)
+            * self._settings.core_density
+            * self._settings.core_heat_capacity
+        )
+        cell_capacity = self._mesh.basic.volume[0] * state.capacitance_staggered()[0, -1]
+        radius_ratio: float = self._mesh.basic.radii[1] / self._mesh.basic.radii[0]
+        alpha = np.power(radius_ratio, 2) / ((cell_capacity / (core_capacity * 1.147)) + 1)
 
-        core_capacity = 4 / 3 * np.pi * pow(state._evaluator.mesh.basic.radii[0], 3) \
-                * self._settings.core_density * self._settings.core_heat_capacity
+        state.heat_flux[0, -1] = alpha * state.heat_flux[1, -1]
 
-        cell_capacity = state._evaluator.mesh.basic.volume[0] * state.capacitance_staggered()[0,-1]
-        radius_ratio = state._evaluator.mesh.basic.radii[1] / state._evaluator.mesh.basic.radii[0]
-
-        alpha = pow(radius_ratio,2) / ((cell_capacity / (core_capacity * 1.147)) + 1)
-
-        state.heat_flux[0,-1] = alpha * state.heat_flux[1,-1]
 
 @dataclass
 class InitialCondition:
@@ -190,32 +195,32 @@ class InitialCondition:
         self._settings: _InitialConditionParameters = self._parameters.initial_condition
 
         if self._settings.from_field:
-            if (self._mesh.staggered.number_of_nodes == len(self._settings.init_temperature)):
+            if self._mesh.staggered.number_of_nodes == len(self._settings.init_temperature):
                 self._temperature = self._settings.init_temperature
             else:
                 msg: str = (
-                        f"the size of the provided init temperature field does not match \
+                    f"the size of the provided init temperature field does not match \
                     the number of staggered points {self._mesh.staggered.number_of_nodes}"
                 )
                 raise ValueError(msg)
         else:
-            self._temperature: np.ndarray = self.get_linear()
+            self._temperature: npt.NDArray = self.get_linear()
 
         logger.debug("initial staggered temperature = %s", self._temperature)
 
     @property
-    def temperature(self) -> np.ndarray:
+    def temperature(self) -> npt.NDArray:
         return self._temperature
 
     # TODO: Clunky. Set the staggered and basic temperature together, or be clear which one is
     # being set.
-    def get_linear(self) -> np.ndarray:
+    def get_linear(self) -> npt.NDArray:
         """Gets a linear temperature profile
 
         Returns:
             Linear temperature profile for the staggered nodes
         """
-        temperature: np.ndarray = np.linspace(
+        temperature: npt.NDArray = np.linspace(
             self._settings.basal_temperature,
             self._settings.surface_temperature,
             self._mesh.staggered.number_of_nodes,

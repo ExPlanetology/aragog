@@ -24,6 +24,7 @@ from dataclasses import Field, dataclass, field, fields
 from typing import Any
 
 import numpy as np
+import numpy.typing as npt
 from scipy import constants
 from thermochem import codata
 from typed_configparser import ConfigParser
@@ -362,7 +363,7 @@ class _Radionuclide:
         self.heat_production /= self.scalings_.power_per_mass
         self.half_life_years /= self.scalings_.time_years
 
-    def get_heating(self, time: np.ndarray | float) -> np.ndarray | float:
+    def get_heating(self, time: npt.NDArray | float) -> npt.NDArray | float:
         """Radiogenic heating
 
         Args:
@@ -372,8 +373,8 @@ class _Radionuclide:
             Radiogenic heating as a float if time is a float, otherwise a numpy row array where
                 each entry in the row is associated with a single time in the time array.
         """
-        arg: np.ndarray | float = np.log(2) * (self.t0_years - time) / self.half_life_years
-        heating: np.ndarray | float = (
+        arg: npt.NDArray | float = np.log(2) * (self.t0_years - time) / self.half_life_years
+        heating: npt.NDArray | float = (
             self.heat_production * self.abundance * self.concentration * np.exp(arg)
         )
 

@@ -23,6 +23,7 @@ import sys
 from dataclasses import KW_ONLY, Field, InitVar, dataclass, field, fields
 
 import numpy as np
+import numpy.typing as npt
 from scipy.interpolate import RectBivariateSpline
 
 from aragog.interfaces import (
@@ -70,7 +71,7 @@ class ConstantProperty(PropertyProtocol):
     def eval(self) -> float:
         return self.value
 
-    def __call__(self, temperature: np.ndarray, pressure: np.ndarray) -> float:
+    def __call__(self, temperature: npt.NDArray, pressure: npt.NDArray) -> float:
         """Evaluates the property.
 
         Args:
@@ -98,23 +99,23 @@ class LookupProperty1D(PropertyProtocol):
 
     name: str
     _: KW_ONLY
-    value: np.ndarray
+    value: npt.NDArray
     ndim: int = field(init=False, default=1)
-    _gradient: np.ndarray = field(init=False)
+    _gradient: npt.NDArray = field(init=False)
 
     def __post_init__(self):
         # Sort the data to ensure x is increasing
         self.value = self.value[self.value[:, 0].argsort()]
         self._gradient = np.gradient(self.value[:, 1], self.value[:, 0])
 
-    def eval(self, pressure: np.ndarray) -> np.ndarray:
+    def eval(self, pressure: npt.NDArray) -> npt.NDArray:
         return np.interp(pressure, self.value[:, 0], self.value[:, 1])
 
-    def gradient(self, pressure: np.ndarray) -> np.ndarray:
+    def gradient(self, pressure: npt.NDArray) -> npt.NDArray:
         """Computes the gradient"""
         return np.interp(pressure, self.value[:, 0], self._gradient)
 
-    def __call__(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+    def __call__(self, temperature: npt.NDArray, pressure: npt.NDArray) -> npt.NDArray:
         del temperature
         return self.eval(pressure)
 
@@ -135,7 +136,7 @@ class LookupProperty2D(PropertyProtocol):
 
     name: str
     _: KW_ONLY
-    value: np.ndarray
+    value: npt.NDArray
     ndim: int = field(init=False, default=2)
     _lookup: RectBivariateSpline = field(init=False)
 
@@ -144,19 +145,19 @@ class LookupProperty2D(PropertyProtocol):
         x_values = self.value[:, 0].round(decimals=0)
         logger.debug("x_values round = %s", x_values)
         logger.debug("self.value.shape = %s", self.value.shape)
-        x_values: np.ndarray = np.unique(self.value[:, 0])
+        x_values: npt.NDArray = np.unique(self.value[:, 0])
         logger.debug("x_values.shape = %s", x_values.shape)
-        y_values: np.ndarray = np.unique(self.value[:, 1])
+        y_values: npt.NDArray = np.unique(self.value[:, 1])
         logger.debug("y_values.shape = %s", y_values.shape)
-        z_values: np.ndarray = self.value[:, 2]
+        z_values: npt.NDArray = self.value[:, 2]
         logger.debug("z_values = %s", z_values)
         z_values = z_values.reshape((x_values.size, y_values.size), order="F")
         self._lookup = RectBivariateSpline(x_values, y_values, z_values, kx=1, ky=1, s=0)
 
-    def eval(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+    def eval(self, temperature: npt.NDArray, pressure: npt.NDArray) -> npt.NDArray:
         return self._lookup(pressure, temperature, grid=False)
 
-    def __call__(self, temperature: np.ndarray, pressure: np.ndarray) -> np.ndarray:
+    def __call__(self, temperature: npt.NDArray, pressure: npt.NDArray) -> npt.NDArray:
         return self.eval(temperature, pressure)
 
 
@@ -194,7 +195,7 @@ class SinglePhaseEvaluator(PhaseEvaluatorABC):
                     logger.debug("%s is a file = %s", name, value)
                     header = infile.readline()
                     col_names = header[1:].split()
-                value_array: np.ndarray = np.loadtxt(value, ndmin=2)
+                value_array: npt.NDArray = np.loadtxt(value, ndmin=2)
                 logger.debug("before scaling, value_array = %s", value_array)
                 # Scale lookup data
                 for nn, col_name in enumerate(col_names):
@@ -274,14 +275,14 @@ class MixedPhaseEvaluator(PhaseEvaluatorABC):
         )
 
     @override
-    def set_pressure(self, pressure: np.ndarray) -> None:
+    def set_pressure(self, pressure: npt.NDArray) -> None:
         """Sets pressure and updates quantities that only depend on pressure"""
         super().set_pressure(pressure)
         # Sets the temperature of the solid and liquid phases to the appropriate melting curve in
         # order to evaluate mixed properties
         self._solid.set_temperature(self.solidus())
         self._solid.set_pressure(pressure)
-        self._liquid.set_temperature(self.solidus())
+        self._liquid.set_temperature(self.liquidus())
         self._liquid.set_pressure(pressure)
         self._delta_density = self._solid.density() - self._liquid.density()
         self._delta_fusion = self.liquidus() - self.solidus()
@@ -318,12 +319,12 @@ class MixedPhaseEvaluator(PhaseEvaluatorABC):
         self._thermal_expansivity = self.delta_density() / self.delta_fusion() / self.density()
 
         # Viscosity
-        weight: np.ndarray = tanh_weight(
+        weight: npt.NDArray = tanh_weight(
             self.melt_fraction(),
             self.settings.rheological_transition_melt_fraction,
             self.settings.rheological_transition_width,
         )
-        log10_viscosity: np.ndarray = combine_properties(
+        log10_viscosity: npt.NDArray = combine_properties(
             weight, np.log10(self._liquid.viscosity()), np.log10(self._solid.viscosity())
         )
         self._viscosity = 10**log10_viscosity
@@ -331,11 +332,11 @@ class MixedPhaseEvaluator(PhaseEvaluatorABC):
     def delta_density(self) -> FloatOrArray:
         return self._delta_density
 
-    def delta_fusion(self) -> np.ndarray:
+    def delta_fusion(self) -> npt.NDArray:
         return self._delta_fusion
 
     @override
-    def density(self) -> np.ndarray:
+    def density(self) -> npt.NDArray:
         return self._density
 
     @override
@@ -347,61 +348,61 @@ class MixedPhaseEvaluator(PhaseEvaluatorABC):
         """Heat capacity of the mixed phase :cite:p:`{Equation 4,}SOLO07`"""
         return self._heat_capacity
 
-    def liquidus(self) -> np.ndarray:
+    def liquidus(self) -> npt.NDArray:
         """Liquidus"""
-        liquidus: np.ndarray = self._liquidus.eval(self.pressure)
+        liquidus: npt.NDArray = self._liquidus.eval(self.pressure)
         logger.debug("liquidus = %s", liquidus)
 
         return liquidus
 
-    def liquidus_gradient(self) -> np.ndarray:
+    def liquidus_gradient(self) -> npt.NDArray:
         """Liquidus gradient"""
         return self._liquidus.gradient(self.pressure)
 
-    def melt_fraction_no_clip(self) -> np.ndarray:
+    def melt_fraction_no_clip(self) -> npt.NDArray:
         """Melt fraction without clipping"""
         return self._melt_fraction_no_clip
 
     @override
-    def melt_fraction(self) -> np.ndarray:
+    def melt_fraction(self) -> npt.NDArray:
         """Melt fraction of the mixed phase
 
         The melt fraction is always between zero and one.
         """
         return self._melt_fraction
 
-    def porosity(self) -> np.ndarray:
+    def porosity(self) -> npt.NDArray:
         """Porosity of the mixed phase, that is the volume fraction occupied by the melt"""
         return self._porosity
 
-    def solidus(self) -> np.ndarray:
+    def solidus(self) -> npt.NDArray:
         """Solidus"""
-        solidus: np.ndarray = self._solidus.eval(self.pressure)
+        solidus: npt.NDArray = self._solidus.eval(self.pressure)
         logger.debug("solidus = %s", solidus)
 
         return solidus
 
-    def solidus_gradient(self) -> np.ndarray:
+    def solidus_gradient(self) -> npt.NDArray:
         """Solidus gradient"""
         return self._solidus.gradient(self.pressure)
 
     @override
-    def thermal_conductivity(self) -> np.ndarray:
+    def thermal_conductivity(self) -> npt.NDArray:
         return self._thermal_conductivity
 
     @override
-    def thermal_expansivity(self) -> np.ndarray:
+    def thermal_expansivity(self) -> npt.NDArray:
         return self._thermal_expansivity
 
     @override
-    def viscosity(self) -> np.ndarray:
+    def viscosity(self) -> npt.NDArray:
         return self._viscosity
 
     def _get_melting_curve_lookup(self, name: str, value: str) -> LookupProperty1D:
         with open(value, encoding="utf-8") as infile:
             header = infile.readline()
             col_names = header[1:].split()
-        value_array: np.ndarray = np.loadtxt(value, ndmin=2)
+        value_array: npt.NDArray = np.loadtxt(value, ndmin=2)
         logger.debug("before scaling, value_array = %s", value_array)
         for nn, col_name in enumerate(col_names):
             logger.info("Scaling %s from %s", col_name, value)
@@ -431,14 +432,14 @@ class CompositePhaseEvaluator(PhaseEvaluatorABC):
         self._mixed: MixedPhaseEvaluator = MixedPhaseEvaluator(parameters)
 
     @override
-    def set_temperature(self, temperature: np.ndarray) -> None:
+    def set_temperature(self, temperature: npt.NDArray) -> None:
         super().set_temperature(temperature)
         self._solid.set_temperature(temperature)
         self._liquid.set_temperature(temperature)
         self._mixed.set_temperature(temperature)
 
     @override
-    def set_pressure(self, pressure: np.ndarray) -> None:
+    def set_pressure(self, pressure: npt.NDArray) -> None:
         """Sets pressure and updates quantities that only depend on pressure"""
         super().set_pressure(pressure)
         self._solid.set_pressure(pressure)
@@ -456,8 +457,8 @@ class CompositePhaseEvaluator(PhaseEvaluatorABC):
         self._thermal_expansivity = self._get_composite("thermal_expansivity")
 
         name: str = "viscosity"
-        log10_mixed_phase: np.ndarray = np.log10(getattr(self._mixed, name)())
-        single_phase: np.ndarray = np.empty_like(self._blending_factor)
+        log10_mixed_phase: npt.NDArray = np.log10(getattr(self._mixed, name)())
+        single_phase: npt.NDArray = np.empty_like(self._blending_factor)
         try:
             single_phase[self._liquid_mask] = getattr(self._liquid, name)()[self._liquid_mask]
         except (IndexError, TypeError):
@@ -466,18 +467,18 @@ class CompositePhaseEvaluator(PhaseEvaluatorABC):
             single_phase[self._solid_mask] = getattr(self._solid, name)()[self._solid_mask]
         except (IndexError, TypeError):
             single_phase[self._solid_mask] = getattr(self._solid, name)()
-        log10_single_phase: np.ndarray = np.log10(single_phase)
+        log10_single_phase: npt.NDArray = np.log10(single_phase)
         self._viscosity = combine_properties(
             self._blending_factor, log10_mixed_phase, log10_single_phase
         )
         self._viscosity = 10**self._viscosity
 
     @override
-    def density(self) -> np.ndarray:
+    def density(self) -> npt.NDArray:
         return self._density
 
     @override
-    def dTdPs(self) -> np.ndarray:
+    def dTdPs(self) -> npt.NDArray:
         return self._dTdPs
 
     @override
@@ -485,38 +486,38 @@ class CompositePhaseEvaluator(PhaseEvaluatorABC):
         return self._mixed.gravitational_acceleration()
 
     @override
-    def heat_capacity(self) -> np.ndarray:
+    def heat_capacity(self) -> npt.NDArray:
         """Heat capacity"""
         return self._heat_capacity
 
-    def liquidus(self) -> np.ndarray:
+    def liquidus(self) -> npt.NDArray:
         return self._mixed.liquidus()
 
-    def liquidus_gradient(self) -> np.ndarray:
+    def liquidus_gradient(self) -> npt.NDArray:
         return self._mixed.liquidus_gradient()
 
     @override
-    def melt_fraction(self) -> np.ndarray:
+    def melt_fraction(self) -> npt.NDArray:
         """Melt fraction"""
         return self._mixed.melt_fraction()
 
-    def solidus(self) -> np.ndarray:
+    def solidus(self) -> npt.NDArray:
         return self._mixed.solidus()
 
-    def solidus_gradient(self) -> np.ndarray:
+    def solidus_gradient(self) -> npt.NDArray:
         return self._mixed.solidus_gradient()
 
     @override
-    def thermal_conductivity(self) -> np.ndarray:
+    def thermal_conductivity(self) -> npt.NDArray:
         """Thermal conductivity"""
         return self._thermal_conductivity
 
     @override
-    def thermal_expansivity(self) -> np.ndarray:
+    def thermal_expansivity(self) -> npt.NDArray:
         """Thermal expansivity"""
         return self._thermal_expansivity
 
-    def viscosity(self) -> np.ndarray:
+    def viscosity(self) -> npt.NDArray:
         """Viscosity"""
         return self._viscosity
 
@@ -524,19 +525,19 @@ class CompositePhaseEvaluator(PhaseEvaluatorABC):
         """Sets blending and masks."""
 
         phase_transition_width: float = self._mixed.settings.phase_transition_width
-        melt_fraction_no_clip: np.ndarray = self._mixed.melt_fraction_no_clip()
+        melt_fraction_no_clip: npt.NDArray = self._mixed.melt_fraction_no_clip()
 
         if phase_transition_width == 0.0:
-            blending_factor: np.ndarray = np.where(
+            blending_factor: npt.NDArray = np.where(
                 ((melt_fraction_no_clip < 0.0) | (melt_fraction_no_clip > 1.0)),
                 0,
                 1,
             )
         else:
-            blending_liquid: np.ndarray = 1.0 - tanh_weight(
+            blending_liquid: npt.NDArray = 1.0 - tanh_weight(
                 melt_fraction_no_clip, 1.0, phase_transition_width
             )
-            blending_solid: np.ndarray = tanh_weight(
+            blending_solid: npt.NDArray = tanh_weight(
                 melt_fraction_no_clip, 0.0, phase_transition_width
             )
             blending_factor = np.where(
@@ -550,10 +551,10 @@ class CompositePhaseEvaluator(PhaseEvaluatorABC):
         self._solid_mask = ~self._liquid_mask
         logger.debug("_solid_mask = %s", self._solid_mask)
 
-    def _get_composite(self, property_name: str) -> np.ndarray:
+    def _get_composite(self, property_name: str) -> npt.NDArray:
         """Evaluates the composite property"""
-        mixed_phase: np.ndarray = getattr(self._mixed, property_name)()
-        single_phase: np.ndarray = np.empty_like(self._blending_factor)
+        mixed_phase: npt.NDArray = getattr(self._mixed, property_name)()
+        single_phase: npt.NDArray = np.empty_like(self._blending_factor)
         logger.debug("single_phase = %s", single_phase)
         logger.debug("_liquid_mask = %s", self._liquid_mask)
         logger.debug("_solid_mask = %s", self._solid_mask)
@@ -579,7 +580,9 @@ class CompositePhaseEvaluator(PhaseEvaluatorABC):
         except (IndexError, TypeError):
             single_phase[self._solid_mask] = getattr(self._solid, property_name)()
 
-        combined: np.ndarray = combine_properties(self._blending_factor, mixed_phase, single_phase)
+        combined: npt.NDArray = combine_properties(
+            self._blending_factor, mixed_phase, single_phase
+        )
 
         return combined
 
