@@ -29,6 +29,7 @@ from scipy.optimize import OptimizeResult
 from aragog import __version__
 from aragog.parser import Parameters
 from aragog.solver import Evaluator
+from aragog.utilities import FloatOrArray
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -97,12 +98,12 @@ class Output:
         return self.evaluator.phases.mixed.liquidus() * self.parameters.scalings.temperature
 
     @property
-    def melt_fraction_staggered(self) -> np.ndarray:
+    def melt_fraction_staggered(self) -> FloatOrArray:
         """Melt fraction on the staggered mesh"""
         return self.state.phase_staggered.melt_fraction()
 
     @property
-    def melt_fraction_basic(self) -> np.ndarray:
+    def melt_fraction_basic(self) -> FloatOrArray:
         """Melt fraction on the basic mesh"""
         return self.state.phase_basic.melt_fraction()
 
