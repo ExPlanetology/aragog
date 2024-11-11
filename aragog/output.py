@@ -112,18 +112,17 @@ class Output:
         """Rheological front at the last solve iteration given user defined threshold.
            It is defined as a dimensionless distance with respect to the outer radius.
         """
-        threshold = self.parameters.phase_mixed.rheological_transition_melt_fraction
         melt_fraction = self.melt_fraction_basic[:,-1]
 
         # if melt fraction is close to one everywhere (magma ocean) rf is the inner radius
-        if (min(melt_fraction) > (1.0 - 0.1*threshold)):
+        if min(melt_fraction) > 0.99:
             rf = self.evaluator.mesh.basic.radii[0]
         # if melt fraction is close to zero everywhere (solidified) rf is the outer radius
-        elif (max(melt_fraction) < 0.1*threshold):
+        elif max(melt_fraction) < 0.01:
             rf = self.evaluator.mesh.basic.radii[-1]
         # general case
         else:
-            idx = np.argmin(abs(melt_fraction - threshold))
+            idx = np.argmin(abs(melt_fraction - self.parameters.phase_mixed.rheological_transition_melt_fraction))
             rf = self.evaluator.mesh.basic.radii[idx]
 
         # Return dimensionless rheological front
