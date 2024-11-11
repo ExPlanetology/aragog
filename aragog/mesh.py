@@ -66,7 +66,7 @@ class FixedMesh:
     radii: np.ndarray
     outer_boundary: float | None = None
     inner_boundary: float | None = None
-    _eos: AdamsWilliamsonEOS = field(init=False)
+    eos: AdamsWilliamsonEOS = field(init=False)
 
     def __post_init__(self):
         if not is_monotonic_increasing(self.radii):
