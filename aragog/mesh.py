@@ -43,10 +43,8 @@ class FixedMesh:
     Attributes:
         settings: Mesh parameters
         radii: Radii of the mesh
-        outer_boundary: Outer boundary for computing depth below the surface. Defaults to None, in
-            which case the outermost radius is used.
-        inner_boundary: Inner boundary for computing height above the base. Defaults to None, in
-            which case the innermost radius is used.
+        outer_boundary: Outer boundary for computing depth below the surface
+        inner_boundary: Inner boundary for computing height above the base
         area: Surface area
         delta_radii: Delta radii
         density: Density
@@ -64,8 +62,8 @@ class FixedMesh:
 
     settings: _MeshParameters
     radii: np.ndarray
-    outer_boundary: float | None = None
-    inner_boundary: float | None = None
+    outer_boundary: float
+    inner_boundary: float
     eos: AdamsWilliamsonEOS = field(init=False)
 
     def __post_init__(self):
@@ -73,12 +71,6 @@ class FixedMesh:
             msg: str = "Mesh must be monotonically increasing"
             logger.error(msg)
             raise ValueError(msg)
-        if self.outer_boundary is None:
-            outer_boundary_: float = np.max(self.radii)
-            self.outer_boundary = outer_boundary_
-        if self.inner_boundary is None:
-            inner_boundary_: float = np.min(self.radii)
-            self.inner_boundary = inner_boundary_
         self._eos = AdamsWilliamsonEOS(
             self.settings, self.radii, self.outer_boundary, self.inner_boundary
         )
@@ -172,7 +164,9 @@ class Mesh:
     def __init__(self, parameters: Parameters):
         self.settings: _MeshParameters = parameters.mesh
         basic_coordinates: np.ndarray = self.get_constant_spacing()
-        self.basic: FixedMesh = FixedMesh(self.settings, basic_coordinates)
+        self.basic: FixedMesh = FixedMesh(
+            self.settings, basic_coordinates, np.max(basic_coordinates), np.min(basic_coordinates)
+        )
         staggered_coordinates: np.ndarray = self.basic.radii[:-1] + 0.5 * self.basic.delta_radii
         self.staggered: FixedMesh = FixedMesh(
             self.settings,
