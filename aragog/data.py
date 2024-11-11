@@ -15,8 +15,7 @@ logger.info(f'FWL data location: {FWL_DATA_DIR}')
 project_id = 'phsxf'
 
 basic_list = (
-        "1TPa-dK09-elec-free/temperature",
-        "1TPa-dK09-elec-free/entropy",
+        "1TPa-dK09-elec-free/MgSiO3_Wolf_Bower_2018",
         )
 
 def download_folder(*, storage, folders: list[str], data_dir: Path):
