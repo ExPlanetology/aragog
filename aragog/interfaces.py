@@ -20,7 +20,7 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Protocol
 
-import numpy as np
+import numpy.typing as npt
 
 from aragog.utilities import FloatOrArray
 
@@ -32,23 +32,23 @@ class PropertyProtocol(Protocol):
 
     def eval(self, *args) -> FloatOrArray: ...
 
-    def __call__(self, temperature: np.ndarray, pressure: np.ndarray) -> FloatOrArray: ...
+    def __call__(self, temperature: npt.NDArray, pressure: npt.NDArray) -> FloatOrArray: ...
 
 
 class PhaseEvaluatorProtocol(Protocol):
     """Phase evaluator protocol"""
 
-    def set_temperature(self, temperature: np.ndarray) -> None: ...
+    def set_temperature(self, temperature: npt.NDArray) -> None: ...
 
-    def set_pressure(self, pressure: np.ndarray) -> None: ...
+    def set_pressure(self, pressure: npt.NDArray) -> None: ...
 
     def update(self) -> None: ...
 
     def density(self) -> FloatOrArray: ...
 
-    def dTdPs(self) -> np.ndarray: ...
+    def dTdPs(self) -> npt.NDArray: ...
 
-    def dTdrs(self) -> np.ndarray: ...
+    def dTdrs(self) -> npt.NDArray: ...
 
     def gravitational_acceleration(self) -> FloatOrArray: ...
 
@@ -68,27 +68,27 @@ class PhaseEvaluatorProtocol(Protocol):
 class MixedPhaseEvaluatorProtocol(PhaseEvaluatorProtocol, Protocol):
     """Mixed phase evaluator protocol"""
 
-    def liquidus(self) -> np.ndarray: ...
+    def liquidus(self) -> npt.NDArray: ...
 
-    def liquidus_gradient(self) -> np.ndarray: ...
+    def liquidus_gradient(self) -> npt.NDArray: ...
 
-    def solidus(self) -> np.ndarray: ...
+    def solidus(self) -> npt.NDArray: ...
 
-    def solidus_gradient(self) -> np.ndarray: ...
+    def solidus_gradient(self) -> npt.NDArray: ...
 
 
 class PhaseEvaluatorABC(ABC):
     """Phase evaluator ABC"""
 
-    temperature: np.ndarray
-    pressure: np.ndarray
+    temperature: npt.NDArray
+    pressure: npt.NDArray
 
-    def set_temperature(self, temperature: np.ndarray) -> None:
+    def set_temperature(self, temperature: npt.NDArray) -> None:
         """Sets the temperature."""
         logger.debug("set_temperature = %s", temperature)
         self.temperature = temperature
 
-    def set_pressure(self, pressure: np.ndarray) -> None:
+    def set_pressure(self, pressure: npt.NDArray) -> None:
         """Sets the pressure."""
         logger.debug("set_pressure = %s", pressure)
         self.pressure = pressure
@@ -99,16 +99,16 @@ class PhaseEvaluatorABC(ABC):
     @abstractmethod
     def density(self) -> FloatOrArray: ...
 
-    def dTdPs(self) -> np.ndarray:
+    def dTdPs(self) -> npt.NDArray:
         """TODO: Update reference to sphinx: Solomatov (2007), Treatise on Geophysics, Eq. 3.2"""
-        dTdPs: np.ndarray = (
+        dTdPs: npt.NDArray = (
             self.thermal_expansivity() * self.temperature / (self.density() * self.heat_capacity())
         )
 
         return dTdPs
 
-    def dTdrs(self) -> np.ndarray:
-        dTdrs: np.ndarray = (
+    def dTdrs(self) -> npt.NDArray:
+        dTdrs: npt.NDArray = (
             -self.gravitational_acceleration()
             * self.thermal_expansivity()
             * self.temperature

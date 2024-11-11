@@ -25,6 +25,7 @@ from dataclasses import InitVar, dataclass, field
 from pathlib import Path
 
 import numpy as np
+import numpy.typing as npt
 from scipy.integrate import solve_ivp
 from scipy.optimize import OptimizeResult
 
@@ -75,17 +76,17 @@ class State:
     _settings: _EnergyParameters = field(init=False)
     phase_basic: PhaseEvaluatorProtocol = field(init=False)
     phase_staggered: PhaseEvaluatorProtocol = field(init=False)
-    _dTdr: np.ndarray = field(init=False)
-    _eddy_diffusivity: np.ndarray = field(init=False)
-    _heat_flux: np.ndarray = field(init=False)
-    _heating: np.ndarray = field(init=False)
-    _is_convective: np.ndarray = field(init=False)
-    _reynolds_number: np.ndarray = field(init=False)
-    _super_adiabatic_temperature_gradient: np.ndarray = field(init=False)
-    _temperature_basic: np.ndarray = field(init=False)
-    _temperature_staggered: np.ndarray = field(init=False)
-    _viscous_velocity: np.ndarray = field(init=False)
-    _inviscid_velocity: np.ndarray = field(init=False)
+    _dTdr: npt.NDArray = field(init=False)
+    _eddy_diffusivity: npt.NDArray = field(init=False)
+    _heat_flux: npt.NDArray = field(init=False)
+    _heating: npt.NDArray = field(init=False)
+    _is_convective: npt.NDArray = field(init=False)
+    _reynolds_number: npt.NDArray = field(init=False)
+    _super_adiabatic_temperature_gradient: npt.NDArray = field(init=False)
+    _temperature_basic: npt.NDArray = field(init=False)
+    _temperature_staggered: npt.NDArray = field(init=False)
+    _viscous_velocity: npt.NDArray = field(init=False)
+    _inviscid_velocity: npt.NDArray = field(init=False)
 
     def __post_init__(self, parameters: Parameters):
         self._settings = parameters.energy
@@ -103,7 +104,7 @@ class State:
 
         return capacitance
 
-    def conductive_heat_flux(self) -> np.ndarray:
+    def conductive_heat_flux(self) -> npt.NDArray:
         r"""Conductive heat flux:
 
         .. math::
@@ -111,11 +112,11 @@ class State:
 
         where :math:`k` is thermal conductivity, :math:`T` is temperature, and :math:`r` is radius.
         """
-        conductive_heat_flux: np.ndarray = self.phase_basic.thermal_conductivity() * -self.dTdr()
+        conductive_heat_flux: npt.NDArray = self.phase_basic.thermal_conductivity() * -self.dTdr()
 
         return conductive_heat_flux
 
-    def convective_heat_flux(self) -> np.ndarray:
+    def convective_heat_flux(self) -> npt.NDArray:
         r"""Convective heat flux:
 
         .. math::
@@ -126,7 +127,7 @@ class State:
         :math:`\kappa_h` is eddy diffusivity, :math:`T` is temperature, :math:`r` is radius, and
         :math:`S` is entropy.
         """
-        convective_heat_flux: np.ndarray = (
+        convective_heat_flux: npt.NDArray = (
             self.phase_basic.density()
             * self.phase_basic.heat_capacity()
             * self.eddy_diffusivity()
@@ -160,24 +161,24 @@ class State:
         """Critical Reynolds number from Abe (1993)"""
         return 9 / 8
 
-    def dTdr(self) -> np.ndarray:
+    def dTdr(self) -> npt.NDArray:
         return self._dTdr
 
-    def eddy_diffusivity(self) -> np.ndarray:
+    def eddy_diffusivity(self) -> npt.NDArray:
         return self._eddy_diffusivity
 
     @property
-    def gravitational_separation_flux(self) -> np.ndarray:
+    def gravitational_separation_flux(self) -> npt.NDArray:
         """Gravitational separation"""
         raise NotImplementedError
 
     @property
-    def heating(self) -> np.ndarray:
+    def heating(self) -> npt.NDArray:
         """The total heating rate according to the heat sources specified in the configuration."""
         return self._heating
 
     @property
-    def heat_flux(self) -> np.ndarray:
+    def heat_flux(self) -> npt.NDArray:
         """The total heat flux according to the fluxes specified in the configuration."""
         return self._heat_flux
 
@@ -188,55 +189,55 @@ class State:
         self._heat_flux = value
 
     @property
-    def inviscid_regime(self) -> np.ndarray:
+    def inviscid_regime(self) -> npt.NDArray:
         return self._reynolds_number > self.critical_reynolds_number
 
     @property
-    def inviscid_velocity(self) -> np.ndarray:
+    def inviscid_velocity(self) -> npt.NDArray:
         return self._inviscid_velocity
 
     @property
-    def is_convective(self) -> np.ndarray:
+    def is_convective(self) -> npt.NDArray:
         return self._is_convective
 
     @property
-    def mixing_flux(self) -> np.ndarray:
+    def mixing_flux(self) -> npt.NDArray:
         """Mixing heat flux"""
         raise NotImplementedError
 
     @property
-    def reynolds_number(self) -> np.ndarray:
+    def reynolds_number(self) -> npt.NDArray:
         return self._reynolds_number
 
     @property
-    def super_adiabatic_temperature_gradient(self) -> np.ndarray:
+    def super_adiabatic_temperature_gradient(self) -> npt.NDArray:
         return self._super_adiabatic_temperature_gradient
 
     @property
-    def temperature_basic(self) -> np.ndarray:
+    def temperature_basic(self) -> npt.NDArray:
         return self._temperature_basic
 
     @property
-    def temperature_staggered(self) -> np.ndarray:
+    def temperature_staggered(self) -> npt.NDArray:
         return self._temperature_staggered
 
     @property
-    def top_temperature(self) -> np.ndarray:
+    def top_temperature(self) -> npt.NDArray:
         return self._temperature_basic[-1, :]
 
     @property
-    def bottom_temperature(self) -> np.ndarray:
+    def bottom_temperature(self) -> npt.NDArray:
         return self._temperature_basic[0, :]
 
     @property
-    def viscous_regime(self) -> np.ndarray:
+    def viscous_regime(self) -> npt.NDArray:
         return self._reynolds_number <= self.critical_reynolds_number
 
     @property
-    def viscous_velocity(self) -> np.ndarray:
+    def viscous_velocity(self) -> npt.NDArray:
         return self._viscous_velocity
 
-    def update(self, temperature: np.ndarray, time: FloatOrArray) -> None:
+    def update(self, temperature: npt.NDArray, time: FloatOrArray) -> None:
         """Updates the state.
 
         The evaluation order matters because we want to minimise the number of evaluations.
@@ -265,7 +266,7 @@ class State:
 
         self._super_adiabatic_temperature_gradient = self.dTdr() - self.phase_basic.dTdrs()
         self._is_convective = self._super_adiabatic_temperature_gradient < 0
-        velocity_prefactor: np.ndarray = (
+        velocity_prefactor: npt.NDArray = (
             self.phase_basic.gravitational_acceleration()
             * self.phase_basic.thermal_expansivity()
             * -self._super_adiabatic_temperature_gradient
@@ -388,14 +389,14 @@ class Solver:
         self.state = State(self.parameters, self.evaluator)
 
     @property
-    def temperature_basic(self) -> np.ndarray:
+    def temperature_basic(self) -> npt.NDArray:
         """Temperature of the basic mesh in K"""
         return self.evaluator.mesh.quantity_at_basic_nodes(self.temperature_staggered)
 
     @property
-    def temperature_staggered(self) -> np.ndarray:
+    def temperature_staggered(self) -> npt.NDArray:
         """Temperature of the staggered mesh in K"""
-        temperature: np.ndarray = self.solution.y * self.parameters.scalings.temperature
+        temperature: npt.NDArray = self.solution.y * self.parameters.scalings.temperature
 
         return temperature
 
@@ -406,9 +407,9 @@ class Solver:
 
     def dTdt(
         self,
-        time: np.ndarray | float,
-        temperature: np.ndarray,
-    ) -> np.ndarray:
+        time: npt.NDArray | float,
+        temperature: npt.NDArray,
+    ) -> npt.NDArray:
         """dT/dt at the staggered nodes
 
         Args:
@@ -421,24 +422,24 @@ class Solver:
         logger.debug("temperature passed into dTdt = %s", temperature)
         # logger.debug("temperature.shape = %s", temperature.shape)
         self.state.update(temperature, time)
-        heat_flux: np.ndarray = self.state.heat_flux
+        heat_flux: npt.NDArray = self.state.heat_flux
         # logger.debug("heat_flux = %s", heat_flux)
         self.evaluator.boundary_conditions.apply(self.state)
         # logger.debug("heat_flux = %s", heat_flux)
         # logger.debug("mesh.basic.area.shape = %s", self.data.mesh.basic.area.shape)
 
-        energy_flux: np.ndarray = heat_flux * self.evaluator.mesh.basic.area
+        energy_flux: npt.NDArray = heat_flux * self.evaluator.mesh.basic.area
         # logger.debug("energy_flux size = %s", energy_flux.shape)
 
-        delta_energy_flux: np.ndarray = np.diff(energy_flux, axis=0)
+        delta_energy_flux: npt.NDArray = np.diff(energy_flux, axis=0)
         # logger.debug("delta_energy_flux size = %s", delta_energy_flux.shape)
         # logger.debug("capacitance = %s", self.state.phase_staggered.capacitance.shape)
         # FIXME: Update capacitance for mixed phase (enthalpy of fusion contribution)
-        capacitance: np.ndarray = (
+        capacitance: npt.NDArray = (
             self.state.capacitance_staggered() * self.evaluator.mesh.basic.volume
         )
 
-        dTdt: np.ndarray = -delta_energy_flux / capacitance
+        dTdt: npt.NDArray = -delta_energy_flux / capacitance
         logger.debug("dTdt (fluxes only) = %s", dTdt)
 
         dTdt += self.state.heating
