@@ -25,11 +25,12 @@ from pstats import SortKey, Stats
 from typing import Any, TypeVar
 
 import numpy as np
+import numpy.typing as npt
 import pandas as pd
 
-MultiplyT = TypeVar("MultiplyT", float, np.ndarray, pd.Series, pd.DataFrame)
+MultiplyT = TypeVar("MultiplyT", float, npt.NDArray, pd.Series, pd.DataFrame)
 
-FloatOrArray = float | np.ndarray
+FloatOrArray = float | npt.NDArray
 
 
 def profile_decorator(func):
@@ -61,7 +62,7 @@ def is_file(value: Any) -> bool:
     return False
 
 
-def is_monotonic_increasing(some_array: np.ndarray) -> np.bool_:
+def is_monotonic_increasing(some_array: npt.NDArray) -> np.bool_:
     """Returns True if an array is monotonically increasing, otherwise returns False."""
     return np.all(np.diff(some_array) > 0)
 
@@ -83,7 +84,7 @@ def is_number(value: Any) -> bool:
         return False
 
 
-def tanh_weight(value: FloatOrArray, threshold: float, width: float) -> np.ndarray:
+def tanh_weight(value: FloatOrArray, threshold: float, width: float) -> npt.NDArray:
     """Computes the tanh weight for viscosity profile and smoothing.
 
     Args:
@@ -95,7 +96,7 @@ def tanh_weight(value: FloatOrArray, threshold: float, width: float) -> np.ndarr
         weight
     """
     arg: FloatOrArray = (value - threshold) / width
-    weight: np.ndarray = 0.5 * (1.0 + np.tanh(arg))
+    weight: npt.NDArray = 0.5 * (1.0 + np.tanh(arg))
 
     return weight
 

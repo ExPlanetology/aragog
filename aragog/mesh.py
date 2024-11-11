@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from functools import cached_property
 
 import numpy as np
+import numpy.typing as npt
 
 from aragog.parser import Parameters, _MeshParameters
 from aragog.utilities import FloatOrArray, is_monotonic_increasing
@@ -43,10 +44,8 @@ class FixedMesh:
     Attributes:
         settings: Mesh parameters
         radii: Radii of the mesh
-        outer_boundary: Outer boundary for computing depth below the surface. Defaults to None, in
-            which case the outermost radius is used.
-        inner_boundary: Inner boundary for computing height above the base. Defaults to None, in
-            which case the innermost radius is used.
+        outer_boundary: Outer boundary for computing depth below the surface
+        inner_boundary: Inner boundary for computing height above the base
         area: Surface area
         delta_radii: Delta radii
         density: Density
@@ -63,51 +62,47 @@ class FixedMesh:
     """
 
     settings: _MeshParameters
-    radii: np.ndarray
-    outer_boundary: float | None = None
-    inner_boundary: float | None = None
-    _eos: AdamsWilliamsonEOS = field(init=False)
+    radii: npt.NDArray
+    outer_boundary: float
+    inner_boundary: float
+    eos: AdamsWilliamsonEOS = field(init=False)
 
     def __post_init__(self):
         if not is_monotonic_increasing(self.radii):
             msg: str = "Mesh must be monotonically increasing"
             logger.error(msg)
             raise ValueError(msg)
-        if self.outer_boundary is None:
-            self.outer_boundary = np.max(self.radii)
-        if self.inner_boundary is None:
-            self.inner_boundary = np.min(self.radii)
         self._eos = AdamsWilliamsonEOS(
             self.settings, self.radii, self.outer_boundary, self.inner_boundary
         )
 
     @cached_property
-    def area(self) -> np.ndarray:
+    def area(self) -> npt.NDArray:
         """Area"""
         return 4 * np.pi * np.square(self.radii)
 
     @cached_property
-    def delta_radii(self) -> np.ndarray:
+    def delta_radii(self) -> npt.NDArray:
         return np.diff(self.radii, axis=0)
 
     @cached_property
-    def density(self) -> np.ndarray:
+    def density(self) -> npt.NDArray:
         return self._eos.density
 
     @cached_property
-    def depth(self) -> np.ndarray:
+    def depth(self) -> npt.NDArray:
         return self.outer_boundary - self.radii
 
     @cached_property
-    def height(self) -> np.ndarray:
+    def height(self) -> npt.NDArray:
         return self.radii - self.inner_boundary
 
     @cached_property
-    def _mesh_cubed(self) -> np.ndarray:
+    def _mesh_cubed(self) -> npt.NDArray:
         return np.power(self.radii, 3)
 
     @cached_property
-    def mixing_length(self) -> np.ndarray:
+    def mixing_length(self) -> npt.NDArray:
         if self.settings.mixing_length_profile == "nearest_boundary":
             logger.debug("Set mixing length profile to nearest boundary")
             mixing_length = np.minimum(
@@ -127,11 +122,11 @@ class FixedMesh:
         return mixing_length
 
     @cached_property
-    def mixing_length_cubed(self) -> np.ndarray:
+    def mixing_length_cubed(self) -> npt.NDArray:
         return np.power(self.mixing_length, 3)
 
     @cached_property
-    def mixing_length_squared(self) -> np.ndarray:
+    def mixing_length_squared(self) -> npt.NDArray:
         return np.square(self.mixing_length)
 
     @cached_property
@@ -139,21 +134,21 @@ class FixedMesh:
         return self.radii.size
 
     @cached_property
-    def pressure(self) -> np.ndarray:
+    def pressure(self) -> npt.NDArray:
         return self._eos.pressure
 
     @cached_property
-    def pressure_gradient(self) -> np.ndarray:
+    def pressure_gradient(self) -> npt.NDArray:
         return self._eos.pressure_gradient
 
     @cached_property
-    def volume(self) -> np.ndarray:
-        volume: np.ndarray = 4 / 3 * np.pi * (self._mesh_cubed[1:] - self._mesh_cubed[:-1])
+    def volume(self) -> npt.NDArray:
+        volume: npt.NDArray = 4 / 3 * np.pi * (self._mesh_cubed[1:] - self._mesh_cubed[:-1])
 
         return volume
 
     @cached_property
-    def total_volume(self) -> np.ndarray:
+    def total_volume(self) -> npt.NDArray:
         return 4 / 3 * np.pi * (self._mesh_cubed[-1] - self._mesh_cubed[0])
 
 
@@ -169,38 +164,40 @@ class Mesh:
 
     def __init__(self, parameters: Parameters):
         self.settings: _MeshParameters = parameters.mesh
-        basic_coordinates: np.ndarray = self.get_constant_spacing()
-        self.basic: FixedMesh = FixedMesh(self.settings, basic_coordinates)
-        staggered_coordinates: np.ndarray = self.basic.radii[:-1] + 0.5 * self.basic.delta_radii
+        basic_coordinates: npt.NDArray = self.get_constant_spacing()
+        self.basic: FixedMesh = FixedMesh(
+            self.settings, basic_coordinates, np.max(basic_coordinates), np.min(basic_coordinates)
+        )
+        staggered_coordinates: npt.NDArray = self.basic.radii[:-1] + 0.5 * self.basic.delta_radii
         self.staggered: FixedMesh = FixedMesh(
             self.settings,
             staggered_coordinates,
             self.basic.outer_boundary,
             self.basic.inner_boundary,
         )
-        self._d_dr_transform: np.ndarray = self._get_d_dr_transform_matrix()
-        self._quantity_transform: np.ndarray = self._get_quantity_transform_matrix()
+        self._d_dr_transform: npt.NDArray = self._get_d_dr_transform_matrix()
+        self._quantity_transform: npt.NDArray = self._get_quantity_transform_matrix()
 
-    def get_constant_spacing(self) -> np.ndarray:
+    def get_constant_spacing(self) -> npt.NDArray:
         """Constant radius spacing across the mantle
 
         Returns:
             Radii with constant spacing as a column vector
         """
-        radii: np.ndarray = np.linspace(
+        radii: npt.NDArray = np.linspace(
             self.settings.inner_radius, self.settings.outer_radius, self.settings.number_of_nodes
         )
         radii = np.atleast_2d(radii).T
 
         return radii
 
-    def _get_d_dr_transform_matrix(self) -> np.ndarray:
+    def _get_d_dr_transform_matrix(self) -> npt.NDArray:
         """Transform matrix for determining d/dr of a staggered quantity on the basic mesh.
 
         Returns:
             The transform matrix
         """
-        transform: np.ndarray = np.zeros(
+        transform: npt.NDArray = np.zeros(
             (self.basic.number_of_nodes, self.staggered.number_of_nodes)
         )
         transform[1:-1, :-1] += np.diagflat(-1 / self.staggered.delta_radii)  # k=0 diagonal
@@ -211,7 +208,7 @@ class Mesh:
 
         return transform
 
-    def d_dr_at_basic_nodes(self, staggered_quantity: np.ndarray) -> np.ndarray:
+    def d_dr_at_basic_nodes(self, staggered_quantity: npt.NDArray) -> npt.NDArray:
         """Determines d/dr at the basic nodes of a quantity defined at the staggered nodes.
 
         Args:
@@ -220,13 +217,13 @@ class Mesh:
         Returns:
             d/dr at the basic nodes
         """
-        d_dr_at_basic_nodes: np.ndarray = self._d_dr_transform.dot(staggered_quantity)
+        d_dr_at_basic_nodes: npt.NDArray = self._d_dr_transform.dot(staggered_quantity)
         logger.debug("d_dr_at_basic_nodes = %s", d_dr_at_basic_nodes)
 
         return d_dr_at_basic_nodes
 
     # TODO: Compatibility with conforming boundary/initial conditions?
-    def _get_quantity_transform_matrix(self) -> np.ndarray:
+    def _get_quantity_transform_matrix(self) -> npt.NDArray:
         """A transform matrix for mapping quantities on the staggered mesh to the basic mesh.
 
         Uses backward and forward differences at the inner and outer radius, respectively, to
@@ -236,16 +233,16 @@ class Mesh:
         Returns:
             The transform matrix
         """
-        transform: np.ndarray = np.zeros(
+        transform: npt.NDArray = np.zeros(
             (self.basic.number_of_nodes, self.staggered.number_of_nodes)
         )
-        mesh_ratio: np.ndarray = self.basic.delta_radii[:-1] / self.staggered.delta_radii
+        mesh_ratio: npt.NDArray = self.basic.delta_radii[:-1] / self.staggered.delta_radii
         transform[1:-1, :-1] += np.diagflat(1 - 0.5 * mesh_ratio)  # k=0 diagonal
         transform[1:-1:, 1:] += np.diagflat(0.5 * mesh_ratio)  # k=1 diagonal
         # Backward difference at inner radius
         transform[0, :2] = np.array([1 + 0.5 * mesh_ratio[0], -0.5 * mesh_ratio[0]]).flatten()
         # Forward difference at outer radius
-        mesh_ratio_outer: np.ndarray = self.basic.delta_radii[-1] / self.staggered.delta_radii[-1]
+        mesh_ratio_outer: npt.NDArray = self.basic.delta_radii[-1] / self.staggered.delta_radii[-1]
         transform[-1, -2:] = np.array(
             [-0.5 * mesh_ratio_outer, 1 + 0.5 * mesh_ratio_outer]
         ).flatten()
@@ -254,7 +251,7 @@ class Mesh:
         return transform
 
     # TODO: Compatibility with conforming boundary/initial conditions?
-    def quantity_at_basic_nodes(self, staggered_quantity: np.ndarray) -> np.ndarray:
+    def quantity_at_basic_nodes(self, staggered_quantity: npt.NDArray) -> npt.NDArray:
         """Determines a quantity at the basic nodes that is defined at the staggered nodes.
 
         Uses backward and forward differences at the inner and outer radius, respectively, to
@@ -267,12 +264,12 @@ class Mesh:
         Returns:
             The quantity at the basic nodes
         """
-        quantity_at_basic_nodes: np.ndarray = self._quantity_transform.dot(staggered_quantity)
+        quantity_at_basic_nodes: npt.NDArray = self._quantity_transform.dot(staggered_quantity)
         logger.debug("quantity_at_basic_nodes = %s", quantity_at_basic_nodes)
 
         return quantity_at_basic_nodes
 
-    def volume_average(self, staggered_quantity: np.ndarray) -> float:
+    def volume_average(self, staggered_quantity: npt.NDArray) -> float:
 
         return np.dot(staggered_quantity.T, self.basic.volume) / self.basic.total_volume
 
@@ -293,12 +290,12 @@ class AdamsWilliamsonEOS:
     def __init__(
         self,
         settings: _MeshParameters,
-        radii: np.ndarray,
+        radii: npt.NDArray,
         outer_boundary: float,
         inner_boundary: float,
     ):
         self._settings: _MeshParameters = settings
-        self._radii: np.ndarray = radii
+        self._radii: npt.NDArray = radii
         self._outer_boundary = outer_boundary
         self._inner_boundary = inner_boundary
         self._surface_density: float = self._settings.surface_density
@@ -309,21 +306,21 @@ class AdamsWilliamsonEOS:
         self._density = self.get_density(self.pressure)
 
     @property
-    def density(self) -> np.ndarray:
+    def density(self) -> npt.NDArray:
         """Density"""
         return self._density
 
     @property
-    def pressure(self) -> np.ndarray:
+    def pressure(self) -> npt.NDArray:
         """Pressure"""
         return self._pressure
 
     @property
-    def pressure_gradient(self) -> np.ndarray:
+    def pressure_gradient(self) -> npt.NDArray:
         """Pressure gradient"""
         return self.pressure_gradient
 
-    def get_density(self, pressure: FloatOrArray) -> np.ndarray:
+    def get_density(self, pressure: FloatOrArray) -> npt.NDArray:
         r"""Computes density from pressure:
 
         .. math::
@@ -339,7 +336,7 @@ class AdamsWilliamsonEOS:
         Returns:
             Density
         """
-        density: np.ndarray = self._surface_density * np.exp(
+        density: npt.NDArray = self._surface_density * np.exp(
             pressure / self._adiabatic_bulk_modulus
         )
 
@@ -370,7 +367,7 @@ class AdamsWilliamsonEOS:
 
         return density
 
-    def get_mass_element(self, radii: FloatOrArray) -> np.ndarray:
+    def get_mass_element(self, radii: FloatOrArray) -> npt.NDArray:
         r"""Computes the mass element:
 
         .. math::
@@ -386,13 +383,13 @@ class AdamsWilliamsonEOS:
         Returns:
             The mass element at radii
         """
-        mass_element: np.ndarray = (
+        mass_element: npt.NDArray = (
             4 * np.pi * np.square(radii) * self.get_density_from_radii(radii)
         )
 
         return mass_element
 
-    def get_mass_within_radii(self, radii: FloatOrArray) -> np.ndarray:
+    def get_mass_within_radii(self, radii: FloatOrArray) -> npt.NDArray:
         r"""Computes mass within radii:
 
         .. math::
@@ -414,7 +411,7 @@ class AdamsWilliamsonEOS:
         c: float = self._gravitational_acceleration
         d: float = self._outer_boundary
 
-        def mass_integral(radii_: FloatOrArray) -> np.ndarray:
+        def mass_integral(radii_: FloatOrArray) -> npt.NDArray:
             """Mass within radii including arbitrary constant of integration.
 
             Args:
@@ -424,7 +421,7 @@ class AdamsWilliamsonEOS:
                 Mass within radii
             """
 
-            mass: np.ndarray = (
+            mass: npt.NDArray = (
                 4
                 * np.pi
                 * (
@@ -440,11 +437,11 @@ class AdamsWilliamsonEOS:
 
             return mass
 
-        mass: np.ndarray = mass_integral(radii) - mass_integral(self._inner_boundary)
+        mass: npt.NDArray = mass_integral(radii) - mass_integral(self._inner_boundary)
 
         return mass
 
-    def get_mass_within_shell(self, radii: np.ndarray) -> np.ndarray:
+    def get_mass_within_shell(self, radii: npt.NDArray) -> npt.NDArray:
         """Computes the mass within spherical shells bounded by radii.
 
         Args:
@@ -453,13 +450,13 @@ class AdamsWilliamsonEOS:
         Returns:
             Mass within the bounded spherical shells
         """
-        mass: np.ndarray = self.get_mass_within_radii(radii[1:]) - self.get_mass_within_radii(
+        mass: npt.NDArray = self.get_mass_within_radii(radii[1:]) - self.get_mass_within_radii(
             radii[:-1]
         )
 
         return mass
 
-    def get_pressure_from_radii(self, radii: FloatOrArray) -> np.ndarray:
+    def get_pressure_from_radii(self, radii: FloatOrArray) -> npt.NDArray:
         r"""Computes pressure from radii:
 
         .. math::
@@ -476,7 +473,7 @@ class AdamsWilliamsonEOS:
         Returns:
             Pressure
         """
-        pressure: np.ndarray = -self._adiabatic_bulk_modulus * np.log(
+        pressure: npt.NDArray = -self._adiabatic_bulk_modulus * np.log(
             (
                 self._adiabatic_bulk_modulus
                 + self._surface_density
@@ -488,7 +485,7 @@ class AdamsWilliamsonEOS:
 
         return pressure
 
-    def get_pressure_gradient(self, pressure: FloatOrArray) -> np.ndarray:
+    def get_pressure_gradient(self, pressure: FloatOrArray) -> npt.NDArray:
         r"""Computes the pressure gradient:
 
         .. math::
@@ -504,11 +501,11 @@ class AdamsWilliamsonEOS:
         Returns:
             Pressure gradient
         """
-        dPdr: np.ndarray = -self._gravitational_acceleration * self.get_density(pressure)
+        dPdr: npt.NDArray = -self._gravitational_acceleration * self.get_density(pressure)
 
         return dPdr
 
-    def get_radii_from_pressure(self, pressure: FloatOrArray) -> np.ndarray:
+    def get_radii_from_pressure(self, pressure: FloatOrArray) -> npt.NDArray:
         r"""Computes radii from pressure:
 
         .. math::
@@ -531,7 +528,7 @@ class AdamsWilliamsonEOS:
         Returns:
             Radii
         """
-        radii: np.ndarray = (
+        radii: npt.NDArray = (
             self._adiabatic_bulk_modulus
             * (np.exp(-pressure / self._adiabatic_bulk_modulus) - 1)
             / (self._surface_density * self._gravitational_acceleration)

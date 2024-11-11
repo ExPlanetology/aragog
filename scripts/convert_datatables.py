@@ -17,6 +17,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
+import numpy.typing as npt
 from matplotlib.axes._axes import Axes
 from scipy import interpolate
 
@@ -33,9 +34,9 @@ logger: logging.Logger = debug_logger()
 class DataFile:
     name: str
     phase: str
-    X: np.ndarray
-    Y: np.ndarray
-    Z: np.ndarray
+    X: npt.NDArray
+    Y: npt.NDArray
+    Z: npt.NDArray
     _: KW_ONLY
     ylabel: str = "Entropy (J/kg/K)"
     contour_start: float | None = None
@@ -67,7 +68,7 @@ class DataFile:
         aspect: float = (self.xmax - self.xmin) / (self.ymax - self.ymin)
         return aspect
 
-    def ev(self, pressure: np.ndarray, coordinate: np.ndarray) -> np.ndarray:
+    def ev(self, pressure: npt.NDArray, coordinate: npt.NDArray) -> npt.NDArray:
         """Evaluate the interpolation function
 
         Args:
@@ -87,8 +88,8 @@ class DataFile:
         """Sets the interpolation"""
         # The data is gridded, although due to floating point precision the values may be slightly
         # different. So force a consistent coordinate.
-        pressure_unique: np.ndarray = np.unique(self.X[0, :])
-        coordinate_unique: np.ndarray = np.unique(self.Y[:, 0])
+        pressure_unique: npt.NDArray = np.unique(self.X[0, :])
+        coordinate_unique: npt.NDArray = np.unique(self.Y[:, 0])
         self._interpolate = interpolate.RectBivariateSpline(
             pressure_unique, coordinate_unique, self.Z.T
         )
@@ -96,10 +97,10 @@ class DataFile:
     def to_temperature(self) -> DataFile:
         """Creates a new DataFile with temperature the independent variable"""
         assert self.temperature_datafile is not None
-        temperature_at_entropy: np.ndarray = self.temperature_datafile.ev(
+        temperature_at_entropy: npt.NDArray = self.temperature_datafile.ev(
             self.X.flatten(), self.Y.flatten()
         )
-        Y_temperature: np.ndarray = temperature_at_entropy.reshape(self.Y.shape)
+        Y_temperature: npt.NDArray = temperature_at_entropy.reshape(self.Y.shape)
 
         # FIXME: Add procedures also here to map temperature (and resample pressure) to a regular
         # grid.
@@ -117,7 +118,7 @@ class DataFile:
         )
 
     @property
-    def contour_levels(self) -> np.ndarray:
+    def contour_levels(self) -> npt.NDArray:
         assert self.is_contour
         return np.arange(self.contour_start, self.zmax, self.contour_step)
 
@@ -178,9 +179,9 @@ class DataFile:
         logger.info("Loading data from %s", file_path)
         xs, ys, zs = np.loadtxt(file_path, unpack=True)
         reshape: tuple[int, int] = (number_coordinate_points, number_pressure_points)
-        X: np.ndarray = xs.reshape(reshape) * cls.to_GPa(pressure_scaling)
-        Y: np.ndarray = ys.reshape(reshape) * coordinate_scaling
-        Z: np.ndarray = zs.reshape(reshape) * quantity_scaling
+        X: npt.NDArray = xs.reshape(reshape) * cls.to_GPa(pressure_scaling)
+        Y: npt.NDArray = ys.reshape(reshape) * coordinate_scaling
+        Z: npt.NDArray = zs.reshape(reshape) * quantity_scaling
 
         return cls(name, phase, X, Y, Z, **kwargs)
 
