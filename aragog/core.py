@@ -167,16 +167,12 @@ class BoundaryConditions:
             4
             / 3
             * np.pi
-            * np.power(state._evaluator.mesh.basic.radii[0], 3)
+            * np.power(self._mesh.basic.radii[0], 3)
             * self._settings.core_density
             * self._settings.core_heat_capacity
         )
-        cell_capacity = (
-            state._evaluator.mesh.basic.volume[0] * state.capacitance_staggered()[0, -1]
-        )
-        radius_ratio: float = (
-            state._evaluator.mesh.basic.radii[1] / state._evaluator.mesh.basic.radii[0]
-        )
+        cell_capacity = self._mesh.basic.volume[0] * state.capacitance_staggered()[0, -1]
+        radius_ratio: float = self._mesh.basic.radii[1] / self._mesh.basic.radii[0]
         alpha = np.power(radius_ratio, 2) / ((cell_capacity / (core_capacity * 1.147)) + 1)
 
         state.heat_flux[0, -1] = alpha * state.heat_flux[1, -1]
