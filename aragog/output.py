@@ -113,17 +113,20 @@ class Output:
         """Rheological front at the last solve iteration given user defined threshold.
         It is defined as a dimensionless distance with respect to the outer radius.
         """
+
+        _phi_global = float(self.melt_fraction_global)
+
         # if global melt fraction is close to one everywhere (magma ocean) rf is the inner radius
-        if self.melt_fraction_global > 0.99:
+        if _phi_global > 0.99:
             rf: float = self.evaluator.mesh.basic.radii[0]
         # if global melt fraction is close to zero everywhere (solidified) rf is the outer radius
-        elif self.melt_fraction_global < 0.01:
+        elif _phi_global < 0.01:
             rf = self.evaluator.mesh.basic.radii[-1]
         # general case
         else:
             idx = np.argmin(
-                abs(
-                    self.melt_fraction_global
+                np.abs(
+                    self.melt_fraction_basic[:,-1]
                     - self.parameters.phase_mixed.rheological_transition_melt_fraction
                 )
             )
@@ -135,7 +138,7 @@ class Output:
     @property
     def melt_fraction_global(self) -> float:
         """Volume-averaged melt fraction"""
-        return self.evaluator.mesh.volume_average(self.melt_fraction_staggered)
+        return self.evaluator.mesh.volume_average(self.melt_fraction_staggered[:,-1])
 
     @property
     def radii_km_basic(self) -> npt.NDArray:
