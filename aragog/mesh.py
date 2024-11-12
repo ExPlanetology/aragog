@@ -148,8 +148,8 @@ class FixedMesh:
         return volume
 
     @cached_property
-    def total_volume(self) -> npt.NDArray:
-        return 4 / 3 * np.pi * (self._mesh_cubed[-1] - self._mesh_cubed[0])
+    def total_volume(self) -> float:
+        return 4 / 3 * np.pi * float(self._mesh_cubed[-1] - self._mesh_cubed[0])
 
 
 class Mesh:
@@ -270,8 +270,7 @@ class Mesh:
         return quantity_at_basic_nodes
 
     def volume_average(self, staggered_quantity: npt.NDArray) -> float:
-
-        return np.dot(staggered_quantity.T, self.basic.volume) / self.basic.total_volume
+        return float(np.dot(staggered_quantity.T, self.basic.volume)) / self.basic.total_volume
 
 
 class AdamsWilliamsonEOS:
