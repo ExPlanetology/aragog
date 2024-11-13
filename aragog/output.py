@@ -159,7 +159,10 @@ class Output:
 
     @property
     def mantle_mass(self) -> float:
-        """Mantle mass comptuted from the AdamsWilliamsonEOS"""
+        """Mantle mass computed from the AdamsWilliamsonEOS"""
+
+        enclosed = self.evaluator.mesh.basic.eos.get_mass_within_radii(self.evaluator.mesh.basic.outer_boundary)
+
         return (
             self.evaluator.mesh.basic.eos.get_mass_within_radii(
                 self.evaluator.mesh.basic.outer_boundary
@@ -167,6 +170,22 @@ class Output:
             * self.parameters.scalings.density
             * np.power(self.parameters.scalings.radius, 3)
         )
+
+    @property
+    def core_mass(self) -> float:
+        """Core mass computed with constant density"""
+
+        # core radius
+        R_core = self.evaluator.mesh.basic.inner_boundary * self.parameters.scalings.radius
+
+        # core volume
+        volume = 4 * np.pi * (R_core**3) / 3
+
+        # core density
+        rho = self.parameters.scalings.density * self.parameters.boundary_conditions.core_density
+
+        # core mass
+        return rho * volume
 
     @property
     def solidus_K_staggered(self) -> npt.NDArray:
