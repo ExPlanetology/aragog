@@ -160,9 +160,6 @@ class Output:
     @property
     def mantle_mass(self) -> float:
         """Mantle mass computed from the AdamsWilliamsonEOS"""
-
-        enclosed = self.evaluator.mesh.basic.eos.get_mass_within_radii(self.evaluator.mesh.basic.outer_boundary)
-
         return (
             self.evaluator.mesh.basic.eos.get_mass_within_radii(
                 self.evaluator.mesh.basic.outer_boundary

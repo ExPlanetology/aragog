@@ -472,7 +472,6 @@ class AdamsWilliamsonEOS:
         Returns:
             Pressure
         """
-
         pressure: npt.NDArray = -self._adiabatic_bulk_modulus * np.log(
             (
                 self._adiabatic_bulk_modulus
