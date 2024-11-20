@@ -192,18 +192,9 @@ class Output:
     def mass_staggered(self) -> npt.NDArray:
         """Mass of each layer on staggered mesh"""
         return (
-            self.evaluator.mesh.staggered.eos.get_mass_element(
-                self.evaluator.mesh.staggered.radii
-            )
-            * self.parameters.scalings.density
-            * np.power(self.parameters.scalings.radius, 3)
-        )
-
-    @property
-    def mass_basic(self) -> npt.NDArray:
-        """Mass of each layer on basic mesh"""
-        return (
-            self.evaluator.mesh.basic.eos.get_mass_element(
+            # shells centred on staggered nodes
+            self.evaluator.mesh.staggered.eos.get_mass_within_shell(
+                # shell upper and lower radii set by basic nodes
                 self.evaluator.mesh.basic.radii
             )
             * self.parameters.scalings.density
@@ -334,12 +325,13 @@ class Output:
         _add_mesh_variable("radius_b", self.radii_km_basic, "km")
         _add_mesh_variable("pres_b", self.pressure_GPa_basic, "GPa")
         _add_mesh_variable("temp_b", self.temperature_K_basic, "K")
-        _add_mesh_variable("mass_b", self.mass_basic, "kg")
         _add_mesh_variable("phi_b", self.melt_fraction_basic, "")
         _add_mesh_variable("Fconv_b", self.convective_heat_flux_basic, "W m-2")
         _add_mesh_variable("log10visc_b", self.log10_viscosity_basic, "Pa s")
         _add_mesh_variable("density_b", self.density_basic, "kg m-3")
         _add_mesh_variable("heatcap_b", self.heat_capacity_basic, "J kg-1 K-1")
+
+        _add_mesh_variable("mass_s", self.mass_staggered, "kg")
         _add_mesh_variable("Hradio_s", self.heating_radio, "W kg-1")
         _add_mesh_variable("Htotal_s", self.heating, "W kg-1")
 
