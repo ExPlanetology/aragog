@@ -20,6 +20,7 @@ from __future__ import annotations
 
 __version__: str = "0.1.4-alpha"
 
+import os
 import importlib.resources
 import logging
 from importlib.abc import Traversable
@@ -76,23 +77,26 @@ def debug_logger() -> logging.Logger:
     return package_logger
 
 
-def debug_file_logger() -> logging.Logger:
-    """Sets up info logging to the console and debug logging to a file.
+def aragog_file_logger(console_level = logging.INFO,
+                       file_level = logging.DEBUG,
+                       log_dir = os.getcwd()) -> logging.Logger:
+    """Sets up console logging and file logging according to arguments.
 
     Returns:
         A logger
     """
     # Console logger
     package_logger: logging.Logger = logging.getLogger(__name__)
-    package_logger.setLevel(logging.DEBUG)
+    package_logger.setLevel(file_level)
     package_logger.handlers = []
     console_handler: logging.Handler = logging.StreamHandler()
     console_formatter: logging.Formatter = simple_formatter()
     console_handler.setFormatter(console_formatter)
-    console_handler.setLevel(logging.INFO)
+    console_handler.setLevel(console_level)
     logger.addHandler(console_handler)
     # File logger
-    file_handler: logging.Handler = logging.FileHandler(f"{__package__}.log")
+    log_file = os.path.join(log_dir, f"{__package__}.log")
+    file_handler: logging.Handler = logging.FileHandler(log_file)
     file_formatter: logging.Formatter = complex_formatter()
     file_handler.setFormatter(file_formatter)
     file_handler.setLevel(logging.DEBUG)
