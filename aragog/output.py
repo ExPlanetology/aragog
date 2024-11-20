@@ -104,6 +104,11 @@ class Output:
         return self.state.heating_radio * self.parameters.scalings.power_per_mass
 
     @property
+    def heating_tidal(self) -> npt.NDArray:
+        """Internal heat generation from tidal heat dissipation at staggered nodes"""
+        raise NotImplementedError
+
+    @property
     def liquidus_K_staggered(self) -> npt.NDArray:
         """Liquidus"""
         return self.evaluator.phases.mixed.liquidus() * self.parameters.scalings.temperature
@@ -186,14 +191,24 @@ class Output:
     @property
     def mass_staggered(self) -> npt.NDArray:
         """Mass of each layer on staggered mesh"""
-        dm = self.evaluator.mesh.staggered.eos.get_mass_element(self.evaluator.mesh.staggered.radii)
-        return dm * self.parameters.scalings.density * self.parameters.scalings.volume
+        return (
+            self.evaluator.mesh.staggered.eos.get_mass_element(
+                self.evaluator.mesh.staggered.radii
+            )
+            * self.parameters.scalings.density
+            * np.power(self.parameters.scalings.radius, 3)
+        )
 
     @property
     def mass_basic(self) -> npt.NDArray:
         """Mass of each layer on basic mesh"""
-        dm = self.evaluator.mesh.basic.eos.get_mass_element(self.evaluator.mesh.basic.radii)
-        return dm * self.parameters.scalings.density * self.parameters.scalings.volume
+        return (
+            self.evaluator.mesh.basic.eos.get_mass_element(
+                self.evaluator.mesh.basic.radii
+            )
+            * self.parameters.scalings.density
+            * np.power(self.parameters.scalings.radius, 3)
+        )
 
     @property
     def core_mass(self) -> float:
