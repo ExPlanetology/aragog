@@ -107,7 +107,6 @@ class _ScalingsParameters:
     thermal_conductivity: float = field(init=False)
     viscosity: float = field(init=False)
     time_years: float = field(init=False)
-    volume: float = field(init=False)
     stefan_boltzmann_constant: float = field(init=False)
 
     def __post_init__(self) -> None:
@@ -126,7 +125,6 @@ class _ScalingsParameters:
         self.thermal_conductivity = self.power_per_volume * self.area / self.temperature
         self.viscosity = self.pressure * self.time
         self.time_years = self.time / constants.Julian_year  # Equivalent to TIMEYRS C code
-        self.volume = np.power(self.radius, 3)
         # Stefan-Boltzmann units for dimensional are W/m^2/K^4
         self.stefan_boltzmann_constant: float = codata.value("Stefan-Boltzmann constant")
         self.stefan_boltzmann_constant /= (
@@ -372,7 +370,7 @@ class _Radionuclide:
             time: Time
 
         Returns:
-            Radiogenic heating as a float if time is a float, otherwise a numpy row array where
+            Radiogenic heating [W/kg] as a float if time is a float, otherwise a numpy row array where
                 each entry in the row is associated with a single time in the time array.
         """
         arg: npt.NDArray | float = np.log(2) * (self.t0_years - time) / self.half_life_years
