@@ -80,6 +80,7 @@ class State:
     _eddy_diffusivity: npt.NDArray = field(init=False)
     _heat_flux: npt.NDArray = field(init=False)
     _heating: npt.NDArray = field(init=False)
+    _heating_radio: npt.NDArray = field(init=False)
     _is_convective: npt.NDArray = field(init=False)
     _reynolds_number: npt.NDArray = field(init=False)
     _super_adiabatic_temperature_gradient: npt.NDArray = field(init=False)
@@ -176,6 +177,11 @@ class State:
     def heating(self) -> npt.NDArray:
         """The total heating rate according to the heat sources specified in the configuration."""
         return self._heating
+
+    @property
+    def heating_radio(self) -> npt.NDArray:
+        """The radiogenic heating rate."""
+        return self._heating_radio
 
     @property
     def heat_flux(self) -> npt.NDArray:
@@ -306,9 +312,11 @@ class State:
         if self._settings.mixing:
             self._heat_flux += self.mixing_flux
         # Heating
-        self._heating = np.zeros_like(self.temperature_staggered)
+        self._heating       = np.zeros_like(self.temperature_staggered)
+        self._heating_radio = np.zeros_like(self.temperature_staggered)
         if self._settings.radionuclides:
-            self._heating += self.radiogenic_heating(time)
+            self._heating_radio = self.radiogenic_heating(time)
+            self._heating += self._heating_radio
 
 
 @dataclass
