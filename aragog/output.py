@@ -94,6 +94,16 @@ class Output:
         )
 
     @property
+    def heating(self) -> npt.NDArray:
+        """Internal heat generation at staggered nodes"""
+        return self.state.heating * self.parameters.scalings.power_per_mass
+
+    @property
+    def heating_radio(self) -> npt.NDArray:
+        """Internal heat generation from radioactive decay at staggered nodes"""
+        return self.state.heating_radio * self.parameters.scalings.power_per_mass
+
+    @property
     def liquidus_K_staggered(self) -> npt.NDArray:
         """Liquidus"""
         return self.evaluator.phases.mixed.liquidus() * self.parameters.scalings.temperature
