@@ -206,7 +206,7 @@ class State:
     @property
     def heating_tidal(self) -> npt.NDArray:
         """The tidal power generation."""
-        raise self._heating_tidal
+        return self._heating_tidal
 
     @property
     def heat_flux(self) -> npt.NDArray:
