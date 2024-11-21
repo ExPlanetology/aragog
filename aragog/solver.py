@@ -173,7 +173,7 @@ class State:
         # Total heat production at a given time (power per unit mass)
         tidal_heating_float: float = self._settings.tidal_value
 
-        # Convert to 1D array (assuming abundances are constant)
+        # Convert to 1D array (assuming that tidal heating is equal at each level)
         return tidal_heating_float * np.ones_like(self.temperature_staggered)
 
 
