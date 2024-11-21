@@ -94,6 +94,21 @@ class Output:
         )
 
     @property
+    def heating(self) -> npt.NDArray:
+        """Internal heat generation at staggered nodes"""
+        return self.state.heating * self.parameters.scalings.power_per_mass
+
+    @property
+    def heating_radio(self) -> npt.NDArray:
+        """Internal heat generation from radioactive decay at staggered nodes"""
+        return self.state.heating_radio * self.parameters.scalings.power_per_mass
+
+    @property
+    def heating_tidal(self) -> npt.NDArray:
+        """Internal heat generation from tidal heat dissipation at staggered nodes"""
+        raise NotImplementedError
+
+    @property
     def liquidus_K_staggered(self) -> npt.NDArray:
         """Liquidus"""
         return self.evaluator.phases.mixed.liquidus() * self.parameters.scalings.temperature
@@ -163,6 +178,19 @@ class Output:
         return (
             self.evaluator.mesh.basic.eos.get_mass_within_radii(
                 self.evaluator.mesh.basic.outer_boundary
+            )
+            * self.parameters.scalings.density
+            * np.power(self.parameters.scalings.radius, 3)
+        )
+
+    @property
+    def mass_staggered(self) -> npt.NDArray:
+        """Mass of each layer on staggered mesh"""
+        return (
+            # shells centred on staggered nodes
+            self.evaluator.mesh.staggered.eos.get_mass_within_shell(
+                # shell upper and lower radii set by basic nodes
+                self.evaluator.mesh.basic.radii
             )
             * self.parameters.scalings.density
             * np.power(self.parameters.scalings.radius, 3)
@@ -272,29 +300,35 @@ class Output:
         _add_scalar_variable("mantle_mass", self.mantle_mass, "kg")
         _add_scalar_variable("rheo_front", self.rheological_front, "")
 
-        # Create dimensions (just basic nodes for now)
-        lev_b = self.shape_basic[0]
-        ds.createDimension("basic", lev_b)
+        # Create dimensions for mesh quantities
+        ds.createDimension("basic", self.shape_basic[0])
+        ds.createDimension("staggered", self.shape_staggered[0])
 
-        # Function to save vector quantities
-        def _add_basic_variable(key: str, some_property: Any, units: str):
-            ds.createVariable(
-                key,
-                np.float64,
-                ("basic",),
-            )
+        # Function to save mesh quantities
+        def _add_mesh_variable(key: str, some_property: Any, units: str):
+            if key[-2:] == "_b":
+                mesh = "basic"
+            elif key[-2:] == "_s":
+                mesh = "staggered"
+            else:
+                raise KeyError(f"NetCDF variable name must end in _b or _s: {key}")
+            ds.createVariable(key, np.float64, (mesh,),)
             ds[key][:] = some_property[:, tidx]
             ds[key].units = units
 
-        # Save vector quantities
-        _add_basic_variable("radius_b", self.radii_km_basic, "km")
-        _add_basic_variable("pres_b", self.pressure_GPa_basic, "GPa")
-        _add_basic_variable("temp_b", self.temperature_K_basic, "K")
-        _add_basic_variable("phi_b", self.melt_fraction_basic, "")
-        _add_basic_variable("Fconv_b", self.convective_heat_flux_basic, "W m-2")
-        _add_basic_variable("log10visc_b", self.log10_viscosity_basic, "Pa s")
-        _add_basic_variable("density_b", self.density_basic, "kg m-3")
-        _add_basic_variable("heatcap_b", self.heat_capacity_basic, "J kg-1 K-1")
+        # Save mesh quantities
+        _add_mesh_variable("radius_b", self.radii_km_basic, "km")
+        _add_mesh_variable("pres_b", self.pressure_GPa_basic, "GPa")
+        _add_mesh_variable("temp_b", self.temperature_K_basic, "K")
+        _add_mesh_variable("phi_b", self.melt_fraction_basic, "")
+        _add_mesh_variable("Fconv_b", self.convective_heat_flux_basic, "W m-2")
+        _add_mesh_variable("log10visc_b", self.log10_viscosity_basic, "Pa s")
+        _add_mesh_variable("density_b", self.density_basic, "kg m-3")
+        _add_mesh_variable("heatcap_b", self.heat_capacity_basic, "J kg-1 K-1")
+
+        _add_mesh_variable("mass_s", self.mass_staggered, "kg")
+        _add_mesh_variable("Hradio_s", self.heating_radio, "W kg-1")
+        _add_mesh_variable("Htotal_s", self.heating, "W kg-1")
 
         # Close the dataset
         ds.close()
