@@ -370,8 +370,9 @@ class _Radionuclide:
             time: Time
 
         Returns:
-            Radiogenic heating [W/kg] as a float if time is a float, otherwise a numpy row array where
-                each entry in the row is associated with a single time in the time array.
+            Radiogenic heat production (power per unit mass) as a float if time is a float,
+                otherwise a numpy row array where each entry in the row is associated
+                with a single time in the time array.
         """
         arg: npt.NDArray | float = np.log(2) * (self.t0_years - time) / self.half_life_years
         heating: npt.NDArray | float = (
