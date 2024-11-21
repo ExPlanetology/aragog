@@ -106,7 +106,7 @@ class Output:
     @property
     def heating_tidal(self) -> npt.NDArray:
         """Internal heat generation from tidal heat dissipation at staggered nodes"""
-        raise self.state.heating_tidal * self.parameters.scalings.power_per_mass
+        return self.state.heating_tidal * self.parameters.scalings.power_per_mass
 
     @property
     def liquidus_K_staggered(self) -> npt.NDArray:

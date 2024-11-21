@@ -224,7 +224,7 @@ class _EnergyParameters:
             scalings: scalings
         """
         self.scalings_ = scalings
-        self.tidal_value /= self.scalings.power_per_mass
+        self.tidal_value /= self.scalings_.power_per_mass
 
 
 @dataclass
