@@ -214,6 +214,18 @@ class _EnergyParameters:
     radionuclides: bool
     tidal: bool
 
+    # TODO: allow this to be loaded from a file or passed as an array.
+    tidal_value: float = 0.0 # Power per unit mass
+
+    def scale_attributes(self, scalings: _ScalingsParameters) -> None:
+        """Scales the attributes.
+
+        Args:
+            scalings: scalings
+        """
+        self.scalings_ = scalings
+        self.tidal_value /= self.scalings.power_per_mass
+
 
 @dataclass
 class _InitialConditionParameters:
