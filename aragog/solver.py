@@ -348,6 +348,7 @@ class State:
             self._heating += self._heating_radio
 
         if self._settings.tidal:
+            self._heating_tidal = self.tidal_heating()
             self._heating += self._heating_tidal
 
 @dataclass
