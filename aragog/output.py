@@ -106,7 +106,7 @@ class Output:
     @property
     def heating_tidal(self) -> npt.NDArray:
         """Internal heat generation from tidal heat dissipation at staggered nodes"""
-        raise NotImplementedError
+        raise self.state.heating_tidal * self.parameters.scalings.power_per_mass
 
     @property
     def liquidus_K_staggered(self) -> npt.NDArray:
@@ -328,6 +328,7 @@ class Output:
 
         _add_mesh_variable("mass_s", self.mass_staggered, "kg")
         _add_mesh_variable("Hradio_s", self.heating_radio, "W kg-1")
+        _add_mesh_variable("Htidal_s", self.heating_tidal, "W kg-1")
         _add_mesh_variable("Htotal_s", self.heating, "W kg-1")
 
         # Close the dataset
