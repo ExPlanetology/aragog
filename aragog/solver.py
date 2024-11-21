@@ -56,8 +56,8 @@ class State:
         evaluator: Evaluator
         critical_reynolds_number: Critical Reynolds number
         gravitational_separation_flux: Gravitational separation flux at the basic nodes
-        heating: Heat generation at the staggered nodes
-        heat_flux: Heat flux at the basic nodes
+        heating: Heat production at the staggered nodes (power per unit mass)
+        heat_flux: Heat flux at the basic nodes (power per unit area)
         inviscid_regime: True if the flow is inviscid and otherwise False, at the basic nodes
         inviscid_velocity: Inviscid velocity at the basic nodes
         is_convective: True if the flow is convecting and otherwise False, at the basic nodes
@@ -80,6 +80,7 @@ class State:
     _eddy_diffusivity: npt.NDArray = field(init=False)
     _heat_flux: npt.NDArray = field(init=False)
     _heating: npt.NDArray = field(init=False)
+    _heating_radio: npt.NDArray = field(init=False)
     _is_convective: npt.NDArray = field(init=False)
     _reynolds_number: npt.NDArray = field(init=False)
     _super_adiabatic_temperature_gradient: npt.NDArray = field(init=False)
@@ -136,25 +137,24 @@ class State:
 
         return convective_heat_flux
 
-    def radiogenic_heating(self, time: FloatOrArray) -> FloatOrArray:
+    def radiogenic_heating(self, time: float) -> npt.NDArray:
         """Radiogenic heating
 
         Args:
             time: Time
 
         Returns:
-            Radiogenic heating as a single column (in a 2-D array) if time is a float, otherwise a
-                2-D array with each column associated with a single time in the time array.
+            Radiogenic heating (power per unit mass) at each layer of the staggered
+                mesh, at a given point in time.
         """
-        radiogenic_heating_float: FloatOrArray = 0
+
+        # Total heat production at a given time (power per unit mass)
+        radio_heating_float: float = 0
         for radionuclide in self._evaluator.radionuclides:
-            radiogenic_heating_float += radionuclide.get_heating(time)
+            radio_heating_float += radionuclide.get_heating(time)
 
-        radiogenic_heating: FloatOrArray = radiogenic_heating_float * (
-            self.phase_staggered.density() / self.capacitance_staggered()
-        )
-
-        return radiogenic_heating
+        # Convert to 1D array (assuming abundances are constant)
+        return radio_heating_float * np.ones_like(self.temperature_staggered)
 
     @property
     def critical_reynolds_number(self) -> float:
@@ -174,8 +174,18 @@ class State:
 
     @property
     def heating(self) -> npt.NDArray:
-        """The total heating rate according to the heat sources specified in the configuration."""
+        """The power generation according to the heat sources specified in the configuration."""
         return self._heating
+
+    @property
+    def heating_radio(self) -> npt.NDArray:
+        """The radiogenic power generation."""
+        return self._heating_radio
+
+    @property
+    def heating_tidal(self) -> npt.NDArray:
+        """The tidal power generation."""
+        raise NotImplementedError
 
     @property
     def heat_flux(self) -> npt.NDArray:
@@ -295,7 +305,8 @@ class State:
             self.viscous_regime, self._viscous_velocity, self._inviscid_velocity
         )
         self._eddy_diffusivity *= self._evaluator.mesh.basic.mixing_length
-        # Heat flux
+
+        # Heat flux (power per unit area)
         self._heat_flux = np.zeros_like(self.temperature_basic)
         if self._settings.conduction:
             self._heat_flux += self.conductive_heat_flux()
@@ -305,11 +316,17 @@ class State:
             self._heat_flux += self.gravitational_separation_flux
         if self._settings.mixing:
             self._heat_flux += self.mixing_flux
-        # Heating
-        self._heating = np.zeros_like(self.temperature_staggered)
-        if self._settings.radionuclides:
-            self._heating += self.radiogenic_heating(time)
 
+        # Heating (power per unit mass)
+        self._heating       = np.zeros_like(self.temperature_staggered)
+        self._heating_radio = np.zeros_like(self.temperature_staggered)
+
+        if self._settings.radionuclides:
+            self._heating_radio = self.radiogenic_heating(time)
+            self._heating += self._heating_radio
+
+        if self._settings.tidal:
+            raise NotImplementedError
 
 @dataclass
 class Evaluator:
@@ -439,10 +456,13 @@ class Solver:
             self.state.capacitance_staggered() * self.evaluator.mesh.basic.volume
         )
 
+        # Heating rate (dT/dt) from flux divergence (power per unit area)
         dTdt: npt.NDArray = -delta_energy_flux / capacitance
         logger.debug("dTdt (fluxes only) = %s", dTdt)
 
-        dTdt += self.state.heating
+        # Additional heating rate (dT/dt) from internal heating (power per unit mass)
+        dTdt += self.state.heating * (self.state.phase_staggered.density() / self.state.capacitance_staggered())
+
         logger.debug("dTdt (with internal heating) = %s", dTdt)
 
         return dTdt
