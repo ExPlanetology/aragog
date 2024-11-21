@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "aragog"
-version = "0.1.4-alpha"
+version = "0.1.5-alpha"
 description = "1-D interior dynamics of rocky mantles that are solid, liquid, or mixed phase"
 authors = ["Dan J Bower <djbower@users.noreply.github.com>"]
 license = "GPL-3.0-or-later"
