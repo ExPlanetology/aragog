@@ -56,7 +56,9 @@ class State:
         evaluator: Evaluator
         critical_reynolds_number: Critical Reynolds number
         gravitational_separation_flux: Gravitational separation flux at the basic nodes
-        heating: Heat production at the staggered nodes (power per unit mass)
+        heating: Total internal heat production at the staggered nodes (power per unit mass)
+        heating_radio: Radiogenic heat production at the staggered nodes (power per unit mass)
+        heating_tidal: Tidal heat production at the staggered nodes (power per unit mass)
         heat_flux: Heat flux at the basic nodes (power per unit area)
         inviscid_regime: True if the flow is inviscid and otherwise False, at the basic nodes
         inviscid_velocity: Inviscid velocity at the basic nodes
@@ -81,6 +83,7 @@ class State:
     _heat_flux: npt.NDArray = field(init=False)
     _heating: npt.NDArray = field(init=False)
     _heating_radio: npt.NDArray = field(init=False)
+    _heating_tidal: npt.NDArray = field(init=False)
     _is_convective: npt.NDArray = field(init=False)
     _reynolds_number: npt.NDArray = field(init=False)
     _super_adiabatic_temperature_gradient: npt.NDArray = field(init=False)
@@ -138,7 +141,7 @@ class State:
         return convective_heat_flux
 
     def radiogenic_heating(self, time: float) -> npt.NDArray:
-        """Radiogenic heating
+        """Radiogenic heating (constant with radius)
 
         Args:
             time: Time
@@ -155,6 +158,24 @@ class State:
 
         # Convert to 1D array (assuming abundances are constant)
         return radio_heating_float * np.ones_like(self.temperature_staggered)
+
+    def tidal_heating(self) -> npt.NDArray:
+        """Tidal heating (constant with radius)
+
+        Args:
+            time: Time
+
+        Returns:
+            Tidal heating (power per unit mass) at each layer of the staggered
+                mesh, at a given point in time.
+        """
+
+        # Total heat production at a given time (power per unit mass)
+        tidal_heating_float: float = self._settings.tidal_value
+
+        # Convert to 1D array (assuming that tidal heating is equal at each level)
+        return tidal_heating_float * np.ones_like(self.temperature_staggered)
+
 
     @property
     def critical_reynolds_number(self) -> float:
@@ -185,7 +206,7 @@ class State:
     @property
     def heating_tidal(self) -> npt.NDArray:
         """The tidal power generation."""
-        raise NotImplementedError
+        return self._heating_tidal
 
     @property
     def heat_flux(self) -> npt.NDArray:
@@ -320,13 +341,15 @@ class State:
         # Heating (power per unit mass)
         self._heating       = np.zeros_like(self.temperature_staggered)
         self._heating_radio = np.zeros_like(self.temperature_staggered)
+        self._heating_tidal = np.zeros_like(self.temperature_staggered)
 
         if self._settings.radionuclides:
             self._heating_radio = self.radiogenic_heating(time)
             self._heating += self._heating_radio
 
         if self._settings.tidal:
-            raise NotImplementedError
+            self._heating_tidal = self.tidal_heating()
+            self._heating += self._heating_tidal
 
 @dataclass
 class Evaluator:

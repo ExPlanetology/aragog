@@ -106,7 +106,7 @@ class Output:
     @property
     def heating_tidal(self) -> npt.NDArray:
         """Internal heat generation from tidal heat dissipation at staggered nodes"""
-        raise NotImplementedError
+        return self.state.heating_tidal * self.parameters.scalings.power_per_mass
 
     @property
     def liquidus_K_staggered(self) -> npt.NDArray:
@@ -254,6 +254,15 @@ class Output:
         )
 
     @property
+    def log10_viscosity_staggered(self) -> npt.NDArray:
+        """Viscosity of the staggered mesh"""
+        return np.log10(
+            self.state.phase_staggered.viscosity()
+            * self.parameters.scalings.viscosity
+            * np.ones(self.shape_staggered)
+        )
+
+    @property
     def solution_top_temperature(self) -> float:
         """Solution (last iteration) temperature at the top of the domain (planet surface)"""
         return self.temperature_K_basic[-1, -1]
@@ -323,11 +332,12 @@ class Output:
         _add_mesh_variable("phi_b", self.melt_fraction_basic, "")
         _add_mesh_variable("Fconv_b", self.convective_heat_flux_basic, "W m-2")
         _add_mesh_variable("log10visc_b", self.log10_viscosity_basic, "Pa s")
+        _add_mesh_variable("log10visc_s", self.log10_viscosity_staggered, "Pa s")
         _add_mesh_variable("density_b", self.density_basic, "kg m-3")
         _add_mesh_variable("heatcap_b", self.heat_capacity_basic, "J kg-1 K-1")
-
         _add_mesh_variable("mass_s", self.mass_staggered, "kg")
         _add_mesh_variable("Hradio_s", self.heating_radio, "W kg-1")
+        _add_mesh_variable("Htidal_s", self.heating_tidal, "W kg-1")
         _add_mesh_variable("Htotal_s", self.heating, "W kg-1")
 
         # Close the dataset
