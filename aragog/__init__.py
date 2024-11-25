@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-__version__: str = "0.1.6-alpha"
+__version__: str = "0.1.7-alpha"
 
 import os
 import importlib.resources
