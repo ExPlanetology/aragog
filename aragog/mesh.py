@@ -409,6 +409,7 @@ class AdamsWilliamsonEOS:
         b: float = self._adiabatic_bulk_modulus
         c: float = self._gravitational_acceleration
         d: float = self._outer_boundary
+        beta: float = b/(a*c) - d
 
         def mass_integral(radii_: FloatOrArray) -> npt.NDArray:
             """Mass within radii including arbitrary constant of integration.
@@ -421,16 +422,10 @@ class AdamsWilliamsonEOS:
             """
 
             mass: npt.NDArray = (
-                4
-                * np.pi
-                * (
-                    b
-                    * (
-                        a * c * radii_ * (a * c * (2 * d + radii_) - 2 * b)
-                        + 2 * np.square(b - a * c * d) * np.log(a * c * (radii_ - d) + b)
-                    )
-                    / (2 * np.square(a) + np.power(c, 3))
-                )
+                4 * np.pi * b/c* (
+                        -1.5 * beta * beta - beta * radii_ + 0.5 * radii_ * radii_
+                        + beta * beta * np.log(abs(beta + radii_))
+                        )
             )
             # + constant
 
