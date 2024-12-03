@@ -120,6 +120,55 @@ class LookupProperty1D(PropertyProtocol):
         return self.eval(pressure)
 
 
+# @dataclass
+# class LookupProperty2D(PropertyProtocol):
+#     """A property from a 2-D lookup
+
+#     Args:
+#         name: Name of the property
+#         value: The 2-D array
+
+#     Attributes:
+#         name: Name of the property
+#         value: The 2-D array
+#         ndim: Number of dimensions, which is equal to two for a 2-D lookup
+#     """
+
+#     name: str
+#     _: KW_ONLY
+#     value: npt.NDArray
+#     ndim: int = field(init=False, default=2)
+#     _lookup: RectBivariateSpline = field(init=False)
+
+#     def __post_init__(self):
+#         # Prepare data for spline
+#         x_values, y_values, z_values = self.prepare_data_for_spline(self.value)
+#         self._lookup = RectBivariateSpline(x_values, y_values, z_values, kx=1, ky=1, s=0)
+
+#     def prepare_data_for_spline(self, data):
+#         """Ensure your data is on a regular grid for RectBivariateSpline"""
+#         # Extract x, y, and z values
+#         x_values = np.unique(data[:, 0])  # Unique pressure values
+#         y_values = np.unique(data[:, 1])  # Unique temperature values
+        
+#         # Create a grid for z values
+#         z_values = np.full((x_values.size, y_values.size), np.nan)
+        
+#         # Find the indices of the x and y values in the unique arrays
+#         x_indices = np.searchsorted(x_values, data[:, 0])
+#         y_indices = np.searchsorted(y_values, data[:, 1])
+        
+#         # Fill the z_values grid
+#         z_values[x_indices, y_indices] = data[:, 2]
+        
+#         return x_values, y_values, z_values
+
+#     def eval(self, temperature: npt.NDArray, pressure: npt.NDArray) -> npt.NDArray:
+#         return self._lookup(pressure, temperature, grid=False)
+
+#     def __call__(self, temperature: npt.NDArray, pressure: npt.NDArray) -> npt.NDArray:
+#         return self.eval(temperature, pressure)
+
 @dataclass
 class LookupProperty2D(PropertyProtocol):
     """A property from a 2-D lookup
@@ -159,6 +208,7 @@ class LookupProperty2D(PropertyProtocol):
 
     def __call__(self, temperature: npt.NDArray, pressure: npt.NDArray) -> npt.NDArray:
         return self.eval(temperature, pressure)
+
 
 
 class SinglePhaseEvaluator(PhaseEvaluatorABC):
