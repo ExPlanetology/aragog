@@ -343,7 +343,7 @@ class Output:
         # Close the dataset
         ds.close()
 
-    def plot(self, num_lines: int = 11) -> None:
+    def plot(self, num_lines: int = 11, figsize: tuple = (25, 10)) -> None:
         """Plots the solution with labelled lines according to time.
 
         Args:
