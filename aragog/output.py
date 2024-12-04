@@ -344,126 +344,135 @@ class Output:
         ds.close()
 
     def plot(self, num_lines: int = 11, figsize: tuple = (25, 10)) -> None:
-        """Plots the solution with labelled lines according to time.
+            """Plots the solution with labelled lines according to time.
 
-        Args:
-            num_lines: Number of lines to plot. Defaults to 11.
-        """
-        assert self.solution is not None
+            Args:
+                num_lines: Number of lines to plot. Defaults to 11.
+                figsize: Size of the figure. Defaults to (25, 10).
+            """
+            assert self.solution is not None
 
-        self.state.update(self.solution.y, self.solution.t)
+            self.state.update(self.solution.y, self.solution.t)
 
-        _, axs = plt.subplots(1, 10, sharey=True)
+            _, axs = plt.subplots(1, 10, sharey=True, figsize=figsize)
 
-        # Ensure there are at least 2 lines to plot (first and last).
-        num_lines = max(2, num_lines)
+            # Ensure there are at least 2 lines to plot (first and last).
+            num_lines = max(2, num_lines)
 
-        # Calculate the time step based on the total number of lines.
-        time_step: float = self.time_range / (num_lines - 1)
+            # Calculate the time step based on the total number of lines.
+            time_step: float = self.time_range / (num_lines - 1)
 
-        # plot temperature
-        try:
-            axs[0].plot(self.liquidus_K_staggered, self.pressure_GPa_staggered, "k--")
-            axs[0].plot(self.solidus_K_staggered, self.pressure_GPa_staggered, "k--")
-        except AttributeError:
-            pass
+            # plot temperature
+            try:
+                axs[0].scatter(self.liquidus_K_staggered, self.pressure_GPa_staggered)
+                axs[0].scatter(self.solidus_K_staggered, self.pressure_GPa_staggered)
+            except AttributeError:
+                pass
 
-        # Plot the first line.
-        def plot_times(ax, x: npt.NDArray, y: npt.NDArray) -> None:
-            label_first: str = f"{self.times[0]:.2f}"
-            ax.plot(x[:, 0], y, label=label_first)
+            # Plot the first line.
+            def plot_times(ax, x: npt.NDArray, y: npt.NDArray) -> None:
+                # If `x` is a float, create an array of the same length as `y` filled with `x`
+                if np.isscalar(x):
+                    x = np.full((len(y), len(self.times)), x, dtype=np.float64)
+                elif x.ndim == 1:
+                    # If `x` is 1D, reshape it or repeat it across the time dimension
+                    x = np.tile(x[:, np.newaxis], (1, len(self.times)))
 
-            # Loop through the selected lines and plot each with a label.
-            for i in range(1, num_lines - 1):
-                desired_time: float = self.times[0] + i * time_step
-                # Find the closest available time step.
-                closest_time_index: np.intp = np.argmin(np.abs(self.times - desired_time))
-                time: float = self.times[closest_time_index]
-                label: str = f"{time:.2f}"  # Create a label based on the time.
-                ax.plot(
-                    x[:, closest_time_index],
-                    y,
-                    label=label,
-                )
 
-            # Plot the last line.
-            times_end: float = self.times[-1]
-            label_last: str = f"{times_end:.2f}"
-            ax.plot(x[:, -1], y, label=label_last)
+                label_first: str = f"{self.times[0]:.2f}"
+                ax.plot(x[:, 0], y, label=label_first)
 
-        plot_times(axs[0], self.temperature_K_basic, self.pressure_GPa_basic)
-        axs[0].set_ylabel("Pressure (GPa)")
-        axs[0].set_xlabel("Temperature (K)")
-        axs[0].set_title("Temperature")
+                # Loop through the selected lines and plot each with a label.
+                for i in range(1, num_lines - 1):
+                    desired_time: float = self.times[0] + i * time_step
+                    # Find the closest available time step.
+                    closest_time_index: np.intp = np.argmin(np.abs(self.times - desired_time))
+                    time: float = self.times[closest_time_index]
+                    label: str = f"{time:.2f}"  # Create a label based on the time.
+                    ax.plot(
+                        x[:, closest_time_index],
+                        y,
+                        label=label,
+                    )
 
-        plot_times(axs[1], self.melt_fraction_staggered, self.pressure_GPa_staggered)
-        axs[1].set_xlabel("Melt fraction")
-        axs[1].set_title("Melt fraction")
+                # Plot the last line.
+                times_end: float = self.times[-1]
+                label_last: str = f"{times_end:.2f}"
+                ax.plot(x[:, -1], y, label=label_last)
 
-        plot_times(axs[2], self.log10_viscosity_basic, self.pressure_GPa_basic)
-        axs[2].set_xlabel("Log10(viscosity)")
-        axs[2].set_title("Log10(viscosity)")
+            plot_times(axs[0], self.temperature_K_basic, self.pressure_GPa_basic)
+            axs[0].set_ylabel("Pressure (GPa)")
+            axs[0].set_xlabel("Temperature (K)")
+            axs[0].set_title("Temperature")
 
-        plot_times(axs[3], self.convective_heat_flux_basic, self.pressure_GPa_basic)
-        axs[3].set_xlabel("Convective heat flux")
-        axs[3].set_title("Convective heat flux")
+            plot_times(axs[1], self.melt_fraction_staggered, self.pressure_GPa_staggered)
+            axs[1].set_xlabel("Melt fraction")
+            axs[1].set_title("Melt fraction")
 
-        plot_times(
-            axs[4],
-            self.super_adiabatic_temperature_gradient_basic,
-            self.pressure_GPa_basic,
-        )
-        axs[4].set_xlabel("Super adiabatic temperature gradient")
-        axs[4].set_title("Super adiabatic temperature gradient")
+            plot_times(axs[2], self.log10_viscosity_basic, self.pressure_GPa_basic)
+            axs[2].set_xlabel("Log10(viscosity)")
+            axs[2].set_title("Log10(viscosity)")
 
-        plot_times(
-            axs[5],
-            self.dTdr,
-            self.pressure_GPa_basic,
-        )
-        axs[5].set_xlabel("dTdr")
-        axs[5].set_title("dTdr")
+            plot_times(axs[3], self.convective_heat_flux_basic, self.pressure_GPa_basic)
+            axs[3].set_xlabel("Convective heat flux")
+            axs[3].set_title("Convective heat flux")
 
-        plot_times(
-            axs[6],
-            self.dTdrs,
-            self.pressure_GPa_basic,
-        )
-        axs[6].set_xlabel("dTdrs")
-        axs[6].set_title("dTdrs")
+            plot_times(
+                axs[4],
+                self.super_adiabatic_temperature_gradient_basic,
+                self.pressure_GPa_basic,
+            )
+            axs[4].set_xlabel("Super adiabatic temperature gradient")
+            axs[4].set_title("Super adiabatic temperature gradient")
 
-        plot_times(
-            axs[7],
-            self.density_basic,
-            self.pressure_GPa_basic,
-        )
-        axs[7].set_xlabel("Density")
-        axs[7].set_title("Density")
+            plot_times(
+                axs[5],
+                self.dTdr,
+                self.pressure_GPa_basic,
+            )
+            axs[5].set_xlabel("dTdr")
+            axs[5].set_title("dTdr")
 
-        plot_times(
-            axs[8],
-            self.heat_capacity_basic,
-            self.pressure_GPa_basic,
-        )
-        axs[8].set_xlabel("Heat capacity")
-        axs[8].set_title("Heat capacity")
+            plot_times(
+                axs[6],
+                self.dTdrs,
+                self.pressure_GPa_basic,
+            )
+            axs[6].set_xlabel("dTdrs")
+            axs[6].set_title("dTdrs")
 
-        plot_times(
-            axs[9],
-            self.thermal_expansivity_basic,
-            self.pressure_GPa_basic,
-        )
-        axs[9].set_xlabel("Thermal expansivity")
-        axs[9].set_title("Thermal expansivity")
+            plot_times(
+                axs[7],
+                self.density_basic,
+                self.pressure_GPa_basic,
+            )
+            axs[7].set_xlabel("Density")
+            axs[7].set_title("Density")
 
-        # Shrink current axis by 20% to allow space for the legend.
-        # box = ax.get_position()
-        # ax.set_position((box.x0, box.y0, box.width * 0.8, box.height))
+            plot_times(
+                axs[8],
+                self.heat_capacity_basic,
+                self.pressure_GPa_basic,
+            )
+            axs[8].set_xlabel("Heat capacity")
+            axs[8].set_title("Heat capacity")
 
-        # axs[0].grid(True)
+            plot_times(
+                axs[9],
+                self.thermal_expansivity_basic,
+                self.pressure_GPa_basic,
+            )
+            axs[9].set_xlabel("Thermal expansivity")
+            axs[9].set_title("Thermal expansivity")
 
-        legend = axs[2].legend()  # (loc="center left", bbox_to_anchor=(1, 0.5))
-        legend.set_title("Time (yr)")
-        plt.gca().invert_yaxis()
+            # Shrink current axis by 20% to allow space for the legend.
+            # box = ax.get_position()
+            # ax.set_position((box.x0, box.y0, box.width * 0.8, box.height))
 
-        plt.show()
+            # axs[0].grid(True)
+
+            legend = axs[2].legend()  # (loc="center left", bbox_to_anchor=(1, 0.5))
+            legend.set_title("Time (yr)")
+            plt.gca().invert_yaxis()
+
+            plt.show()
