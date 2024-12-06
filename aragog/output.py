@@ -371,6 +371,14 @@ class Output:
 
         # Plot the first line.
         def plot_times(ax, x: npt.NDArray, y: npt.NDArray) -> None:
+            # If `x` is a float, create an array of the same length as `y` filled with `x`
+            if np.isscalar(x):
+                x = np.full((len(y), len(self.times)), x, dtype=np.float64)
+            elif x.ndim == 1:
+                # If `x` is 1D, reshape it or repeat it across the time dimension
+                x = np.tile(x[:, np.newaxis], (1, len(self.times)))
+
+
             label_first: str = f"{self.times[0]:.2f}"
             ax.plot(x[:, 0], y, label=label_first)
 
