@@ -141,24 +141,36 @@ class LookupProperty2D(PropertyProtocol):
     _lookup: RectBivariateSpline = field(init=False)
 
     def __post_init__(self):
-        # x and y must be increasing otherwise the interpolation might give unexpected behaviour
-        x_values = self.value[:, 0].round(decimals=0)
-        logger.debug("x_values round = %s", x_values)
-        logger.debug("self.value.shape = %s", self.value.shape)
-        x_values: npt.NDArray = np.unique(self.value[:, 0])
-        logger.debug("x_values.shape = %s", x_values.shape)
-        y_values: npt.NDArray = np.unique(self.value[:, 1])
-        logger.debug("y_values.shape = %s", y_values.shape)
-        z_values: npt.NDArray = self.value[:, 2]
-        logger.debug("z_values = %s", z_values)
-        z_values = z_values.reshape((x_values.size, y_values.size), order="F")
+        # Prepare data for spline
+        x_values, y_values, z_values = self.prepare_data_for_spline(self.value)
         self._lookup = RectBivariateSpline(x_values, y_values, z_values, kx=1, ky=1, s=0)
+
+    def prepare_data_for_spline(self, data):
+        """Ensure your data is on a regular grid for RectBivariateSpline"""
+        # Extract x, y, and z values
+        x_values = np.unique(data[:, 0])  # Unique pressure values
+        y_values = np.unique(data[:, 1])  # Unique temperature values
+        
+        # Create a grid for z values
+        z_values = np.full((x_values.size, y_values.size), np.nan)
+        
+        # Find the indices of the x and y values in the unique arrays
+        x_indices = np.searchsorted(x_values, data[:, 0])
+        y_indices = np.searchsorted(y_values, data[:, 1])
+        
+        # Fill the z_values grid
+        z_values[x_indices, y_indices] = data[:, 2]
+        
+        return x_values, y_values, z_values
 
     def eval(self, temperature: npt.NDArray, pressure: npt.NDArray) -> npt.NDArray:
         return self._lookup(pressure, temperature, grid=False)
 
     def __call__(self, temperature: npt.NDArray, pressure: npt.NDArray) -> npt.NDArray:
         return self.eval(temperature, pressure)
+
+
+
 
 
 class SinglePhaseEvaluator(PhaseEvaluatorABC):
