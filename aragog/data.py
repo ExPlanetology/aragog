@@ -7,16 +7,15 @@ from osfclient.api import OSF
 
 logger: logging.Logger = logging.getLogger(__name__)
 
-FWL_DATA_DIR = Path(os.environ.get('FWL_DATA', platformdirs.user_data_dir('fwl_data')))
+FWL_DATA_DIR = Path(os.environ.get("FWL_DATA", platformdirs.user_data_dir("fwl_data")))
 
-logger.info(f'FWL data location: {FWL_DATA_DIR}')
+logger.info(f"FWL data location: {FWL_DATA_DIR}")
 
-#project ID of the lookup data folder in the OSF
-project_id = 'phsxf'
+# project ID of the lookup data folder in the OSF
+project_id = "phsxf"
 
-basic_list = (
-        "1TPa-dK09-elec-free/MgSiO3_Wolf_Bower_2018",
-        )
+basic_list = ("1TPa-dK09-elec-free/MgSiO3_Wolf_Bower_2018",)
+
 
 def download_folder(*, storage, folders: list[str], data_dir: Path):
     """
@@ -31,11 +30,11 @@ def download_folder(*, storage, folders: list[str], data_dir: Path):
         for folder in folders:
             if not file.path[1:].startswith(folder):
                 continue
-            parts = file.path.split('/')[1:]
+            parts = file.path.split("/")[1:]
             target = Path(data_dir, *parts)
             target.parent.mkdir(parents=True, exist_ok=True)
-            logger.info(f'Downloading {file.path}...')
-            with open(target, 'wb') as f:
+            logger.info(f"Downloading {file.path}...")
+            with open(target, "wb") as f:
                 file.write_to(f)
             break
 
@@ -46,7 +45,8 @@ def GetFWLData() -> Path:
     """
     return Path(FWL_DATA_DIR).absolute()
 
-def DownloadLookupTableData(fname: str=""):
+
+def DownloadLookupTableData(fname: str = ""):
     """
     Download lookup table data
 
@@ -57,12 +57,12 @@ def DownloadLookupTableData(fname: str=""):
 
     osf = OSF()
     project = osf.project(project_id)
-    storage = project.storage('osfstorage')
+    storage = project.storage("osfstorage")
 
     data_dir = GetFWLData() / "interior_lookup_tables"
     data_dir.mkdir(parents=True, exist_ok=True)
 
-    #If no folder specified download all basic list
+    # If no folder specified download all basic list
     if not fname:
         folder_list = basic_list
     elif fname in basic_list:

@@ -141,7 +141,7 @@ class Output:
         else:
             idx = np.argmin(
                 np.abs(
-                    self.melt_fraction_basic[:,-1]
+                    self.melt_fraction_basic[:, -1]
                     - self.parameters.phase_mixed.rheological_transition_melt_fraction
                 )
             )
@@ -153,7 +153,7 @@ class Output:
     @property
     def melt_fraction_global(self) -> float:
         """Volume-averaged melt fraction"""
-        return self.evaluator.mesh.volume_average(self.melt_fraction_staggered[:,-1])
+        return self.evaluator.mesh.volume_average(self.melt_fraction_staggered[:, -1])
 
     @property
     def radii_km_basic(self) -> npt.NDArray:
@@ -321,7 +321,11 @@ class Output:
                 mesh = "staggered"
             else:
                 raise KeyError(f"NetCDF variable name must end in _b or _s: {key}")
-            ds.createVariable(key, np.float64, (mesh,),)
+            ds.createVariable(
+                key,
+                np.float64,
+                (mesh,),
+            )
             ds[key][:] = some_property[:, tidx]
             ds[key].units = units
 
@@ -377,7 +381,6 @@ class Output:
             elif x.ndim == 1:
                 # If `x` is 1D, reshape it or repeat it across the time dimension
                 x = np.tile(x[:, np.newaxis], (1, len(self.times)))
-
 
             label_first: str = f"{self.times[0]:.2f}"
             ax.plot(x[:, 0], y, label=label_first)

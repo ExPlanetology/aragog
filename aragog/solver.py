@@ -176,7 +176,6 @@ class State:
         # Convert to 1D array (assuming that tidal heating is equal at each level)
         return tidal_heating_float * np.ones_like(self.temperature_staggered)
 
-
     @property
     def critical_reynolds_number(self) -> float:
         """Critical Reynolds number from Abe (1993)"""
@@ -339,7 +338,7 @@ class State:
             self._heat_flux += self.mixing_flux
 
         # Heating (power per unit mass)
-        self._heating       = np.zeros_like(self.temperature_staggered)
+        self._heating = np.zeros_like(self.temperature_staggered)
         self._heating_radio = np.zeros_like(self.temperature_staggered)
         self._heating_tidal = np.zeros_like(self.temperature_staggered)
 
@@ -350,6 +349,7 @@ class State:
         if self._settings.tidal:
             self._heating_tidal = self.tidal_heating()
             self._heating += self._heating_tidal
+
 
 @dataclass
 class Evaluator:
@@ -484,7 +484,9 @@ class Solver:
         logger.debug("dTdt (fluxes only) = %s", dTdt)
 
         # Additional heating rate (dT/dt) from internal heating (power per unit mass)
-        dTdt += self.state.heating * (self.state.phase_staggered.density() / self.state.capacitance_staggered())
+        dTdt += self.state.heating * (
+            self.state.phase_staggered.density() / self.state.capacitance_staggered()
+        )
 
         logger.debug("dTdt (with internal heating) = %s", dTdt)
 

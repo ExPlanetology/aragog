@@ -215,7 +215,7 @@ class _EnergyParameters:
     tidal: bool
 
     # TODO: allow this to be loaded from a file or passed as an array.
-    tidal_value: float = 0.0 # Power per unit mass
+    tidal_value: float = 0.0  # Power per unit mass
 
     def scale_attributes(self, scalings: _ScalingsParameters) -> None:
         """Scales the attributes.

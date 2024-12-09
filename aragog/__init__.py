@@ -20,9 +20,9 @@ from __future__ import annotations
 
 __version__: str = "0.1.7-alpha"
 
-import os
 import importlib.resources
 import logging
+import os
 from importlib.abc import Traversable
 
 CFG_DATA: Traversable = importlib.resources.files(f"{__package__}.cfg")
@@ -77,9 +77,9 @@ def debug_logger() -> logging.Logger:
     return package_logger
 
 
-def aragog_file_logger(console_level = logging.INFO,
-                       file_level = logging.DEBUG,
-                       log_dir = os.getcwd()) -> logging.Logger:
+def aragog_file_logger(
+    console_level=logging.INFO, file_level=logging.DEBUG, log_dir=os.getcwd()
+) -> logging.Logger:
     """Sets up console logging and file logging according to arguments.
 
     Returns:
