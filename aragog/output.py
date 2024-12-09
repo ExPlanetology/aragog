@@ -343,17 +343,18 @@ class Output:
         # Close the dataset
         ds.close()
 
-    def plot(self, num_lines: int = 11) -> None:
+    def plot(self, num_lines: int = 11, figsize: tuple = (25, 10)) -> None:
         """Plots the solution with labelled lines according to time.
 
         Args:
             num_lines: Number of lines to plot. Defaults to 11.
+            figsize: Size of the figure. Defaults to (25, 10).
         """
         assert self.solution is not None
 
         self.state.update(self.solution.y, self.solution.t)
 
-        _, axs = plt.subplots(1, 10, sharey=True)
+        _, axs = plt.subplots(1, 10, sharey=True, figsize=figsize)
 
         # Ensure there are at least 2 lines to plot (first and last).
         num_lines = max(2, num_lines)
@@ -363,13 +364,21 @@ class Output:
 
         # plot temperature
         try:
-            axs[0].plot(self.liquidus_K_staggered, self.pressure_GPa_staggered, "k--")
-            axs[0].plot(self.solidus_K_staggered, self.pressure_GPa_staggered, "k--")
+            axs[0].scatter(self.liquidus_K_staggered, self.pressure_GPa_staggered)
+            axs[0].scatter(self.solidus_K_staggered, self.pressure_GPa_staggered)
         except AttributeError:
             pass
 
         # Plot the first line.
         def plot_times(ax, x: npt.NDArray, y: npt.NDArray) -> None:
+            # If `x` is a float, create an array of the same length as `y` filled with `x`
+            if np.isscalar(x):
+                x = np.full((len(y), len(self.times)), x, dtype=np.float64)
+            elif x.ndim == 1:
+                # If `x` is 1D, reshape it or repeat it across the time dimension
+                x = np.tile(x[:, np.newaxis], (1, len(self.times)))
+
+
             label_first: str = f"{self.times[0]:.2f}"
             ax.plot(x[:, 0], y, label=label_first)
 
