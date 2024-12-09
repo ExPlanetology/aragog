@@ -150,17 +150,17 @@ class LookupProperty2D(PropertyProtocol):
         # Extract x, y, and z values
         x_values = np.unique(data[:, 0])  # Unique pressure values
         y_values = np.unique(data[:, 1])  # Unique temperature values
-        
+
         # Create a grid for z values
         z_values = np.full((x_values.size, y_values.size), np.nan)
-        
+
         # Find the indices of the x and y values in the unique arrays
         x_indices = np.searchsorted(x_values, data[:, 0])
         y_indices = np.searchsorted(y_values, data[:, 1])
-        
+
         # Fill the z_values grid
         z_values[x_indices, y_indices] = data[:, 2]
-        
+
         return x_values, y_values, z_values
 
     def eval(self, temperature: npt.NDArray, pressure: npt.NDArray) -> npt.NDArray:
@@ -168,9 +168,6 @@ class LookupProperty2D(PropertyProtocol):
 
     def __call__(self, temperature: npt.NDArray, pressure: npt.NDArray) -> npt.NDArray:
         return self.eval(temperature, pressure)
-
-
-
 
 
 class SinglePhaseEvaluator(PhaseEvaluatorABC):
