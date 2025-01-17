@@ -170,7 +170,22 @@ class State:
                 mesh, at a given point in time.
         """
 
-        return self._settings.tidal_array
+        length = len(self._settings.tidal_array)
+
+        # Must have correct shape
+        if length == 1:
+            # scalar
+            out = np.ones_like(self.temperature_staggered) * self._settings.tidal_array[0]
+
+        elif length == len(self.temperature_staggered):
+            # vector with correct length
+            out = np.array([self._settings.tidal_array]).T
+
+        else:
+            # vector with invalid length
+            raise ValueError(f"Tidal heating array has invalid length {length}")
+
+        return out
 
     @property
     def critical_reynolds_number(self) -> float:
