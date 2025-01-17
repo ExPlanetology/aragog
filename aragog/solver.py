@@ -160,7 +160,7 @@ class State:
         return radio_heating_float * np.ones_like(self.temperature_staggered)
 
     def tidal_heating(self) -> npt.NDArray:
-        """Tidal heating (constant with radius)
+        """Tidal heating at each layer of the mantle.
 
         Args:
             time: Time
@@ -170,11 +170,22 @@ class State:
                 mesh, at a given point in time.
         """
 
-        # Total heat production at a given time (power per unit mass)
-        tidal_heating_float: float = self._settings.tidal_value
+        length = len(self._settings.tidal_array)
 
-        # Convert to 1D array (assuming that tidal heating is equal at each level)
-        return tidal_heating_float * np.ones_like(self.temperature_staggered)
+        # Must have correct shape
+        if length == 1:
+            # scalar
+            out = np.ones_like(self.temperature_staggered) * self._settings.tidal_array[0]
+
+        elif length == len(self.temperature_staggered):
+            # vector with correct length
+            out = np.array([self._settings.tidal_array]).T
+
+        else:
+            # vector with invalid length
+            raise ValueError(f"Tidal heating array has invalid length {length}")
+
+        return out
 
     @property
     def critical_reynolds_number(self) -> float:
