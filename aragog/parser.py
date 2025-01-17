@@ -214,7 +214,7 @@ class _EnergyParameters:
     radionuclides: bool
     tidal: bool
 
-    tidal_array:npt.NDArray 
+    tidal_array: npt.NDArray = field(default_factory=lambda:np.array([0.0], dtype=float))
 
     def scale_attributes(self, scalings: _ScalingsParameters) -> None:
         """Scales the attributes.
