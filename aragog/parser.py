@@ -233,6 +233,7 @@ class _InitialConditionParameters:
     surface_temperature: float = 4000
     basal_temperature: float = 4000
     init_file: str = ""
+    adiabat: bool = False
     from_field: bool = False
     scalings_: _ScalingsParameters = field(init=False)
 
