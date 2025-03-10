@@ -18,14 +18,16 @@
 
 from __future__ import annotations
 
+import copy
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 import numpy as np
 import numpy.typing as npt
 
 from aragog.mesh import Mesh
+from aragog.phase import PhaseEvaluatorCollection
 from aragog.parser import (
     Parameters,
     _BoundaryConditionsParameters,
@@ -186,10 +188,13 @@ class InitialCondition:
     Args:
         parameters: Parameters
         mesh: Mesh
+        phases: PhaseEvaluatorProtocol
     """
 
     _parameters: Parameters
     _mesh: Mesh
+    _phases: PhaseEvaluatorCollection
+    phase_basic: PhaseEvaluatorProtocol = field(init=False)
 
     def __post_init__(self):
         self._settings: _InitialConditionParameters = self._parameters.initial_condition
@@ -203,6 +208,12 @@ class InitialCondition:
                     the number of staggered points {self._mesh.staggered.number_of_nodes}"
                 )
                 raise ValueError(msg)
+        elif self._settings.adiabat:
+            self.phase_staggered = copy.deepcopy(self._phases.active)
+            self.phase_staggered.set_pressure(self._mesh.staggered.pressure)
+            msg: str = (
+                 f"adiabatic case selected but not implemented yet")
+            raise ValueError(msg)
         else:
             self._temperature: npt.NDArray = self.get_linear()
 

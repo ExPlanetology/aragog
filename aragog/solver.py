@@ -386,8 +386,8 @@ class Evaluator:
     def __post_init__(self):
         self.mesh = Mesh(self._parameters)
         self.boundary_conditions = BoundaryConditions(self._parameters, self.mesh)
-        self.initial_condition = InitialCondition(self._parameters, self.mesh)
         self.phases = PhaseEvaluatorCollection(self._parameters)
+        self.initial_condition = InitialCondition(self._parameters, self.mesh, self.phases)
 
     @property
     def radionuclides(self) -> list[_Radionuclide]:
