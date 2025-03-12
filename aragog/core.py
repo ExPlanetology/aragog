@@ -18,9 +18,8 @@
 
 from __future__ import annotations
 
-import copy
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -189,7 +188,7 @@ class InitialCondition:
     Args:
         parameters: Parameters
         mesh: Mesh
-        phases: PhaseEvaluatorProtocol
+        phases: PhaseEvaluatorCollection
     """
 
     _parameters: Parameters
