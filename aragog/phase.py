@@ -460,10 +460,10 @@ class CompositePhaseEvaluator(PhaseEvaluatorABC):
         self._mixed.update()
         self._set_blending_and_masks()
         self._density = self._get_composite("density")
-        self._dTdPs = self._get_composite("dTdPs")
         self._heat_capacity = self._get_composite("heat_capacity")
         self._thermal_conductivity = self._get_composite("thermal_conductivity")
         self._thermal_expansivity = self._get_composite("thermal_expansivity")
+        self._dTdPs = self._get_composite("dTdPs")
 
         name: str = "viscosity"
         log10_mixed_phase: npt.NDArray = np.log10(getattr(self._mixed, name)())
