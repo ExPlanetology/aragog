@@ -198,8 +198,10 @@ class InitialCondition:
     def __post_init__(self):
         self._settings: _InitialConditionParameters = self._parameters.initial_condition
 
-        # Three initialisation methods: user-defined field, adiabat or linear.
-        if self._settings.from_field:
+        # Three initialisation methods: linear (1), user-defined field (2) or adiabat (3).
+        if self._settings.initial_condition == 1:
+            self._temperature: npt.NDArray = self.get_linear()
+        elif self._settings.initial_condition == 2:
             if self._mesh.staggered.number_of_nodes == len(self._settings.init_temperature):
                 self._temperature = self._settings.init_temperature
             else:
@@ -208,10 +210,13 @@ class InitialCondition:
                     the number of staggered points {self._mesh.staggered.number_of_nodes}"
                 )
                 raise ValueError(msg)
-        elif self._settings.adiabat:
+        elif self._settings.initial_condition == 3:
             self._temperature: npt.NDArray = self.get_adiabat(self._mesh.staggered.pressure[:,-1])
         else:
-            self._temperature: npt.NDArray = self.get_linear()
+            msg: str = (
+                f"initial_condition = {self._settings.initial_condition} is unknown"
+            )
+            raise ValueError(msg)
 
         logger.debug("initial staggered temperature = %s", self._temperature)
 
