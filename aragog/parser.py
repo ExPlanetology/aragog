@@ -230,14 +230,19 @@ class _EnergyParameters:
 class _InitialConditionParameters:
     """Stores the settings in the initial_condition section in the configuration data."""
 
+    initial_condition: int = 1
     surface_temperature: float = 4000
     basal_temperature: float = 4000
     init_file: str = ""
-    from_field: bool = False
     scalings_: _ScalingsParameters = field(init=False)
 
     def scale_attributes(self, scalings: _ScalingsParameters) -> None:
         """Scales the attributes.
+
+        Initial condition method
+            1: Linear profile
+            2: User-defined temperature field (from file)
+            3: Adiabatic profile
 
         Args:
             scalings: scalings
@@ -246,8 +251,10 @@ class _InitialConditionParameters:
         self.surface_temperature /= self.scalings_.temperature
         self.basal_temperature /= self.scalings_.temperature
 
-        if self.init_file:
-            self.from_field = True
+        if self.initial_condition == 2:
+            if self.init_file == "":
+                msg: str = (f"you must provide an initial temperature file")
+                raise ValueError(msg)
             self.init_temperature = np.loadtxt(self.init_file)
             self.init_temperature /= self.scalings_.temperature
 
