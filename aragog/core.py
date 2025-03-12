@@ -24,8 +24,10 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import numpy.typing as npt
+from scipy.integrate import solve_ivp
 
 from aragog.mesh import Mesh
+from aragog.phase import PhaseEvaluatorCollection
 from aragog.parser import (
     Parameters,
     _BoundaryConditionsParameters,
@@ -186,15 +188,20 @@ class InitialCondition:
     Args:
         parameters: Parameters
         mesh: Mesh
+        phases: PhaseEvaluatorCollection
     """
 
     _parameters: Parameters
     _mesh: Mesh
+    _phases: PhaseEvaluatorCollection
 
     def __post_init__(self):
         self._settings: _InitialConditionParameters = self._parameters.initial_condition
 
-        if self._settings.from_field:
+        # Three initialisation methods: linear (1), user-defined field (2) or adiabat (3).
+        if self._settings.initial_condition == 1:
+            self._temperature: npt.NDArray = self.get_linear()
+        elif self._settings.initial_condition == 2:
             if self._mesh.staggered.number_of_nodes == len(self._settings.init_temperature):
                 self._temperature = self._settings.init_temperature
             else:
@@ -203,8 +210,13 @@ class InitialCondition:
                     the number of staggered points {self._mesh.staggered.number_of_nodes}"
                 )
                 raise ValueError(msg)
+        elif self._settings.initial_condition == 3:
+            self._temperature: npt.NDArray = self.get_adiabat(self._mesh.staggered.pressure[:,-1])
         else:
-            self._temperature: npt.NDArray = self.get_linear()
+            msg: str = (
+                f"initial_condition = {self._settings.initial_condition} is unknown"
+            )
+            raise ValueError(msg)
 
         logger.debug("initial staggered temperature = %s", self._temperature)
 
@@ -226,3 +238,31 @@ class InitialCondition:
             self._mesh.staggered.number_of_nodes,
         )
         return temperature
+
+    def get_adiabat(self, pressure) -> npt.NDArray:
+        """Gets an adiabatic temperature profile by integrating
+           the adiatiabatic temperature gradient dTdPs from the surface.
+           Uses the set surface temperature.
+
+        Args:
+            Pressure field on the staggered nodes
+
+        Returns:
+            Adiabatic temperature profile for the staggered nodes
+        """
+
+        def adiabat_ode(P,T):
+            self._phases.active.set_pressure(P)
+            self._phases.active.set_temperature(T)
+            self._phases.active.update()
+            return self._phases.active.dTdPs()
+
+        # flip the pressure field top to bottom
+        pressure = np.flip(pressure)
+
+        sol = solve_ivp(
+             adiabat_ode, (pressure[0], pressure[-1]), [self._settings.surface_temperature],
+             t_eval=pressure, method='RK45', rtol=1e-6, atol=1e-9)
+
+        # flip back the temperature field from bottom to top
+        return np.flip(sol.y[0])
