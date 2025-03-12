@@ -26,7 +26,6 @@ from typing import TYPE_CHECKING
 import numpy as np
 import numpy.typing as npt
 from scipy.integrate import solve_ivp
-import matplotlib.pyplot as plt
 
 from aragog.mesh import Mesh
 from aragog.phase import PhaseEvaluatorCollection
@@ -212,21 +211,6 @@ class InitialCondition:
                 raise ValueError(msg)
         elif self._settings.adiabat:
             self._temperature: npt.NDArray = self.get_adiabat(self._mesh.staggered.pressure[:,-1])
-            # Plot Temperature vs Pressure
-            fig, ax = plt.subplots(figsize=(10, 8))
-            ax.plot(self._temperature*4000, self._mesh.staggered.pressure[:,-1]*16303/1e9, 'b-', label="Adiabat")
-            ax.set_xlabel("Temperature (K)")
-            ax.set_ylabel("Pressure (GPa)")
-            ax.set_title("Adiabatic Temperature")
-            ax.legend()
-            ax.invert_yaxis()
-            ax.grid(True)
-            plt.show()
-
-            msg: str = (
-                 f"adiabatic case selected but not implemented yet")
-            raise ValueError(msg)
-            
         else:
             self._temperature: npt.NDArray = self.get_linear()
 
