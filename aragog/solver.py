@@ -97,9 +97,9 @@ class State:
         # Sets the pressure since this will not change during a model run. Must deepcopy first
         # because pressure is set as an attribute.
         self.phase_basic = copy.deepcopy(self._evaluator.phases.active)
-        self.phase_basic.set_pressure(self._evaluator.mesh.basic.pressure)
+        self.phase_basic.set_pressure(self._evaluator.mesh.basic_pressure)
         self.phase_staggered = copy.deepcopy(self._evaluator.phases.active)
-        self.phase_staggered.set_pressure(self._evaluator.mesh.staggered.pressure)
+        self.phase_staggered.set_pressure(self._evaluator.mesh.staggered_pressure)
 
     def capacitance_staggered(self) -> FloatOrArray:
         capacitance: FloatOrArray = (
