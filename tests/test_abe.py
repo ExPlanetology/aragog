@@ -119,3 +119,22 @@ def test_mixed(helper):
     logger.info("expected = %s", expected)
 
     assert np.isclose(calculated, expected, atol=helper.atol, rtol=helper.rtol).all()
+
+@profile_decorator
+def test_mixed_init(helper):
+    """Test Abe (1993.
+    Initialize from an adiabat and use user-defined EOS"""
+
+    with helper.get_cfg_file("abe_mixed_init.cfg") as cfg_file:
+        solver: Solver = Solver.from_file(cfg_file)
+
+    solver.initialize()
+    solver.solve()
+    calculated: npt.NDArray = solver.temperature_staggered[:, -1]
+
+    with helper.get_reference_file("abe_mixed_init.dat") as reference_file:
+        expected: npt.NDArray = np.loadtxt(reference_file)
+    logger.info("calculated = %s", calculated)
+    logger.info("expected = %s", expected)
+
+    assert np.isclose(calculated, expected, atol=helper.atol, rtol=helper.rtol).all()
