@@ -161,9 +161,15 @@ class Mesh:
         )
         self._d_dr_transform: npt.NDArray = self._get_d_dr_transform_matrix()
         self._quantity_transform: npt.NDArray = self._get_quantity_transform_matrix()
-        self.eos = AdamsWilliamsonEOS(
-            self.settings, self.basic.radii, self.staggered.radii
-        )
+        if self.settings.eos_method == 1:
+            self.eos = AdamsWilliamsonEOS(
+                self.settings, self.basic.radii, self.staggered.radii
+            )
+        elif self.settings.eos_method == 2:
+            self.eos = UserDefinedEOS(self)
+        else:
+            msg: str = (f"Unknown method to initialize Equation of State")
+            raise ValueError(msg)
 
     @cached_property
     def effective_density(self) -> npt.NDArray:
@@ -565,3 +571,32 @@ class AdamsWilliamsonEOS(EOS):
         )
 
         return radii
+
+class UserDefinedEOS(EOS):
+    r"""User defined equation of state (EOS).
+
+    Pressure field and effective density field on staggered nodes provided by the user.
+    """
+
+    def __init__(
+        self,
+        mesh: Mesh,
+    ):
+        self._staggered_pressure = mesh.settings.staggered_pressure.reshape(-1,1)
+        self._effective_density = mesh.settings.effective_density.reshape(-1,1)
+        self._basic_pressure = mesh.quantity_at_basic_nodes(self._staggered_pressure)
+
+    @property
+    def basic_pressure(self) -> npt.NDArray:
+        """Pressure at basic nodes"""
+        return self._basic_pressure
+
+    @property
+    def staggered_pressure(self) -> npt.NDArray:
+        """Pressure at staggered nodes"""
+        return self._staggered_pressure
+
+    @property
+    def effective_density(self) -> npt.NDArray:
+        """Effective density"""
+        return self._effective_density
