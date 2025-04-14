@@ -211,7 +211,7 @@ class InitialCondition:
                 )
                 raise ValueError(msg)
         elif self._settings.initial_condition == 3:
-            self._temperature: npt.NDArray = self.get_adiabat(self._mesh.staggered.pressure[:,-1])
+            self._temperature: npt.NDArray = self.get_adiabat(self._mesh.staggered_pressure[:,-1])
         else:
             msg: str = (
                 f"initial_condition = {self._settings.initial_condition} is unknown"
