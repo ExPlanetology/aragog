@@ -22,6 +22,7 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from functools import cached_property
+from scipy.interpolate import PchipInterpolator
 
 import numpy as np
 import numpy.typing as npt
@@ -166,7 +167,9 @@ class Mesh:
                 self.settings, self.basic.radii, self.staggered.radii
             )
         elif self.settings.eos_method == 2:
-            self.eos = UserDefinedEOS(self)
+            self.eos = UserDefinedEOS(
+                self.settings, self.basic.radii, self.staggered.radii
+            )
         else:
             msg: str = (f"Unknown method to initialize Equation of State")
             raise ValueError(msg)
@@ -580,11 +583,15 @@ class UserDefinedEOS(EOS):
 
     def __init__(
         self,
-        mesh: Mesh,
+        settings: _MeshParameters,
+        basic_radii: npt.NDArray,
+        staggered_radii: npt.NDArray,
     ):
-        self._staggered_pressure = mesh.settings.staggered_pressure.reshape(-1,1)
-        self._effective_density = mesh.settings.effective_density.reshape(-1,1)
-        self._basic_pressure = mesh.quantity_at_basic_nodes(self._staggered_pressure)
+        interp_pressure = PchipInterpolator(settings.eos_radius, settings.eos_pressure)
+        interp_density = PchipInterpolator(settings.eos_radius, settings.eos_density)
+        self._staggered_pressure = interp_pressure(staggered_radii).reshape(-1,1)
+        self._basic_pressure = interp_pressure(basic_radii).reshape(-1,1)
+        self._effective_density = interp_density(staggered_radii).reshape(-1,1)
 
     @property
     def basic_pressure(self) -> npt.NDArray:
