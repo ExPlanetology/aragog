@@ -268,9 +268,11 @@ class _MeshParameters:
     number_of_nodes: int
     mixing_length_profile: str
     # Static pressure profile is derived from the Adams-Williamson equation of state.
-    surface_density: float
-    gravitational_acceleration: float
-    adiabatic_bulk_modulus: float
+    eos_method: int = 1 # 1: Adams-Williamson / 2: User defined
+    surface_density: float = 4000
+    gravitational_acceleration: float = 9.81
+    adiabatic_bulk_modulus: float = 260e9
+    eos_file: str = ""
     scalings_: _ScalingsParameters = field(init=False)
 
     def scale_attributes(self, scalings: _ScalingsParameters) -> None:
@@ -286,6 +288,20 @@ class _MeshParameters:
         self.gravitational_acceleration /= self.scalings_.gravitational_acceleration
         self.adiabatic_bulk_modulus /= self.scalings_.pressure
 
+        if self.eos_method == 2:
+            if self.eos_file == "":
+                msg: str = (f"you must provide a file for setting up equation of state")
+                raise ValueError(msg)
+            arr = np.loadtxt(self.eos_file)
+            self.eos_radius = arr[:,0] / self.scalings_.radius
+            self.eos_pressure = arr[:,1] / self.scalings_.pressure
+            self.eos_density = arr[:,2] / self.scalings_.density
+            # Check that provided eos radius roughly match with Aragog mesh
+            if ((self.eos_radius[0] < self.inner_radius) or
+                (self.eos_radius[-1] > self.outer_radius) or
+                (self.eos_radius[-1]-self.eos_radius[0]) < 0.75*(self.outer_radius-self.inner_radius)):
+                msg: str = (f"Radius array in EOS file: Values out of range.")
+                raise ValueError(msg)
 
 @dataclass
 class _PhaseMixedParameters:

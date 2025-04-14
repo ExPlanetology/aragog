@@ -163,35 +163,27 @@ class Output:
     @property
     def pressure_GPa_basic(self) -> npt.NDArray:
         """Pressure of the basic mesh in GPa"""
-        return self.evaluator.mesh.basic.eos.pressure * self.parameters.scalings.pressure * 1.0e-9
+        return self.evaluator.mesh.basic_pressure * self.parameters.scalings.pressure * 1.0e-9
 
     @property
     def pressure_GPa_staggered(self) -> npt.NDArray:
         """Pressure of the staggered mesh in GPa"""
         return (
-            self.evaluator.mesh.staggered.eos.pressure * self.parameters.scalings.pressure * 1.0e-9
+            self.evaluator.mesh.staggered_pressure * self.parameters.scalings.pressure * 1.0e-9
         )
 
     @property
     def mantle_mass(self) -> float:
         """Mantle mass computed from the AdamsWilliamsonEOS"""
-        return (
-            self.evaluator.mesh.basic.eos.get_mass_within_radii(
-                self.evaluator.mesh.basic.outer_boundary
-            )
-            * self.parameters.scalings.density
-            * np.power(self.parameters.scalings.radius, 3)
-        )
+        return np.sum(self.mass_staggered)
 
     @property
     def mass_staggered(self) -> npt.NDArray:
         """Mass of each layer on staggered mesh"""
         return (
             # shells centred on staggered nodes
-            self.evaluator.mesh.staggered.eos.get_mass_within_shell(
-                # shell upper and lower radii set by basic nodes
-                self.evaluator.mesh.basic.radii
-            )
+            self.evaluator.mesh.effective_density
+            * self.evaluator.mesh.basic.volume
             * self.parameters.scalings.density
             * np.power(self.parameters.scalings.radius, 3)
         )

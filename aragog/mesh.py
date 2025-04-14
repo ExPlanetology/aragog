@@ -19,8 +19,10 @@
 from __future__ import annotations
 
 import logging
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from functools import cached_property
+from scipy.interpolate import PchipInterpolator
 
 import numpy as np
 import numpy.typing as npt
@@ -48,15 +50,12 @@ class FixedMesh:
         inner_boundary: Inner boundary for computing height above the base
         area: Surface area
         delta_radii: Delta radii
-        density: Density
         depth: Depth below the outer boundary
         height: Height above the inner boundary
         mixing_length: Mixing length
         mixing_length_squared: Mixing length squared
         mixing_length_cubed: Mixing length cubed
         number_of_nodes: Number of nodes
-        pressure: Pressure
-        pressure_gradient: Pressure gradient (dP/dr)
         volume: Volume of the spherical shells defined between neighbouring radii
         total_volume: Total volume
     """
@@ -65,16 +64,12 @@ class FixedMesh:
     radii: npt.NDArray
     outer_boundary: float
     inner_boundary: float
-    eos: AdamsWilliamsonEOS = field(init=False)
 
     def __post_init__(self):
         if not is_monotonic_increasing(self.radii):
             msg: str = "Mesh must be monotonically increasing"
             logger.error(msg)
             raise ValueError(msg)
-        self.eos = AdamsWilliamsonEOS(
-            self.settings, self.radii, self.outer_boundary, self.inner_boundary
-        )
 
     @cached_property
     def area(self) -> npt.NDArray:
@@ -84,10 +79,6 @@ class FixedMesh:
     @cached_property
     def delta_radii(self) -> npt.NDArray:
         return np.diff(self.radii, axis=0)
-
-    @cached_property
-    def density(self) -> npt.NDArray:
-        return self.eos.density
 
     @cached_property
     def depth(self) -> npt.NDArray:
@@ -134,14 +125,6 @@ class FixedMesh:
         return self.radii.size
 
     @cached_property
-    def pressure(self) -> npt.NDArray:
-        return self.eos.pressure
-
-    @cached_property
-    def pressure_gradient(self) -> npt.NDArray:
-        return self.eos.pressure_gradient
-
-    @cached_property
     def volume(self) -> npt.NDArray:
         volume: npt.NDArray = 4 / 3 * np.pi * (self._mesh_cubed[1:] - self._mesh_cubed[:-1])
 
@@ -162,6 +145,8 @@ class Mesh:
         parameters: Parameters
     """
 
+    eos: EOS = field(init=False)
+
     def __init__(self, parameters: Parameters):
         self.settings: _MeshParameters = parameters.mesh
         basic_coordinates: npt.NDArray = self.get_constant_spacing()
@@ -177,6 +162,29 @@ class Mesh:
         )
         self._d_dr_transform: npt.NDArray = self._get_d_dr_transform_matrix()
         self._quantity_transform: npt.NDArray = self._get_quantity_transform_matrix()
+        if self.settings.eos_method == 1:
+            self.eos = AdamsWilliamsonEOS(
+                self.settings, self.basic.radii, self.staggered.radii
+            )
+        elif self.settings.eos_method == 2:
+            self.eos = UserDefinedEOS(
+                self.settings, self.basic.radii, self.staggered.radii
+            )
+        else:
+            msg: str = (f"Unknown method to initialize Equation of State")
+            raise ValueError(msg)
+
+    @cached_property
+    def effective_density(self) -> npt.NDArray:
+        return self.eos.effective_density
+
+    @cached_property
+    def basic_pressure(self) -> npt.NDArray:
+        return self.eos.basic_pressure
+
+    @cached_property
+    def staggered_pressure(self) -> npt.NDArray:
+        return self.eos.staggered_pressure
 
     def get_constant_spacing(self) -> npt.NDArray:
         """Constant radius spacing across the mantle
@@ -273,7 +281,19 @@ class Mesh:
         return float(np.dot(staggered_quantity.T, self.basic.volume)) / self.basic.total_volume
 
 
-class AdamsWilliamsonEOS:
+class EOS(ABC):
+    """Generic EOS class"""
+
+    @abstractmethod
+    def effective_density(self) -> npt.NDArray: ...
+
+    @abstractmethod
+    def basic_pressure(self) -> npt.NDArray: ...
+
+    @abstractmethod
+    def staggered_pressure(self) -> npt.NDArray: ...
+
+class AdamsWilliamsonEOS(EOS):
     r"""Adams-Williamson equation of state (EOS).
 
     EOS due to adiabatic self-compression from the definition of the adiabatic bulk modulus:
@@ -289,35 +309,53 @@ class AdamsWilliamsonEOS:
     def __init__(
         self,
         settings: _MeshParameters,
-        radii: npt.NDArray,
-        outer_boundary: float,
-        inner_boundary: float,
+        basic_radii: npt.NDArray,
+        staggered_radii: npt.NDArray,
     ):
         self._settings: _MeshParameters = settings
-        self._radii: npt.NDArray = radii
-        self._outer_boundary = outer_boundary
-        self._inner_boundary = inner_boundary
+        self._basic_radii: npt.NDArray = basic_radii
+        self._staggered_radii: npt.NDArray = staggered_radii
+        self._outer_boundary = np.max(basic_radii)
+        self._inner_boundary = np.min(basic_radii)
         self._surface_density: float = self._settings.surface_density
         self._gravitational_acceleration: float = self._settings.gravitational_acceleration
         self._adiabatic_bulk_modulus: float = self._settings.adiabatic_bulk_modulus
-        self._pressure = self.get_pressure_from_radii(radii)
-        self._pressure_gradient = self.get_pressure_gradient(self.pressure)
-        self._density = self.get_density(self.pressure)
+        self._basic_pressure = self.get_pressure_from_radii(basic_radii)
+        self._staggered_pressure = self.get_pressure_from_radii(staggered_radii)
+        self._effective_density = self.get_effective_density(basic_radii)
 
     @property
-    def density(self) -> npt.NDArray:
-        """Density"""
-        return self._density
+    def basic_pressure(self) -> npt.NDArray:
+        """Pressure at basic nodes"""
+        return self._basic_pressure
 
     @property
-    def pressure(self) -> npt.NDArray:
-        """Pressure"""
-        return self._pressure
+    def staggered_pressure(self) -> npt.NDArray:
+        """Pressure at staggered nodes"""
+        return self._staggered_pressure
 
     @property
-    def pressure_gradient(self) -> npt.NDArray:
-        """Pressure gradient"""
-        return self.pressure_gradient
+    def effective_density(self) -> npt.NDArray:
+        """Effective density"""
+        return self._effective_density
+
+    def get_effective_density(self, radii) -> npt.NDArray:
+        r"""
+        Computes effective density on staggered nodes using
+        density rho(r) integration over a spherical shell.
+
+        Args:
+            radii: Radii array on basic nodes
+
+        Returns:
+            Effective Density array on staggered nodes
+        """
+
+        mass_shell = self.get_mass_within_shell(radii)
+        volume_shell = 4 / 3 * np.pi  \
+            * (np.power(radii[1:],3.0) - np.power(radii[:-1],3.0))
+
+        return mass_shell/volume_shell
 
     def get_density(self, pressure: FloatOrArray) -> npt.NDArray:
         r"""Computes density from pressure:
@@ -536,3 +574,36 @@ class AdamsWilliamsonEOS:
         )
 
         return radii
+
+class UserDefinedEOS(EOS):
+    r"""User defined equation of state (EOS).
+
+    Pressure field and effective density field on staggered nodes provided by the user.
+    """
+
+    def __init__(
+        self,
+        settings: _MeshParameters,
+        basic_radii: npt.NDArray,
+        staggered_radii: npt.NDArray,
+    ):
+        interp_pressure = PchipInterpolator(settings.eos_radius, settings.eos_pressure)
+        interp_density = PchipInterpolator(settings.eos_radius, settings.eos_density)
+        self._staggered_pressure = interp_pressure(staggered_radii).reshape(-1,1)
+        self._basic_pressure = interp_pressure(basic_radii).reshape(-1,1)
+        self._effective_density = interp_density(staggered_radii).reshape(-1,1)
+
+    @property
+    def basic_pressure(self) -> npt.NDArray:
+        """Pressure at basic nodes"""
+        return self._basic_pressure
+
+    @property
+    def staggered_pressure(self) -> npt.NDArray:
+        """Pressure at staggered nodes"""
+        return self._staggered_pressure
+
+    @property
+    def effective_density(self) -> npt.NDArray:
+        """Effective density"""
+        return self._effective_density
