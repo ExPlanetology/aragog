@@ -293,14 +293,14 @@ class _MeshParameters:
                 msg: str = (f"you must provide a file for setting up equation of state")
                 raise ValueError(msg)
             arr = np.loadtxt(self.eos_file)
-            self.staggered_pressure = arr[:,0] / self.scalings_.pressure
-            self.effective_density = arr[:,1] / self.scalings_.density
-            # Check length match with number of nodes
-            if not (self.number_of_nodes == len(self.staggered_pressure) + 1):
-                msg: str = (
-                    f"the size of the provided pressure field for user defined EOS does not match \
-                    the number of staggered points."
-                )
+            self.eos_radius = arr[:,0] / self.scalings_.radius
+            self.eos_pressure = arr[:,1] / self.scalings_.pressure
+            self.eos_density = arr[:,2] / self.scalings_.density
+            # Check that provided eos radius roughly match with Aragog mesh
+            if ((self.eos_radius[0] < self.inner_radius) or
+                (self.eos_radius[-1] > self.outer_radius) or
+                (self.eos_radius[-1]-self.eos_radius[0]) < 0.75*(self.outer_radius-self.inner_radius)):
+                msg: str = (f"Radius array in EOS file: Values out of range.")
                 raise ValueError(msg)
 
 @dataclass
