@@ -268,12 +268,13 @@ class Output:
     def time_range(self) -> float:
         return self.times[-1] - self.times[0]
 
-    def write_at_time(self, file_path: str, tidx: int = -1) -> None:
+    def write_at_time(self, file_path: str, tidx: int = -1, compress: bool = False) -> None:
         """Write the state of the model at a particular time to a NetCDF4 file on the disk.
 
         Args:
             file_path: Path to the output file
             tidx: Index on the time axis at which to access the data
+            compress: Whether to compress the data
         """
 
         logger.debug("Writing i=%d NetCDF file to %s", tidx, file_path)
@@ -317,6 +318,9 @@ class Output:
                 key,
                 np.float64,
                 (mesh,),
+                compression="zlib" if compress else None,
+                shuffle = True,
+                complevel = 4
             )
             ds[key][:] = some_property[:, tidx]
             ds[key].units = units
