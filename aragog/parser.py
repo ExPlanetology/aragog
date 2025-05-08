@@ -425,11 +425,13 @@ class _SolverParameters:
     atol: float
     rtol: float
     scalings_: _ScalingsParameters = field(init=False)
+    tsurf_poststep_change: float
 
     def scale_attributes(self, scalings: _ScalingsParameters) -> None:
         self.scalings_ = scalings
         self.start_time /= self.scalings_.time_years
         self.end_time /= self.scalings_.time_years
+        self.tsurf_poststep_change /= self.scalings_.temperature
 
 
 @dataclass(kw_only=True)

@@ -503,15 +503,41 @@ class Solver:
 
         return dTdt
 
-    def solve(self) -> None:
-        """Solves the system of ODEs to determine the interior temperature profile."""
+    def make_tsurf_event(self):
+        tsurf_initial = [None]
 
-        start_time: float = self.parameters.solver.start_time
-        logger.debug("start_time = %f", start_time)
-        end_time: float = self.parameters.solver.end_time
-        logger.debug("end_time = %f", end_time)
-        atol: float = self.parameters.solver.atol
-        rtol: float = self.parameters.solver.rtol
+        def tsurf_event(time: float, temperature: npt.NDArray) -> float:
+            # Get current surface temperature from passed-in array
+
+            tsurf_current = temperature[-1] * self.parameters.scalings.temperature
+            tsurf_threshold = self.parameters.solver.tsurf_poststep_change * self.parameters.scalings.temperature
+
+            if tsurf_initial[0] is None:
+                tsurf_initial[0] = tsurf_current
+                return 1.0  # Start safely above zero
+
+            delta = abs(tsurf_current - tsurf_initial[0])
+
+            logger.info(
+                "t = %.3e, tsurf_current = %.3f, tsurf_initial = %.3f, delta = %.3f, tsurf_threshold = %.3f",
+                time, tsurf_current, tsurf_initial[0], delta, tsurf_threshold
+            )
+
+            return tsurf_threshold - delta  # triggers the event
+
+        tsurf_event.terminal = True
+        tsurf_event.direction = -1
+
+        return tsurf_event
+
+    def solve(self) -> None:
+        start_time = self.parameters.solver.start_time
+        end_time = self.parameters.solver.end_time
+        atol = self.parameters.solver.atol
+        rtol = self.parameters.solver.rtol
+
+        tsurf_event = self.make_tsurf_event()
+        # invalid_event=self.make_invalid_tsurf_event()
 
         self._solution = solve_ivp(
             self.dTdt,
@@ -521,6 +547,19 @@ class Solver:
             vectorized=True,
             atol=atol,
             rtol=rtol,
-        )
-
+            events=[tsurf_event],
+         )
         logger.info(self.solution)
+
+        if self._solution.status == 1:
+            logger.warning("Integration stopped early due to surface temperature jump.")
+            self.stop_early = True
+
+        elif self._solution.status == 0:
+            logger.info("Integration completed successfully.")
+            self.stop_early = False
+
+        else:
+            logger.error("Integration failed with status = %d", self._solution.status)
+            logger.error("Message: %s", self._solution.message)
+            self.stop_early = True
