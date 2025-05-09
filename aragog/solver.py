@@ -504,28 +504,42 @@ class Solver:
         return dTdt
 
     def make_tsurf_event(self):
+        """
+        Creates a temperature event function for use with an ODE solver to monitor changes 
+        in the surface temperature.The event triggers when the change exceeds the 
+        threshold, allowing the solver to stop integration.
+
+        Returns:
+            The event has the attributes:
+                - terminal = True: Integration stops when the event is triggered.
+                - direction = -1: Only triggers when the function is decreasing through zero.
+        """
         tsurf_initial = [None]
 
         def tsurf_event(time: float, temperature: npt.NDArray) -> float:
-            # Get current surface temperature from passed-in array
+            """
+            Event function to detect when surface temperature changes beyond a specified threshold.
 
+            Args:
+                time (float): Current time.
+                temperature (np.ndarray): Current temperature profile.
+
+            Returns:
+                float: The difference between the threshold and the actual change in surface 
+                    temperature. When this value crosses zero from above, the event is triggered.
+            """
             tsurf_current = temperature[-1] * self.parameters.scalings.temperature
             tsurf_threshold = self.parameters.solver.tsurf_poststep_change * self.parameters.scalings.temperature
 
             if tsurf_initial[0] is None:
                 tsurf_initial[0] = tsurf_current
-                return 1.0  # Start safely above zero
-
+                return 1.0  
+            
             delta = abs(tsurf_current - tsurf_initial[0])
 
-            logger.info(
-                "t = %.3e, tsurf_current = %.3f, tsurf_initial = %.3f, delta = %.3f, tsurf_threshold = %.3f",
-                time, tsurf_current, tsurf_initial[0], delta, tsurf_threshold
-            )
+            return tsurf_threshold - delta  
 
-            return tsurf_threshold - delta  # triggers the event
-
-        tsurf_event.terminal = True
+        tsurf_event.terminal = self.parameters.solver.event_triggering
         tsurf_event.direction = -1
 
         return tsurf_event
@@ -537,7 +551,7 @@ class Solver:
         rtol = self.parameters.solver.rtol
 
         tsurf_event = self.make_tsurf_event()
-        # invalid_event=self.make_invalid_tsurf_event()
+  
 
         self._solution = solve_ivp(
             self.dTdt,

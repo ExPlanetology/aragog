@@ -426,6 +426,7 @@ class _SolverParameters:
     rtol: float
     scalings_: _ScalingsParameters = field(init=False)
     tsurf_poststep_change: float
+    event_triggering:bool = False
 
     def scale_attributes(self, scalings: _ScalingsParameters) -> None:
         self.scalings_ = scalings
