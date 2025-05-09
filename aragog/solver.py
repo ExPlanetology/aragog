@@ -503,15 +503,55 @@ class Solver:
 
         return dTdt
 
-    def solve(self) -> None:
-        """Solves the system of ODEs to determine the interior temperature profile."""
+    def make_tsurf_event(self):
+        """
+        Creates a temperature event function for use with an ODE solver to monitor changes 
+        in the surface temperature.The event triggers when the change exceeds the 
+        threshold, allowing the solver to stop integration.
 
-        start_time: float = self.parameters.solver.start_time
-        logger.debug("start_time = %f", start_time)
-        end_time: float = self.parameters.solver.end_time
-        logger.debug("end_time = %f", end_time)
-        atol: float = self.parameters.solver.atol
-        rtol: float = self.parameters.solver.rtol
+        Returns:
+            The event has the attributes:
+                - terminal = True: Integration stops when the event is triggered.
+                - direction = -1: Only triggers when the function is decreasing through zero.
+        """
+        tsurf_initial = [None]
+
+        def tsurf_event(time: float, temperature: npt.NDArray) -> float:
+            """
+            Event function to detect when surface temperature changes beyond a specified threshold.
+
+            Args:
+                time (float): Current time.
+                temperature (np.ndarray): Current temperature profile.
+
+            Returns:
+                float: The difference between the threshold and the actual change in surface 
+                    temperature. When this value crosses zero from above, the event is triggered.
+            """
+            tsurf_current = temperature[-1] * self.parameters.scalings.temperature
+            tsurf_threshold = self.parameters.solver.tsurf_poststep_change * self.parameters.scalings.temperature
+
+            if tsurf_initial[0] is None:
+                tsurf_initial[0] = tsurf_current
+                return 1.0  
+            
+            delta = abs(tsurf_current - tsurf_initial[0])
+
+            return tsurf_threshold - delta  
+
+        tsurf_event.terminal = self.parameters.solver.event_triggering
+        tsurf_event.direction = -1
+
+        return tsurf_event
+
+    def solve(self) -> None:
+        start_time = self.parameters.solver.start_time
+        end_time = self.parameters.solver.end_time
+        atol = self.parameters.solver.atol
+        rtol = self.parameters.solver.rtol
+
+        tsurf_event = self.make_tsurf_event()
+  
 
         self._solution = solve_ivp(
             self.dTdt,
@@ -521,6 +561,19 @@ class Solver:
             vectorized=True,
             atol=atol,
             rtol=rtol,
-        )
-
+            events=[tsurf_event],
+         )
         logger.info(self.solution)
+
+        if self._solution.status == 1:
+            logger.warning("Integration stopped early due to surface temperature jump.")
+            self.stop_early = True
+
+        elif self._solution.status == 0:
+            logger.info("Integration completed successfully.")
+            self.stop_early = False
+
+        else:
+            logger.error("Integration failed with status = %d", self._solution.status)
+            logger.error("Message: %s", self._solution.message)
+            self.stop_early = True
