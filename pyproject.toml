@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "aragog"
-version = "0.2.3-alpha"
+version = "0.2.4-alpha"
 description = "1-D interior dynamics of rocky mantles that are solid, liquid, or mixed phase"
 authors = ["Dan J Bower <djbower@users.noreply.github.com>"]
 license = "GPL-3.0-or-later"
@@ -12,7 +12,7 @@ packages = [
 
 [tool.poetry.dependencies]
 python = ">=3.10"
-numpy = "^1.26.4"
+numpy = ">=2.0.0"
 scipy = "^1.12.0"
 netCDF4 = "^1.7.0"
 thermochem = "^0.8.2"
