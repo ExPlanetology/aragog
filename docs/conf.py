@@ -24,7 +24,7 @@ copyright = "2024, Dan J. Bower"  # Created by Sphinx, so pylint: disable=W0622
 author = "Dan J. Bower"
 
 # The full version, including alpha/beta/rc tags
-release = "0.2.3-alpha"
+release = "0.2.4-alpha"
 
 
 # -- General configuration ---------------------------------------------------
