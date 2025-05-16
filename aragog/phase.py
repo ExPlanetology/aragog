@@ -313,7 +313,8 @@ class MixedPhaseEvaluator(PhaseEvaluatorABC):
         self._density = 1 / self._density
 
         # Porosity
-        self._porosity = (self._solid.density() - self.density()) / self.delta_density()
+        epsilon = 1e-10  # Used to avoid division by zero when dividing by the delta density for higher mass planets
+        self._porosity = (self._solid.density() - self.density()) / (self.delta_density() + epsilon)
 
         # Thermal conductivity
         self._thermal_conductivity = combine_properties(
