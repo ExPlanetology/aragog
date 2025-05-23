@@ -296,6 +296,7 @@ class _MeshParameters:
             self.eos_radius = arr[:,0] / self.scalings_.radius
             self.eos_pressure = arr[:,1] / self.scalings_.pressure
             self.eos_density = arr[:,2] / self.scalings_.density
+            self.eos_gravity = arr[:,3] / self.scalings_.gravitational_acceleration
             # Check that provided eos radius roughly match with Aragog mesh
             if ((self.eos_radius[0] < self.inner_radius) or
                 (self.eos_radius[-1] > self.outer_radius) or
