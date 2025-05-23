@@ -175,7 +175,7 @@ class SinglePhaseEvaluator(PhaseEvaluatorABC):
 
     Args:
         settings: Phase parameters
-        gravitational_acceleration: Gravitational acceleration
+        gravitational_acceleration: PropertyProtocol
     """
 
     # For typing
@@ -187,7 +187,7 @@ class SinglePhaseEvaluator(PhaseEvaluatorABC):
     _thermal_expansivity: PropertyProtocol
     _viscosity: PropertyProtocol
 
-    def __init__(self, settings: _PhaseParameters, gravitational_acceleration: float):
+    def __init__(self, settings: _PhaseParameters, gravitational_acceleration: PropertyProtocol):
         self._settings: _PhaseParameters = settings
         cls_fields: tuple[Field, ...] = fields(self._settings)
         for field_ in cls_fields:
@@ -222,9 +222,7 @@ class SinglePhaseEvaluator(PhaseEvaluatorABC):
             else:
                 logger.info("Cannot interpret value (%s): not a number or a file", value)
 
-        self._gravitational_acceleration = ConstantProperty(
-            "gravitational_acceleration", value=gravitational_acceleration
-        )
+        self._gravitational_acceleration = gravitational_acceleration
 
     @override
     def density(self) -> FloatOrArray:
@@ -269,12 +267,13 @@ class MixedPhaseEvaluator(PhaseEvaluatorABC):
     """
 
     def __init__(self, parameters: Parameters):
+        gravitational_acceleration: PropertyProtocol = setup_gravitational_acceleration(parameters)
         self.settings: _PhaseMixedParameters = parameters.phase_mixed
         self._liquid: PhaseEvaluatorProtocol = SinglePhaseEvaluator(
-            parameters.phase_liquid, parameters.mesh.gravitational_acceleration
+            parameters.phase_liquid, gravitational_acceleration
         )
         self._solid: PhaseEvaluatorProtocol = SinglePhaseEvaluator(
-            parameters.phase_solid, parameters.mesh.gravitational_acceleration
+            parameters.phase_solid, gravitational_acceleration
         )
         self._solidus: LookupProperty1D = self._get_melting_curve_lookup(
             "solidus", self.settings.solidus
@@ -433,11 +432,12 @@ class CompositePhaseEvaluator(PhaseEvaluatorABC):
     """
 
     def __init__(self, parameters: Parameters):
+        gravitational_acceleration: PropertyProtocol = setup_gravitational_acceleration(parameters)
         self._liquid: PhaseEvaluatorProtocol = SinglePhaseEvaluator(
-            parameters.phase_liquid, parameters.mesh.gravitational_acceleration
+            parameters.phase_liquid, gravitational_acceleration
         )
         self._solid: PhaseEvaluatorProtocol = SinglePhaseEvaluator(
-            parameters.phase_solid, parameters.mesh.gravitational_acceleration
+            parameters.phase_solid, gravitational_acceleration
         )
         self._mixed: MixedPhaseEvaluator = MixedPhaseEvaluator(parameters)
 
@@ -622,9 +622,9 @@ class PhaseEvaluatorCollection:
     active: PhaseEvaluatorProtocol = field(init=False)
 
     def __post_init__(self, parameters: Parameters):
-        gravitation_acceleration: float = parameters.mesh.gravitational_acceleration
-        self.liquid = SinglePhaseEvaluator(parameters.phase_liquid, gravitation_acceleration)
-        self.solid = SinglePhaseEvaluator(parameters.phase_solid, gravitation_acceleration)
+        gravitational_acceleration: PropertyProtocol = setup_gravitational_acceleration(parameters)
+        self.liquid = SinglePhaseEvaluator(parameters.phase_liquid, gravitational_acceleration)
+        self.solid = SinglePhaseEvaluator(parameters.phase_solid, gravitational_acceleration)
         self.mixed = MixedPhaseEvaluator(parameters)
         self.composite = CompositePhaseEvaluator(parameters)
 
@@ -641,3 +641,27 @@ class PhaseEvaluatorCollection:
             self.active = self.composite
         else:
             raise ValueError(f"Phase = {phase_to_use} is not a valid selection")
+
+def setup_gravitational_acceleration(parameters: Parameters):
+    """Sets up the gravitational acceleration property.
+
+    Args:
+        parameters: Parameters
+
+    Returns:
+        gravitational_acceleration: PropertyProtocol
+    """
+    if parameters.mesh.eos_method == 1:
+        gravitational_acceleration = ConstantProperty(
+            "gravitational_acceleration", value=parameters.mesh.gravitational_acceleration
+        )
+    elif parameters.mesh.eos_method == 2:
+        #gravitational_acceleration = LookupProperty1D(
+        #    "gravitational_acceleration",
+        #    value=parameters.mesh.gravitational_acceleration_lookup,
+        #)
+        raise ValueError(f"EOS method = {parameters.mesh.eos_method} not implemented yet")
+    else:
+        raise ValueError(f"EOS method = {parameters.mesh.eos_method} is not a valid selection")
+
+    return gravitational_acceleration
