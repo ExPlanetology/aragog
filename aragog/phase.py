@@ -652,10 +652,13 @@ def setup_gravitational_acceleration(parameters: Parameters):
         gravitational_acceleration: PropertyProtocol
     """
     if parameters.mesh.eos_method == 1:
+        # AdamsWilliamson EOS method = constant gravitational acceleration
         gravitational_acceleration = ConstantProperty(
             "gravitational_acceleration", value=parameters.mesh.gravitational_acceleration
         )
     elif parameters.mesh.eos_method == 2:
+        # User defined EOS method = space dependent gravitational acceleration (1D lookup)
+        # Re-interpolate EOS-data to match standard lookup pressure grid
         interp_gravity = PchipInterpolator(
             np.flip(parameters.mesh.eos_pressure),
             np.flip(parameters.mesh.eos_gravity))
