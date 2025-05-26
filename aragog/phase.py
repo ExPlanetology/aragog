@@ -24,7 +24,7 @@ from dataclasses import KW_ONLY, Field, InitVar, dataclass, field, fields
 
 import numpy as np
 import numpy.typing as npt
-from scipy.interpolate import RectBivariateSpline
+from scipy.interpolate import RectBivariateSpline, PchipInterpolator
 
 from aragog.interfaces import (
     MixedPhaseEvaluatorProtocol,
@@ -656,11 +656,18 @@ def setup_gravitational_acceleration(parameters: Parameters):
             "gravitational_acceleration", value=parameters.mesh.gravitational_acceleration
         )
     elif parameters.mesh.eos_method == 2:
-        #gravitational_acceleration = LookupProperty1D(
-        #    "gravitational_acceleration",
-        #    value=parameters.mesh.gravitational_acceleration_lookup,
-        #)
-        raise ValueError(f"EOS method = {parameters.mesh.eos_method} not implemented yet")
+        interp_gravity = PchipInterpolator(
+            np.flip(parameters.mesh.eos_pressure),
+            np.flip(parameters.mesh.eos_gravity))
+        num_points: int = 138
+        max_pressure: float = 1.37e11 / parameters.scalings.pressure
+        lookup_data: npt.NDArray = np.zeros((num_points, 2), dtype=float)
+        lookup_data[:,0] = np.linspace(0.0, max_pressure, num=num_points)
+        lookup_data[:,1] = interp_gravity(lookup_data[:,0])
+        gravitational_acceleration = LookupProperty1D(
+            "gravitational_acceleration",
+            value=lookup_data,
+        )
     else:
         raise ValueError(f"EOS method = {parameters.mesh.eos_method} is not a valid selection")
 
