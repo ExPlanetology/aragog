@@ -439,6 +439,19 @@ class Solver:
         self.evaluator = Evaluator(self.parameters)
         self.state = State(self.parameters, self.evaluator)
 
+    def reset(self) -> None:
+        """This function initializes the model, while keeping the previous state of the
+        PhaseEvaluatorCollection object. This avoids multiple loads of lookup table data
+        when running Aragog multiple times.
+        """
+        logger.info("Resetting %s", self.__class__.__name__)
+        # Update the Evaluator object except the phase properties
+        self.evaluator.mesh = Mesh(self.parameters)
+        self.evaluator.boundary_conditions = BoundaryConditions(self.parameters, self.evaluator.mesh)
+        self.evaluator.initial_condition = InitialCondition(self.parameters, self.evaluator.mesh, self.evaluator.phases)
+        # Reinstantiate the solver state
+        self.state = State(self.parameters, self.evaluator)
+
     @property
     def temperature_basic(self) -> npt.NDArray:
         """Temperature of the basic mesh in K"""
