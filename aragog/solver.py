@@ -140,6 +140,25 @@ class State:
 
         return convective_heat_flux
 
+    def mixing_heat_flux(self) -> npt.NDArray:
+        """Mixing heat flux"""
+
+        r"""Mixing heat flux:
+
+        .. math::
+            J_{cm} = -\rho \kappa_h \frac{\partial \phi}{\partial r}
+
+        where :math:`\rho` is density, :math:`\kappa_h` is eddy diffusivity,
+        :math:`\phi` is melt mass fraction, :math:`r` is radius.
+        """
+        mixing_heat_flux: npt.NDArray = (
+            self.phase_basic.density()
+            * self.eddy_diffusivity()
+            * -self._dphidr()
+        )
+
+        return mixing_heat_flux
+
     def radiogenic_heating(self, time: float) -> npt.NDArray:
         """Radiogenic heating (constant with radius)
 
@@ -242,11 +261,6 @@ class State:
         return self._is_convective
 
     @property
-    def mixing_flux(self) -> npt.NDArray:
-        """Mixing heat flux"""
-        raise NotImplementedError
-
-    @property
     def reynolds_number(self) -> npt.NDArray:
         return self._reynolds_number
 
@@ -346,7 +360,7 @@ class State:
         if self._settings.gravitational_separation:
             self._heat_flux += self.gravitational_separation_flux
         if self._settings.mixing:
-            self._heat_flux += self.mixing_flux
+            self._heat_flux += self.mixing_heat_flux()
 
         # Heating (power per unit mass)
         self._heating = np.zeros_like(self.temperature_staggered)
