@@ -155,6 +155,7 @@ class State:
         mixing_heat_flux: npt.NDArray = (
             self.phase_basic.density()
             * self.eddy_diffusivity()
+            * self.phase_basic.delta_fusion()
             * -self._dphidr()
         )
 
