@@ -79,6 +79,7 @@ class State:
     phase_basic: PhaseEvaluatorProtocol = field(init=False)
     phase_staggered: PhaseEvaluatorProtocol = field(init=False)
     _dTdr: npt.NDArray = field(init=False)
+    _dphidr: npt.NDArray = field(init=False)
     _eddy_diffusivity: npt.NDArray = field(init=False)
     _heat_flux: npt.NDArray = field(init=False)
     _heating: npt.NDArray = field(init=False)
@@ -318,6 +319,11 @@ class State:
         self.phase_staggered.update()
         self.phase_basic.set_temperature(self._temperature_basic)
         self.phase_basic.update()
+
+        self._dphidr = self._evaluator.mesh.d_dr_at_basic_nodes(
+            self.phase_basic.melt_fraction()
+        )
+        logger.debug("dphidr = %s", self._dphidr())
 
         self._super_adiabatic_temperature_gradient = self.dTdr() - self.phase_basic.dTdrs()
         self._is_convective = self._super_adiabatic_temperature_gradient < 0
