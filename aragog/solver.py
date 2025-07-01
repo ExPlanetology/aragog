@@ -322,7 +322,7 @@ class State:
         self.phase_basic.update()
 
         self._dphidr = self._evaluator.mesh.d_dr_at_basic_nodes(
-            self.phase_basic.melt_fraction()
+            self.phase_staggered.melt_fraction()
         )
         logger.debug("dphidr = %s", self._dphidr())
 
