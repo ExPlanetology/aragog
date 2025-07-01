@@ -156,7 +156,7 @@ class State:
             self.phase_basic.density()
             * self.eddy_diffusivity()
             * self.phase_basic.delta_fusion()
-            * -self._dphidr()
+            * -self.dphidr()
         )
 
         return mixing_heat_flux
@@ -215,6 +215,9 @@ class State:
 
     def dTdr(self) -> npt.NDArray:
         return self._dTdr
+
+    def dphidr(self) -> npt.NDArray:
+        return self._dphidr
 
     def eddy_diffusivity(self) -> npt.NDArray:
         return self._eddy_diffusivity
@@ -324,7 +327,7 @@ class State:
         self._dphidr = self._evaluator.mesh.d_dr_at_basic_nodes(
             self.phase_staggered.melt_fraction()
         )
-        logger.debug("dphidr = %s", self._dphidr())
+        logger.debug("dphidr = %s", self.dphidr())
 
         self._super_adiabatic_temperature_gradient = self.dTdr() - self.phase_basic.dTdrs()
         self._is_convective = self._super_adiabatic_temperature_gradient < 0
