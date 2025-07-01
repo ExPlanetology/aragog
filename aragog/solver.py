@@ -147,15 +147,16 @@ class State:
         r"""Mixing heat flux:
 
         .. math::
-            J_{cm} = -\rho \kappa_h \frac{\partial \phi}{\partial r}
+            J_{cm} = -\rho \kappa_h \Delta h \frac{\partial \phi}{\partial r}
 
         where :math:`\rho` is density, :math:`\kappa_h` is eddy diffusivity,
-        :math:`\phi` is melt mass fraction, :math:`r` is radius.
+        :math:`\phi` is melt mass fraction, :math:`r` is radius and
+        :math:`\Delta h` is the latent heat.
         """
         mixing_heat_flux: npt.NDArray = (
             self.phase_basic.density()
             * self.eddy_diffusivity()
-            * self.phase_basic.delta_fusion()
+            * self.phase_basic.settings.latent_heat_of_fusion
             * -self.dphidr()
         )
 
