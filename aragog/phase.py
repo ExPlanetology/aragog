@@ -523,7 +523,7 @@ class CompositePhaseEvaluator(PhaseEvaluatorABC):
 
     @override
     def latent_heat(self) -> FloatOrArray:
-        """Melt fraction"""
+        """Latent heat of fusion"""
         return self._mixed.latent_heat()
 
     def solidus(self) -> npt.NDArray:
