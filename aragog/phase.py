@@ -252,6 +252,9 @@ class SinglePhaseEvaluator(PhaseEvaluatorABC):
     def viscosity(self) -> FloatOrArray:
         return self._viscosity(self.temperature, self.pressure)
 
+    @override
+    def relative_velocity(self) -> float:
+        return 0.
 
 class MixedPhaseEvaluator(PhaseEvaluatorABC):
     """Evaluates the EOS and transport properties of a mixed phase.
@@ -407,6 +410,11 @@ class MixedPhaseEvaluator(PhaseEvaluatorABC):
     def viscosity(self) -> npt.NDArray:
         return self._viscosity
 
+    @override
+    def relative_velocity(self) -> npt.NDArray:
+        """Relative velocity between melt and solid"""
+        return self._relative_velocity
+
     def _get_melting_curve_lookup(self, name: str, value: str) -> LookupProperty1D:
         with open(value, encoding="utf-8") as infile:
             header = infile.readline()
@@ -530,6 +538,11 @@ class CompositePhaseEvaluator(PhaseEvaluatorABC):
     def viscosity(self) -> npt.NDArray:
         """Viscosity"""
         return self._viscosity
+
+    @override
+    def relative_velocity(self) -> npt.NDArray:
+        """Relative velocity between melt and solid"""
+        return self.mixed.relative_velocity()
 
     def _set_blending_and_masks(self) -> None:
         """Sets blending and masks."""
