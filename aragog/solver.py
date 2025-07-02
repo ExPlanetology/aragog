@@ -140,6 +140,24 @@ class State:
 
         return convective_heat_flux
 
+    def gravitational_separation_heat_flux(self) -> npt.NDArray:
+        r"""Gravitational separation heat flux:
+
+        .. math::
+            J_{grav} = \rho \phi (1 - \phi) v_{rel} \Delta h
+
+        where :math:`\rho` is density, :math:`\phi` is melt fraction, :math:`v_{rel}` is relative
+        velocity, and :math:`\Delta h` is the latent heat of fusion.
+        """
+        gravitational_separation_heat_flux: npt.NDArray = (
+            self.phase_basic.density()
+            * self.phase_basic.melt_fraction()
+            * (1.0 - self.phase_basic.melt_fraction())
+            * self.phase_basic.relative_velocity()
+            * self.phase_basic.latent_heat()
+        )
+        raise NotImplementedError
+
     def radiogenic_heating(self, time: float) -> npt.NDArray:
         """Radiogenic heating (constant with radius)
 
@@ -197,11 +215,6 @@ class State:
 
     def eddy_diffusivity(self) -> npt.NDArray:
         return self._eddy_diffusivity
-
-    @property
-    def gravitational_separation_flux(self) -> npt.NDArray:
-        """Gravitational separation"""
-        raise NotImplementedError
 
     @property
     def heating(self) -> npt.NDArray:
@@ -344,7 +357,7 @@ class State:
         if self._settings.convection:
             self._heat_flux += self.convective_heat_flux()
         if self._settings.gravitational_separation:
-            self._heat_flux += self.gravitational_separation_flux
+            self._heat_flux += self.gravitational_separation_heat_flux()
         if self._settings.mixing:
             self._heat_flux += self.mixing_flux
 
