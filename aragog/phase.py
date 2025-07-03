@@ -239,6 +239,10 @@ class SinglePhaseEvaluator(PhaseEvaluatorABC):
     @override
     def melt_fraction(self) -> float:
         return self._melt_fraction(self.temperature, self.pressure)
+    
+    @override
+    def latent_heat(self) -> float:
+        return 0.
 
     @override
     def thermal_conductivity(self) -> FloatOrArray:
@@ -294,8 +298,9 @@ class MixedPhaseEvaluator(PhaseEvaluatorABC):
         self._liquid.set_pressure(pressure)
         self._delta_density = self._solid.density() - self._liquid.density()
         self._delta_fusion = self.liquidus() - self.solidus()
+        self._latent_heat = self.settings.latent_heat_of_fusion
         # Heat capacity of the mixed phase :cite:p:`{Equation 4,}SOLO07`
-        self._heat_capacity = self.settings.latent_heat_of_fusion / self.delta_fusion()
+        self._heat_capacity = self.latent_heat() / self.delta_fusion()
 
     @override
     def update(self):
@@ -379,6 +384,11 @@ class MixedPhaseEvaluator(PhaseEvaluatorABC):
         The melt fraction is always between zero and one.
         """
         return self._melt_fraction
+
+    @override
+    def latent_heat(self) -> float:
+        """Latent heat of fusion"""
+        return self._latent_heat
 
     def porosity(self) -> npt.NDArray:
         """Porosity of the mixed phase, that is the volume fraction occupied by the melt"""
@@ -510,6 +520,11 @@ class CompositePhaseEvaluator(PhaseEvaluatorABC):
     def melt_fraction(self) -> npt.NDArray:
         """Melt fraction"""
         return self._mixed.melt_fraction()
+
+    @override
+    def latent_heat(self) -> FloatOrArray:
+        """Latent heat of fusion"""
+        return self._mixed.latent_heat()
 
     def solidus(self) -> npt.NDArray:
         return self._mixed.solidus()
