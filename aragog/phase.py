@@ -432,7 +432,7 @@ class MixedPhaseEvaluator(PhaseEvaluatorABC):
     def _get_relative_velocity(self) -> npt.NDArray:
         """Compute relative velocity"""
         dv = (
-            self.delta_density()
+            - self.delta_density()
             * self.gravitational_acceleration()
             * self._permeability()
             / self._liquid.viscosity()
@@ -471,7 +471,7 @@ class MixedPhaseEvaluator(PhaseEvaluatorABC):
             0.001
             * self._grain_size**2
             * self._porosity**2
-            * (1-self._porosity)**2
+            / (1-self._porosity)**2
         )
         return permeability
 
