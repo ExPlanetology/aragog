@@ -66,7 +66,7 @@ class PhaseEvaluatorProtocol(Protocol):
 
     def viscosity(self) -> FloatOrArray: ...
 
-    def relative_velocity(self) -> FloatOrArray:
+    def relative_velocity(self) -> FloatOrArray: ...
 
 class MixedPhaseEvaluatorProtocol(PhaseEvaluatorProtocol, Protocol):
     """Mixed phase evaluator protocol"""
