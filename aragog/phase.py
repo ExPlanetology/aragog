@@ -324,8 +324,7 @@ class MixedPhaseEvaluator(PhaseEvaluatorABC):
         epsilon = 1e-10  # Used to avoid division by zero when dividing by the delta density for higher mass planets
         self._porosity = (self._solid.density() - self.density()) / (self.delta_density() + epsilon)
 
-        # Relative velocity between melt and solid
-        self._relative_velocity = self._get_relative_velocity()
+
 
         # Thermal conductivity
         self._thermal_conductivity = combine_properties(
@@ -349,6 +348,9 @@ class MixedPhaseEvaluator(PhaseEvaluatorABC):
             weight, np.log10(self._liquid.viscosity()), np.log10(self._solid.viscosity())
         )
         self._viscosity = 10**log10_viscosity
+
+        # Relative velocity between melt and solid
+        self._relative_velocity = self._get_relative_velocity()
 
     def delta_density(self) -> FloatOrArray:
         return self._delta_density
@@ -432,9 +434,9 @@ class MixedPhaseEvaluator(PhaseEvaluatorABC):
     def _get_relative_velocity(self) -> npt.NDArray:
         """Compute relative velocity"""
         dv = (
-            - self._delta_density
+            self.delta_density()
             * self.gravitational_acceleration()
-            * self._permeability()
+            #* self._permeability()
             / self._liquid.viscosity()
         )
         return dv
@@ -460,8 +462,9 @@ class MixedPhaseEvaluator(PhaseEvaluatorABC):
 
     def _permeability_stokes(self) -> npt.NDArray:
         """Permeability for Stokes flow in the mixed phase"""
+        shape = np.shape(self._porosity)
         permeability = 2./9.*self._grain_size**2
-        return permeability
+        return np.full(shape, permeability)
 
     def _permeability_blake_kozeny_carman(self) -> npt.NDArray:
         """Permeability for Blake-Kozeny-Carman flow in the mixed phase"""
@@ -614,7 +617,7 @@ class CompositePhaseEvaluator(PhaseEvaluatorABC):
     @override
     def relative_velocity(self) -> npt.NDArray:
         """Relative velocity between melt and solid"""
-        return self.mixed.relative_velocity()
+        return self._mixed.relative_velocity()
 
     def _set_blending_and_masks(self) -> None:
         """Sets blending and masks."""

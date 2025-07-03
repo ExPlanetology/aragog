@@ -157,7 +157,7 @@ class State:
             * self.phase_basic.relative_velocity()
             * self.phase_basic.latent_heat()
         )
-        raise gravitational_separation_heat_flux
+        return gravitational_separation_heat_flux
 
     def mixing_heat_flux(self) -> npt.NDArray:
         """Mixing heat flux"""
