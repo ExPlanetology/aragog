@@ -434,7 +434,7 @@ class MixedPhaseEvaluator(PhaseEvaluatorABC):
         dv = (
             self.delta_density()
             * self.gravitational_acceleration()
-            #* self._permeability()
+            * self._permeability()
             / self._liquid.viscosity()
         )
         return dv
@@ -446,17 +446,19 @@ class MixedPhaseEvaluator(PhaseEvaluatorABC):
 
         # Stokes regime
         permeability = np.where(
-            self._porosity > 0.7714620383592684,
+            self._porosity > 0.771462,
             self._permeability_stokes(),
             permeability
             )
 
         # Blake-Kozeny-Carman regime
         permeability = np.where(
-            self._porosity < 0.0769618,
+            self._porosity < 0.0769452,
             self._permeability_blake_kozeny_carman(),
             permeability
             )
+        
+        return permeability
 
     def _permeability_stokes(self) -> npt.NDArray:
         """Permeability for Stokes flow in the mixed phase"""
