@@ -289,6 +289,7 @@ class MixedPhaseEvaluator(PhaseEvaluatorABC):
             "liquidus", self.settings.liquidus
         )
         self._grain_size: float = self.settings.grain_size
+        self._latent_heat: float = self.settings.latent_heat_of_fusion
 
     @override
     def set_pressure(self, pressure: npt.NDArray) -> None:
@@ -302,7 +303,6 @@ class MixedPhaseEvaluator(PhaseEvaluatorABC):
         self._liquid.set_pressure(pressure)
         self._delta_density = self._solid.density() - self._liquid.density()
         self._delta_fusion = self.liquidus() - self.solidus()
-        self._latent_heat = self.settings.latent_heat_of_fusion
         # Heat capacity of the mixed phase :cite:p:`{Equation 4,}SOLO07`
         self._heat_capacity = self.latent_heat() / self.delta_fusion()
 
@@ -432,7 +432,7 @@ class MixedPhaseEvaluator(PhaseEvaluatorABC):
     def _get_relative_velocity(self) -> npt.NDArray:
         """Compute relative velocity"""
         dv = (
-            self._delta_density
+            - self._delta_density
             * self.gravitational_acceleration()
             * self._permeability()
             / self._liquid.viscosity()
