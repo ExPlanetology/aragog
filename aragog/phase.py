@@ -324,7 +324,8 @@ class MixedPhaseEvaluator(PhaseEvaluatorABC):
         epsilon = 1e-10  # Used to avoid division by zero when dividing by the delta density for higher mass planets
         self._porosity = (self._solid.density() - self.density()) / (self.delta_density() + epsilon)
 
-
+        # Relative velocity between melt and solid
+        self._relative_velocity = self._get_relative_velocity()
 
         # Thermal conductivity
         self._thermal_conductivity = combine_properties(
@@ -348,9 +349,6 @@ class MixedPhaseEvaluator(PhaseEvaluatorABC):
             weight, np.log10(self._liquid.viscosity()), np.log10(self._solid.viscosity())
         )
         self._viscosity = 10**log10_viscosity
-
-        # Relative velocity between melt and solid
-        self._relative_velocity = self._get_relative_velocity()
 
     def delta_density(self) -> FloatOrArray:
         return self._delta_density
