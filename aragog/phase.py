@@ -440,15 +440,23 @@ class MixedPhaseEvaluator(PhaseEvaluatorABC):
         return dv
 
     def _permeability(self) -> npt.NDArray:
+
+        # RumpfGupte regime (default)
+        permeability = self._permeability_rumpf_gupte()
+
         # Stokes regime
-        if self._porosity > 0.7714620383592684:
-            return self._permeability_stokes()
+        permeability = np.where(
+            self._porosity > 0.7714620383592684,
+            self._permeability_stokes(),
+            permeability
+            )
+
         # Blake-Kozeny-Carman regime
-        elif self._porosity < 0.0769618:
-            return self._permeability_blake_kozeny_carman()
-        # RumpfGupte regime
-        else:
-            return self._permeability_rumpf_gupte()
+        permeability = np.where(
+            self._porosity < 0.0769618,
+            self._permeability_blake_kozeny_carman(),
+            permeability
+            )
 
     def _permeability_stokes(self) -> npt.NDArray:
         """Permeability for Stokes flow in the mixed phase"""
