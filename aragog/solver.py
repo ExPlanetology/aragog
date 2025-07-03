@@ -79,6 +79,7 @@ class State:
     phase_basic: PhaseEvaluatorProtocol = field(init=False)
     phase_staggered: PhaseEvaluatorProtocol = field(init=False)
     _dTdr: npt.NDArray = field(init=False)
+    _dphidr: npt.NDArray = field(init=False)
     _eddy_diffusivity: npt.NDArray = field(init=False)
     _heat_flux: npt.NDArray = field(init=False)
     _heating: npt.NDArray = field(init=False)
@@ -156,7 +157,28 @@ class State:
             * self.phase_basic.relative_velocity()
             * self.phase_basic.latent_heat()
         )
-        raise NotImplementedError
+        raise gravitational_separation_heat_flux
+
+    def mixing_heat_flux(self) -> npt.NDArray:
+        """Mixing heat flux"""
+
+        r"""Mixing heat flux:
+
+        .. math::
+            J_{cm} = -\rho \kappa_h \Delta h \frac{\partial \phi}{\partial r}
+
+        where :math:`\rho` is density, :math:`\kappa_h` is eddy diffusivity,
+        :math:`\phi` is melt mass fraction, :math:`r` is radius and
+        :math:`\Delta h` is the latent heat.
+        """
+        mixing_heat_flux: npt.NDArray = (
+            self.phase_basic.density()
+            * self.eddy_diffusivity()
+            * self.phase_basic.latent_heat()
+            * -self.dphidr()
+        )
+
+        return mixing_heat_flux
 
     def radiogenic_heating(self, time: float) -> npt.NDArray:
         """Radiogenic heating (constant with radius)
@@ -213,6 +235,9 @@ class State:
     def dTdr(self) -> npt.NDArray:
         return self._dTdr
 
+    def dphidr(self) -> npt.NDArray:
+        return self._dphidr
+
     def eddy_diffusivity(self) -> npt.NDArray:
         return self._eddy_diffusivity
 
@@ -253,11 +278,6 @@ class State:
     @property
     def is_convective(self) -> npt.NDArray:
         return self._is_convective
-
-    @property
-    def mixing_flux(self) -> npt.NDArray:
-        """Mixing heat flux"""
-        raise NotImplementedError
 
     @property
     def reynolds_number(self) -> npt.NDArray:
@@ -318,6 +338,11 @@ class State:
         self.phase_basic.set_temperature(self._temperature_basic)
         self.phase_basic.update()
 
+        self._dphidr = self._evaluator.mesh.d_dr_at_basic_nodes(
+            self.phase_staggered.melt_fraction()
+        )
+        logger.debug("dphidr = %s", self.dphidr())
+
         self._super_adiabatic_temperature_gradient = self.dTdr() - self.phase_basic.dTdrs()
         self._is_convective = self._super_adiabatic_temperature_gradient < 0
         velocity_prefactor: npt.NDArray = (
@@ -359,7 +384,7 @@ class State:
         if self._settings.gravitational_separation:
             self._heat_flux += self.gravitational_separation_heat_flux()
         if self._settings.mixing:
-            self._heat_flux += self.mixing_flux
+            self._heat_flux += self.mixing_heat_flux()
 
         # Heating (power per unit mass)
         self._heating = np.zeros_like(self.temperature_staggered)
