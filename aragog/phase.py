@@ -284,6 +284,7 @@ class MixedPhaseEvaluator(PhaseEvaluatorABC):
         self._liquidus: LookupProperty1D = self._get_melting_curve_lookup(
             "liquidus", self.settings.liquidus
         )
+        self._grain_size: float = self.settings.grain_size
 
     @override
     def set_pressure(self, pressure: npt.NDArray) -> None:
@@ -317,6 +318,9 @@ class MixedPhaseEvaluator(PhaseEvaluatorABC):
         # Porosity
         epsilon = 1e-10  # Used to avoid division by zero when dividing by the delta density for higher mass planets
         self._porosity = (self._solid.density() - self.density()) / (self.delta_density() + epsilon)
+
+        # Relative velocity between melt and solid
+        self._relative_velocity = self._get_relative_velocity()
 
         # Thermal conductivity
         self._thermal_conductivity = combine_properties(
@@ -414,6 +418,51 @@ class MixedPhaseEvaluator(PhaseEvaluatorABC):
     def relative_velocity(self) -> npt.NDArray:
         """Relative velocity between melt and solid"""
         return self._relative_velocity
+
+    def _get_relative_velocity(self) -> npt.NDArray:
+        """Compute relative velocity"""
+        dv = (
+            self._delta_density
+            * self.gravitational_acceleration()
+            * self._permeability()
+            / self._liquid.viscosity()
+        )
+        return dv
+
+    def _permeability(self) -> npt.NDArray:
+        # Stokes regime
+        if self._porosity > 0.7714620383592684:
+            return self._permeability_stokes()
+        # Blake-Kozeny-Carman regime
+        elif self._porosity < 0.0769618:
+            return self._permeability_blake_kozeny_carman()
+        # RumpfGupte regime
+        else:
+            return self._permeability_rumpf_gupte()
+
+    def _permeability_stokes(self) -> npt.NDArray:
+        """Permeability for Stokes flow in the mixed phase"""
+        permeability = 2./9.*self._grain_size**2
+        return permeability
+
+    def _permeability_blake_kozeny_carman(self) -> npt.NDArray:
+        """Permeability for Blake-Kozeny-Carman flow in the mixed phase"""
+        permeability = (
+            0.001
+            * self._grain_size**2
+            * self._porosity**2
+            * (1-self._porosity)**2
+        )
+        return permeability
+
+    def _permeability_rumpf_gupte(self) -> npt.NDArray:
+        """Permeability for Rumpf-Gupte flow in the mixed phase"""
+        permeability = (
+            5./7.
+            * self._grain_size**2
+            * self._porosity**4.5
+        )
+        return permeability
 
     def _get_melting_curve_lookup(self, name: str, value: str) -> LookupProperty1D:
         with open(value, encoding="utf-8") as infile:
