@@ -462,9 +462,8 @@ class MixedPhaseEvaluator(PhaseEvaluatorABC):
 
     def _permeability_stokes(self) -> npt.NDArray:
         """Permeability for Stokes flow in the mixed phase"""
-        shape = np.shape(self._porosity)
         permeability = 2./9.*self._grain_size**2
-        return np.full(shape, permeability)
+        return permeability
 
     def _permeability_blake_kozeny_carman(self) -> npt.NDArray:
         """Permeability for Blake-Kozeny-Carman flow in the mixed phase"""
