@@ -256,6 +256,9 @@ class SinglePhaseEvaluator(PhaseEvaluatorABC):
     def viscosity(self) -> FloatOrArray:
         return self._viscosity(self.temperature, self.pressure)
 
+    @override
+    def relative_velocity(self) -> float:
+        return 0.
 
 class MixedPhaseEvaluator(PhaseEvaluatorABC):
     """Evaluates the EOS and transport properties of a mixed phase.
@@ -285,6 +288,8 @@ class MixedPhaseEvaluator(PhaseEvaluatorABC):
         self._liquidus: LookupProperty1D = self._get_melting_curve_lookup(
             "liquidus", self.settings.liquidus
         )
+        self._grain_size: float = self.settings.grain_size
+        self._latent_heat: float = self.settings.latent_heat_of_fusion
 
     @override
     def set_pressure(self, pressure: npt.NDArray) -> None:
@@ -298,7 +303,6 @@ class MixedPhaseEvaluator(PhaseEvaluatorABC):
         self._liquid.set_pressure(pressure)
         self._delta_density = self._solid.density() - self._liquid.density()
         self._delta_fusion = self.liquidus() - self.solidus()
-        self._latent_heat = self.settings.latent_heat_of_fusion
         # Heat capacity of the mixed phase :cite:p:`{Equation 4,}SOLO07`
         self._heat_capacity = self.latent_heat() / self.delta_fusion()
 
@@ -319,6 +323,9 @@ class MixedPhaseEvaluator(PhaseEvaluatorABC):
         # Porosity
         epsilon = 1e-10  # Used to avoid division by zero when dividing by the delta density for higher mass planets
         self._porosity = (self._solid.density() - self.density()) / (self.delta_density() + epsilon)
+
+        # Relative velocity between melt and solid
+        self._relative_velocity = self._get_relative_velocity()
 
         # Thermal conductivity
         self._thermal_conductivity = combine_properties(
@@ -416,6 +423,66 @@ class MixedPhaseEvaluator(PhaseEvaluatorABC):
     @override
     def viscosity(self) -> npt.NDArray:
         return self._viscosity
+
+    @override
+    def relative_velocity(self) -> npt.NDArray:
+        """Relative velocity between melt and solid"""
+        return self._relative_velocity
+
+    def _get_relative_velocity(self) -> npt.NDArray:
+        """Compute relative velocity"""
+        dv = (
+            - self.delta_density()
+            * self.gravitational_acceleration()
+            * self._permeability()
+            / self._liquid.viscosity()
+        )
+        return dv
+
+    def _permeability(self) -> npt.NDArray:
+
+        # RumpfGupte regime (default)
+        permeability = self._permeability_rumpf_gupte()
+
+        # Stokes regime
+        permeability = np.where(
+            self._porosity > 0.771462,
+            self._permeability_stokes(),
+            permeability
+            )
+
+        # Blake-Kozeny-Carman regime
+        permeability = np.where(
+            self._porosity < 0.0769452,
+            self._permeability_blake_kozeny_carman(),
+            permeability
+            )
+        
+        return permeability
+
+    def _permeability_stokes(self) -> npt.NDArray:
+        """Permeability for Stokes flow in the mixed phase"""
+        permeability = 2./9.*self._grain_size**2
+        return permeability
+
+    def _permeability_blake_kozeny_carman(self) -> npt.NDArray:
+        """Permeability for Blake-Kozeny-Carman flow in the mixed phase"""
+        permeability = (
+            0.001
+            * self._grain_size**2
+            * self._porosity**2
+            / (1-self._porosity)**2
+        )
+        return permeability
+
+    def _permeability_rumpf_gupte(self) -> npt.NDArray:
+        """Permeability for Rumpf-Gupte flow in the mixed phase"""
+        permeability = (
+            5./7.
+            * self._grain_size**2
+            * self._porosity**4.5
+        )
+        return permeability
 
     def _get_melting_curve_lookup(self, name: str, value: str) -> LookupProperty1D:
         with open(value, encoding="utf-8") as infile:
@@ -545,6 +612,11 @@ class CompositePhaseEvaluator(PhaseEvaluatorABC):
     def viscosity(self) -> npt.NDArray:
         """Viscosity"""
         return self._viscosity
+
+    @override
+    def relative_velocity(self) -> npt.NDArray:
+        """Relative velocity between melt and solid"""
+        return self._mixed.relative_velocity()
 
     def _set_blending_and_masks(self) -> None:
         """Sets blending and masks."""
