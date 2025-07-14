@@ -1,6 +1,8 @@
 import logging
 import os
 from pathlib import Path
+from time import sleep
+import subprocess as sp
 
 import platformdirs
 from osfclient.api import OSF
