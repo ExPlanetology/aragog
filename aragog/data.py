@@ -16,29 +16,52 @@ project_id = "phsxf"
 
 basic_list = (
     "1TPa-dK09-elec-free/MgSiO3_Wolf_Bower_2018",
+    "1TPa-dK09-elec-free/MgSiO3_Wolf_Bower_2018_400GPa",
     "Melting_curves/Monteux+600",
     "Melting_curves/Monteux-600",
     "Melting_curves/Wolf_Bower+2018",
     )
 
-def download_zenodo_folder(zenodo_id: str, folder_dir: Path):
+def get_zenodo_record(folder: str) -> str | None:
+    """
+    Get Zenodo record ID for a given folder.
+
+    Inputs :
+        - folder : str
+            Folder name to get the Zenodo record ID for
+
+    Returns :
+        - str | None : Zenodo record ID or None if not found
+    """
+    zenodo_map = {
+        '1TPa-dK09-elec-free/MgSiO3_Wolf_Bower_2018': '15877374',
+        '1TPa-dK09-elec-free/MgSiO3_Wolf_Bower_2018_400GPa': '15877424',
+        'Melting_curves/Monteux+600': '15728091',
+        'Melting_curves/Monteux-600': '15728138',
+        'Melting_curves/Wolf_Bower+2018': '15728072',
+    }
+    return zenodo_map.get(folder, None)
+
+def download_zenodo_folder(folder: str, data_dir: Path):
     """
     Download a specific Zenodo record into specified folder
 
     Inputs :
-        - zenodo_id : str
-            Zenodo record ID to download
+        - folder : str
+            Folder name to download
         - folder_dir : Path
-            Local directory where the Zenodo record will be downloaded
+            local repository where data are saved
     """
 
+    folder_dir = data_dir / folder
     folder_dir.mkdir(parents=True)
+    zenodo_id = get_zenodo_record(folder)
     cmd = [
             "zenodo_get", zenodo_id,
             "-o", folder_dir
         ]
     out = os.path.join(GetFWLData(), "zenodo.log")
-    log.debug("    logging to %s"%out)
+    logger.debug("    logging to %s"%out)
     with open(out,'w') as hdl:
         sp.run(cmd, check=True, stdout=hdl, stderr=hdl)
 
@@ -63,13 +86,11 @@ def download_OSF_folder(*, storage, folders: list[str], data_dir: Path):
                 file.write_to(f)
             break
 
-
 def GetFWLData() -> Path:
     """
     Get path to FWL data directory on the disk
     """
     return Path(FWL_DATA_DIR).absolute()
-
 
 def DownloadLookupTableData(fname: str = ""):
     """
@@ -95,10 +116,37 @@ def DownloadLookupTableData(fname: str = ""):
     else:
         raise ValueError(f"Unrecognised folder name: {fname}")
 
-    folders = [folder for folder in folder_list if not (data_dir / folder).exists()]
+    for folder in folder_list:
+        folder_dir = data_dir / folder
+        max_tries = 2 # Maximum download attempts, could be a function argument
 
-    if folders:
-        logger.info(f"Downloading interior lookup table data to {data_dir}")
-        download_folder(storage=storage, folders=folders, data_dir=data_dir)
+        if not folder_dir.exists():
+            logger.info(f"Downloading interior lookup table data to {data_dir}")
+            for i in range(max_tries):
+                logger.info(f"Attempt {i + 1} of {max_tries}")
+                success = False
+
+                try:
+                    download_zenodo_folder(folder = folder, data_dir=data_dir)
+                    success = True
+                except RuntimeError as e:
+                    logger.error(f"Zenodo download failed: {e}")
+                    folder_dir.rmdir()
+
+                if not success:
+                    try:
+                        download_OSF_folder(storage=storage, folders=folder, data_dir=data_dir)
+                        success = True
+                    except RuntimeError as e:
+                        logger.error(f"OSF download failed: {e}")
+
+                if success:
+                    break
+
+                if i < max_tries - 1:
+                    logger.info("Retrying download...")
+                    sleep(5) # Wait 5 seconds before retrying
+                else:
+                    logger.error("Max retries reached. Download failed.")
 
     return
