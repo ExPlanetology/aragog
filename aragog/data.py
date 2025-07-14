@@ -14,10 +14,35 @@ logger.info(f"FWL data location: {FWL_DATA_DIR}")
 # project ID of the lookup data folder in the OSF
 project_id = "phsxf"
 
-basic_list = ("1TPa-dK09-elec-free/MgSiO3_Wolf_Bower_2018",)
+basic_list = (
+    "1TPa-dK09-elec-free/MgSiO3_Wolf_Bower_2018",
+    "Melting_curves/Monteux+600",
+    "Melting_curves/Monteux-600",
+    "Melting_curves/Wolf_Bower+2018",
+    )
 
+def download_zenodo_folder(zenodo_id: str, folder_dir: Path):
+    """
+    Download a specific Zenodo record into specified folder
 
-def download_folder(*, storage, folders: list[str], data_dir: Path):
+    Inputs :
+        - zenodo_id : str
+            Zenodo record ID to download
+        - folder_dir : Path
+            Local directory where the Zenodo record will be downloaded
+    """
+
+    folder_dir.mkdir(parents=True)
+    cmd = [
+            "zenodo_get", zenodo_id,
+            "-o", folder_dir
+        ]
+    out = os.path.join(GetFWLData(), "zenodo.log")
+    log.debug("    logging to %s"%out)
+    with open(out,'w') as hdl:
+        sp.run(cmd, check=True, stdout=hdl, stderr=hdl)
+
+def download_OSF_folder(*, storage, folders: list[str], data_dir: Path):
     """
     Download a specific folder in the OSF repository
 
@@ -51,7 +76,7 @@ def DownloadLookupTableData(fname: str = ""):
     Download lookup table data
 
     Inputs :
-        - fname (optional) :    folder name, i.e. "1TPa-dK09-elec-free/temperature"
+        - fname (optional) :    folder name, i.e. "1TPa-dK09-elec-free/MgSiO3_Wolf_Bower_2018"
                                 if not provided download all the folder list
     """
 
