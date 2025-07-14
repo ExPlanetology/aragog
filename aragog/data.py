@@ -18,7 +18,6 @@ project_id = "phsxf"
 
 basic_list = (
     "1TPa-dK09-elec-free/MgSiO3_Wolf_Bower_2018",
-    "1TPa-dK09-elec-free/MgSiO3_Wolf_Bower_2018_400GPa",
     "Melting_curves/Monteux+600",
     "Melting_curves/Monteux-600",
     "Melting_curves/Wolf_Bower+2018",
