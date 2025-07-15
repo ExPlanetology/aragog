@@ -203,10 +203,16 @@ class State:
                 mesh, at a given point in time.
         """
 
-        mass_flux_basic: npt.NDArray = (np.zeros_like(self.temperature_basic))
-        if self._settings.dilatation:
+        mass_flux_staggered: npt.NDArray = self._evaluator.mesh.quantity_at_staggered_nodes(self._mass_flux)
 
-        raise ValueError(f"Dilatation heating not implemented.")
+
+        dilatation_volume_source: npt.NDArray = (
+            self.phase_staggered.density()
+            * self.phase_staggered.gravitational_acceleration()
+            * mass_flux_staggered
+        )
+
+        return dilatation_volume_source
 
     def tidal_heating(self) -> npt.NDArray:
         """Tidal heating at each layer of the mantle.
