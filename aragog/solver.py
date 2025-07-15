@@ -115,7 +115,7 @@ class State:
         r"""Conductive heat flux:
 
         .. math::
-            J_{cond} = -k \frac{\partial T}{\partial r}
+            q_{cond} = -k \frac{\partial T}{\partial r}
 
         where :math:`k` is thermal conductivity, :math:`T` is temperature, and :math:`r` is radius.
         """
@@ -127,7 +127,7 @@ class State:
         r"""Convective heat flux:
 
         .. math::
-            J_{conv} = -\rho c_p \kappa_h \left( \frac{\partial T}{\partial r}
+            q_{conv} = -\rho c_p \kappa_h \left( \frac{\partial T}{\partial r}
                 - \left( \frac{\partial T}{\partial r} \right)_S \right)
 
         where :math:`\rho` is density, :math:`c_p` is heat capacity at constant pressure,
@@ -147,9 +147,9 @@ class State:
         r"""Gravitational separation mass flux:
 
         .. math::
-            J_{grav} = \rho \phi (1 - \phi) v_{rel}
+            j_{grav} = \rho \phi (1 - \phi) v_{rel}
 
-        where :math:`\rho` is density, :math:`\phi` is melt fraction, and 
+        where :math:`\rho` is density, :math:`\phi` is melt fraction, and
         :math:`v_{rel}` is relative velocity.
         """
         gravitational_separation_mass_flux: npt.NDArray = (
@@ -164,7 +164,7 @@ class State:
         r"""Mixing mass flux:
 
         .. math::
-            J_{cm} = -\rho \kappa_h \frac{\partial \phi}{\partial r}
+            j_{cm} = -\rho \kappa_h \frac{\partial \phi}{\partial r}
 
         where :math:`\rho` is density, :math:`\kappa_h` is eddy diffusivity,
         :math:`\phi` is melt mass fraction, and :math:`r` is radius.
