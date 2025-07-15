@@ -333,15 +333,18 @@ class State:
             temperature, self._temperature_basic, self.dTdr()
         )
 
+        logger.debug("Setting the melt fraction profile")
         self.phase_staggered.set_temperature(temperature)
         self.phase_staggered.update()
         self.phase_basic.set_temperature(self._temperature_basic)
         self.phase_basic.update()
-
         self._dphidr = self._evaluator.mesh.d_dr_at_basic_nodes(
             self.phase_staggered.melt_fraction()
         )
         logger.debug("dphidr = %s", self.dphidr())
+        self._evaluator.boundary_conditions.conform_temperature_boundary_conditions(
+            self.phase_staggered.melt_fraction(), self.phase_basic.melt_fraction(), self._dphidr()
+        )
 
         self._super_adiabatic_temperature_gradient = self.dTdr() - self.phase_basic.dTdrs()
         self._is_convective = self._super_adiabatic_temperature_gradient < 0
