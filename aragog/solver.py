@@ -81,9 +81,11 @@ class State:
     _dTdr: npt.NDArray = field(init=False)
     _dphidr: npt.NDArray = field(init=False)
     _eddy_diffusivity: npt.NDArray = field(init=False)
+    _mass_flux: npt.NDArray = field(init=False)
     _heat_flux: npt.NDArray = field(init=False)
     _heating: npt.NDArray = field(init=False)
     _heating_radio: npt.NDArray = field(init=False)
+    _heating_dilatation: npt.NDArray = field(init=False)
     _heating_tidal: npt.NDArray = field(init=False)
     _is_convective: npt.NDArray = field(init=False)
     _reynolds_number: npt.NDArray = field(init=False)
@@ -141,44 +143,38 @@ class State:
 
         return convective_heat_flux
 
-    def gravitational_separation_heat_flux(self) -> npt.NDArray:
-        r"""Gravitational separation heat flux:
+    def gravitational_separation_mass_flux(self) -> npt.NDArray:
+        r"""Gravitational separation mass flux:
 
         .. math::
-            J_{grav} = \rho \phi (1 - \phi) v_{rel} \Delta h
+            J_{grav} = \rho \phi (1 - \phi) v_{rel}
 
-        where :math:`\rho` is density, :math:`\phi` is melt fraction, :math:`v_{rel}` is relative
-        velocity, and :math:`\Delta h` is the latent heat of fusion.
+        where :math:`\rho` is density, :math:`\phi` is melt fraction, and 
+        :math:`v_{rel}` is relative velocity.
         """
-        gravitational_separation_heat_flux: npt.NDArray = (
+        gravitational_separation_mass_flux: npt.NDArray = (
             self.phase_basic.density()
             * self.phase_basic.melt_fraction()
             * (1.0 - self.phase_basic.melt_fraction())
             * self.phase_basic.relative_velocity()
-            * self.phase_basic.latent_heat()
         )
-        return gravitational_separation_heat_flux
+        return gravitational_separation_mass_flux
 
-    def mixing_heat_flux(self) -> npt.NDArray:
-        """Mixing heat flux"""
-
-        r"""Mixing heat flux:
+    def mixing_mass_flux(self) -> npt.NDArray:
+        r"""Mixing mass flux:
 
         .. math::
-            J_{cm} = -\rho \kappa_h \Delta h \frac{\partial \phi}{\partial r}
+            J_{cm} = -\rho \kappa_h \frac{\partial \phi}{\partial r}
 
         where :math:`\rho` is density, :math:`\kappa_h` is eddy diffusivity,
-        :math:`\phi` is melt mass fraction, :math:`r` is radius and
-        :math:`\Delta h` is the latent heat.
+        :math:`\phi` is melt mass fraction, and :math:`r` is radius.
         """
-        mixing_heat_flux: npt.NDArray = (
+        mixing_mass_flux: npt.NDArray = (
             self.phase_basic.density()
             * self.eddy_diffusivity()
-            * self.phase_basic.latent_heat()
             * -self.dphidr()
         )
-
-        return mixing_heat_flux
+        return mixing_mass_flux
 
     def radiogenic_heating(self, time: float) -> npt.NDArray:
         """Radiogenic heating (constant with radius)
@@ -206,6 +202,10 @@ class State:
             Dilatation/compression heating (power per unit mass) at each layer of the staggered
                 mesh, at a given point in time.
         """
+
+        mass_flux_basic: npt.NDArray = (np.zeros_like(self.temperature_basic))
+        if self._settings.dilatation:
+
         raise ValueError(f"Dilatation heating not implemented.")
 
     def tidal_heating(self) -> npt.NDArray:
@@ -269,6 +269,11 @@ class State:
     def heating_tidal(self) -> npt.NDArray:
         """The tidal power generation."""
         return self._heating_tidal
+
+    @property
+    def mass_flux(self) -> npt.NDArray:
+        """The total melt mass flux according to the fluxes specified in the configuration."""
+        return self._mass_flux
 
     @property
     def heat_flux(self) -> npt.NDArray:
@@ -391,14 +396,16 @@ class State:
 
         # Heat flux (power per unit area)
         self._heat_flux = np.zeros_like(self.temperature_basic)
+        self._mass_flux = np.zeros_like(self.temperature_basic)
         if self._settings.conduction:
             self._heat_flux += self.conductive_heat_flux()
         if self._settings.convection:
             self._heat_flux += self.convective_heat_flux()
         if self._settings.gravitational_separation:
-            self._heat_flux += self.gravitational_separation_heat_flux()
+            self._mass_flux += self.gravitational_separation_mass_flux()
         if self._settings.mixing:
-            self._heat_flux += self.mixing_heat_flux()
+            self._mass_flux += self.mixing_mass_flux()
+        self._heat_flux += self._mass_flux * self.phase_basic.latent_heat()
 
         # Heating (power per unit mass)
         self._heating = np.zeros_like(self.temperature_staggered)
