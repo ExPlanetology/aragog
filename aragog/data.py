@@ -18,6 +18,12 @@ project_id = "phsxf"
 
 basic_list = (
     "1TPa-dK09-elec-free/MgSiO3_Wolf_Bower_2018",
+    "Melting_curves/Wolf_Bower+2018",
+    )
+
+full_list = (
+    "1TPa-dK09-elec-free/MgSiO3_Wolf_Bower_2018",
+    "1TPa-dK09-elec-free/MgSiO3_Wolf_Bower_2018_400GPa",
     "Melting_curves/Monteux+600",
     "Melting_curves/Monteux-600",
     "Melting_curves/Wolf_Bower+2018",
@@ -112,7 +118,7 @@ def DownloadLookupTableData(fname: str = ""):
     # If no folder specified download all basic list
     if not fname:
         folder_list = basic_list
-    elif fname in basic_list:
+    elif fname in full_list:
         folder_list = [fname]
     else:
         raise ValueError(f"Unrecognised folder name: {fname}")
