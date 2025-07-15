@@ -199,6 +199,15 @@ class State:
         # Convert to 1D array (assuming abundances are constant)
         return radio_heating_float * np.ones_like(self.temperature_staggered)
 
+    def dilatation_heating(self) -> npt.NDArray:
+        """Dilatation/compression heating (power per unit mass)
+
+        Returns:
+            Dilatation/compression heating (power per unit mass) at each layer of the staggered
+                mesh, at a given point in time.
+        """
+        raise ValueError(f"Dilatation heating not implemented.")
+
     def tidal_heating(self) -> npt.NDArray:
         """Tidal heating at each layer of the mantle.
 
@@ -250,6 +259,11 @@ class State:
     def heating_radio(self) -> npt.NDArray:
         """The radiogenic power generation."""
         return self._heating_radio
+
+    @property
+    def heating_dilatation(self) -> npt.NDArray:
+        """The heat source through dilation/compression."""
+        return self._heating_dilatation
 
     @property
     def heating_tidal(self) -> npt.NDArray:
@@ -394,6 +408,10 @@ class State:
         if self._settings.radionuclides:
             self._heating_radio = self.radiogenic_heating(time)
             self._heating += self._heating_radio
+
+        if self._settings.dilatation:
+            self._heating_dilatation = self.dilatation_heating()
+            self._heating += self._heating_dilatation
 
         if self._settings.tidal:
             self._heating_tidal = self.tidal_heating()
