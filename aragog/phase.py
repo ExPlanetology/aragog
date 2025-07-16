@@ -260,6 +260,10 @@ class SinglePhaseEvaluator(PhaseEvaluatorABC):
     def relative_velocity(self) -> float:
         return 0.
 
+    @override
+    def delta_specific_volume(self) -> FloatOrArray:
+        return 0.0
+
 class MixedPhaseEvaluator(PhaseEvaluatorABC):
     """Evaluates the EOS and transport properties of a mixed phase.
 
@@ -302,6 +306,7 @@ class MixedPhaseEvaluator(PhaseEvaluatorABC):
         self._liquid.set_temperature(self.liquidus())
         self._liquid.set_pressure(pressure)
         self._delta_density = self._solid.density() - self._liquid.density()
+        self._delta_specific_volume = 1.0/self._liquid.density() - 1.0/self._solid.density()
         self._delta_fusion = self.liquidus() - self.solidus()
         # Heat capacity of the mixed phase :cite:p:`{Equation 4,}SOLO07`
         self._heat_capacity = self.latent_heat() / self.delta_fusion()
@@ -438,6 +443,11 @@ class MixedPhaseEvaluator(PhaseEvaluatorABC):
             / self._liquid.viscosity()
         )
         return dv
+
+    @override
+    def delta_specific_volume(self) -> npt.NDArray:
+        """Difference of specific volume between melt and solid"""
+        return self._delta_specific_volume
 
     def _permeability(self) -> npt.NDArray:
 
@@ -617,6 +627,11 @@ class CompositePhaseEvaluator(PhaseEvaluatorABC):
     def relative_velocity(self) -> npt.NDArray:
         """Relative velocity between melt and solid"""
         return self._mixed.relative_velocity()
+
+    @override
+    def delta_specific_volume(self) -> npt.NDArray:
+        """Difference of specific volume between melt and solid"""
+        return self._mixed.delta_specific_volume()
 
     def _set_blending_and_masks(self) -> None:
         """Sets blending and masks."""
