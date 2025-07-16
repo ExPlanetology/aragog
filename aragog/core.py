@@ -267,5 +267,5 @@ class InitialCondition:
         # flip back the temperature field from bottom to top
         temperature_basic = np.flip(sol.y[0])
 
-        Return temperature field at staggered nodes
+        # Return temperature field at staggered nodes
         return self._mesh.quantity_at_staggered_nodes(temperature_basic)
