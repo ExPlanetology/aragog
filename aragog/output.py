@@ -367,7 +367,7 @@ class Output:
         _add_mesh_variable("Fconv_b", self.convective_heat_flux_basic, "W m-2")
         _add_mesh_variable("Fgrav_b", self.gravitational_separation_heat_flux_basic, "W m-2")
         _add_mesh_variable("Fmix_b", self.mixing_heat_flux_basic, "W m-2")
-        _add_mesh_variable("Ftotal_b", self.conductive_heat_flux_basic, "W m-2")
+        _add_mesh_variable("Ftotal_b", self.total_heat_flux_basic, "W m-2")
         _add_mesh_variable("log10visc_b", self.log10_viscosity_basic, "Pa s")
         _add_mesh_variable("log10visc_s", self.log10_viscosity_staggered, "Pa s")
         _add_mesh_variable("density_b", self.density_basic, "kg m-3")
