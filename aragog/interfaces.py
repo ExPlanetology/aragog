@@ -68,6 +68,8 @@ class PhaseEvaluatorProtocol(Protocol):
 
     def relative_velocity(self) -> FloatOrArray: ...
 
+    def delta_specific_volume(self) -> FloatOrArray: ...
+
 class MixedPhaseEvaluatorProtocol(PhaseEvaluatorProtocol, Protocol):
     """Mixed phase evaluator protocol"""
 
@@ -148,3 +150,6 @@ class PhaseEvaluatorABC(ABC):
 
     @abstractmethod
     def relative_velocity(self) -> FloatOrArray: ...
+
+    @abstractmethod
+    def delta_specific_volume(self) -> FloatOrArray: ...
