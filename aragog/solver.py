@@ -206,8 +206,7 @@ class State:
         mass_flux_staggered: npt.NDArray = self._evaluator.mesh.quantity_at_staggered_nodes(self._mass_flux)
 
         dilatation_volume_source: npt.NDArray = (
-            self.phase_staggered.density()
-            * self.phase_staggered.gravitational_acceleration()
+            self.phase_staggered.gravitational_acceleration()
             * self.phase_staggered.delta_specific_volume()
             * mass_flux_staggered
         )
