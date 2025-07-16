@@ -224,20 +224,19 @@ class InitialCondition:
     def temperature(self) -> npt.NDArray:
         return self._temperature
 
-    # TODO: Clunky. Set the staggered and basic temperature together, or be clear which one is
-    # being set.
     def get_linear(self) -> npt.NDArray:
         """Gets a linear temperature profile
 
         Returns:
             Linear temperature profile for the staggered nodes
+            Only works for uniform spatial mesh.
         """
-        temperature: npt.NDArray = np.linspace(
+        temperature_basic: npt.NDArray = np.linspace(
             self._settings.basal_temperature,
             self._settings.surface_temperature,
-            self._mesh.staggered.number_of_nodes,
+            self._mesh.basic.number_of_nodes,
         )
-        return temperature
+        return self._mesh.quantity_at_staggered_nodes(temperature_basic)
 
     def get_adiabat(self, pressure) -> npt.NDArray:
         """Gets an adiabatic temperature profile by integrating
