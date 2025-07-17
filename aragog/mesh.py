@@ -210,8 +210,25 @@ class Mesh:
         )
         transform[1:-1, :-1] += np.diagflat(-1 / self.staggered.delta_radii)  # k=0 diagonal
         transform[1:-1:, 1:] += np.diagflat(1 / self.staggered.delta_radii)  # k=1 diagonal
-        transform[0, :] = transform[1, :]  # Backward difference at outer radius
-        transform[-1, :] = transform[-2, :]  # Forward difference at inner radius
+
+        # Gradient at boundaries can be extrapolated from the first two closests basic nodes
+        # This only affects the estimation of indivual components of heat fluxes when working
+        # with flux boundary conditions. Gradient at boundaries are overwritten when using
+        # temperature boundary conditions.
+
+        # Extrapolation of gradient at inner radius
+        inner_delta_ratio = self.basic.delta_radii[1] / self.basic.delta_radii[0]
+        transform[0, 0] = - (inner_delta_ratio + 1) / self.staggered.delta_radii[0]
+        transform[0, 1] = (inner_delta_ratio + 1) / self.staggered.delta_radii[0]
+        transform[0, 1] += inner_delta_ratio / self.staggered.delta_radii[1]
+        transform[0, 2] = - inner_delta_ratio / self.staggered.delta_radii[1]
+        # Extrapolation of gradient at outer radius
+        outer_delta_ratio: float = self.basic.delta_radii[-2] / self.basic.delta_radii[-1]
+        transform[-1, -1] = - (outer_delta_ratio + 1) / self.staggered.delta_radii[-1]
+        transform[-1, -2] = (outer_delta_ratio + 1) / self.staggered.delta_radii[-1]
+        transform[-1, -2] += outer_delta_ratio / self.staggered.delta_radii[-2]
+        transform[-1, -3] = - outer_delta_ratio / self.staggered.delta_radii[-2]
+
         logger.debug("_d_dr_transform_matrix = %s", transform)
 
         return transform
@@ -230,13 +247,14 @@ class Mesh:
 
         return d_dr_at_basic_nodes
 
-    # TODO: Compatibility with conforming boundary/initial conditions?
     def _get_quantity_transform_matrix(self) -> npt.NDArray:
         """A transform matrix for mapping quantities on the staggered mesh to the basic mesh.
 
         Uses backward and forward differences at the inner and outer radius, respectively, to
-        obtain the quantity values of the basic nodes at the innermost and outermost nodes. It may
-        be subsequently necessary to conform these outer boundaries to applied boundary conditions.
+        obtain the quantity values of the basic nodes at the innermost and outermost nodes.
+        When using temperature boundary conditions, values at outer boundaries will be overwritten.
+        When using flux boundary conditions, values at outer boundaries will be used to provide
+        estimate of individual components of heat fluxes though the total heat flux is imposed.
 
         Returns:
             The transform matrix
@@ -258,13 +276,14 @@ class Mesh:
 
         return transform
 
-    # TODO: Compatibility with conforming boundary/initial conditions?
     def quantity_at_basic_nodes(self, staggered_quantity: npt.NDArray) -> npt.NDArray:
         """Determines a quantity at the basic nodes that is defined at the staggered nodes.
 
         Uses backward and forward differences at the inner and outer radius, respectively, to
-        obtain the quantity values of the basic nodes at the innermost and outermost nodes. It may
-        be subsequently necessary to conform these outer boundaries to applied boundary conditions.
+        obtain the quantity values of the basic nodes at the innermost and outermost nodes.
+        When using temperature boundary conditions, values at outer boundaries will be overwritten.
+        When using flux boundary conditions, values at outer boundaries will be used to provide
+        estimate of individual components of heat fluxes though the total heat flux is imposed.
 
         Args:
             staggered_quantity: A quantity defined at the staggered nodes
