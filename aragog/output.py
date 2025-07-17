@@ -59,9 +59,37 @@ class Output:
         return self.solution.y.shape
 
     @property
+    def conductive_heat_flux_basic(self) -> npt.NDArray:
+        """Conductive heat flux"""
+        return self.state.conductive_heat_flux() * self.parameters.scalings.heat_flux
+
+    @property
     def convective_heat_flux_basic(self) -> npt.NDArray:
         """Convective heat flux"""
         return self.state.convective_heat_flux() * self.parameters.scalings.heat_flux
+
+    @property
+    def gravitational_separation_heat_flux_basic(self) -> npt.NDArray:
+        """Gravitational separation heat flux"""
+        return (
+            self.state.gravitational_separation_mass_flux()
+            * self.state.phase_basic.latent_heat()
+            * self.parameters.scalings.heat_flux
+        )
+
+    @property
+    def mixing_heat_flux_basic(self) -> npt.NDArray:
+        """Convective mixing heat flux"""
+        return (
+            self.state.mixing_mass_flux()
+            * self.state.phase_basic.latent_heat()
+            * self.parameters.scalings.heat_flux
+        )
+
+    @property
+    def total_heat_flux_basic(self) -> npt.NDArray:
+        """Conductive heat flux"""
+        return self.state.heat_flux() * self.parameters.scalings.heat_flux
 
     @property
     def density_basic(self) -> npt.NDArray:
@@ -102,6 +130,11 @@ class Output:
     def heating_radio(self) -> npt.NDArray:
         """Internal heat generation from radioactive decay at staggered nodes"""
         return self.state.heating_radio * self.parameters.scalings.power_per_mass
+
+    @property
+    def heating_dilatation(self) -> npt.NDArray:
+        """Internal heat generation from dilatation/compression at staggered nodes"""
+        return self.state.heating_dilatation * self.parameters.scalings.power_per_mass
 
     @property
     def heating_tidal(self) -> npt.NDArray:
@@ -330,13 +363,18 @@ class Output:
         _add_mesh_variable("pres_b", self.pressure_GPa_basic, "GPa")
         _add_mesh_variable("temp_b", self.temperature_K_basic, "K")
         _add_mesh_variable("phi_b", self.melt_fraction_basic, "")
+        _add_mesh_variable("Fcond_b", self.conductive_heat_flux_basic, "W m-2")
         _add_mesh_variable("Fconv_b", self.convective_heat_flux_basic, "W m-2")
+        _add_mesh_variable("Fgrav_b", self.gravitational_separation_heat_flux_basic, "W m-2")
+        _add_mesh_variable("Fmix_b", self.mixing_heat_flux_basic, "W m-2")
+        _add_mesh_variable("Ftotal_b", self.total_heat_flux_basic, "W m-2")
         _add_mesh_variable("log10visc_b", self.log10_viscosity_basic, "Pa s")
         _add_mesh_variable("log10visc_s", self.log10_viscosity_staggered, "Pa s")
         _add_mesh_variable("density_b", self.density_basic, "kg m-3")
         _add_mesh_variable("heatcap_b", self.heat_capacity_basic, "J kg-1 K-1")
         _add_mesh_variable("mass_s", self.mass_staggered, "kg")
         _add_mesh_variable("Hradio_s", self.heating_radio, "W kg-1")
+        _add_mesh_variable("Hvol_s", self.heating_dilatation, "W kg-1")
         _add_mesh_variable("Htidal_s", self.heating_tidal, "W kg-1")
         _add_mesh_variable("Htotal_s", self.heating, "W kg-1")
 

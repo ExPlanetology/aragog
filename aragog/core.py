@@ -211,7 +211,7 @@ class InitialCondition:
                 )
                 raise ValueError(msg)
         elif self._settings.initial_condition == 3:
-            self._temperature: npt.NDArray = self.get_adiabat(self._mesh.staggered_pressure[:,-1])
+            self._temperature: npt.NDArray = self.get_adiabat(self._mesh.basic_pressure[:,-1])
         else:
             msg: str = (
                 f"initial_condition = {self._settings.initial_condition} is unknown"
@@ -224,28 +224,27 @@ class InitialCondition:
     def temperature(self) -> npt.NDArray:
         return self._temperature
 
-    # TODO: Clunky. Set the staggered and basic temperature together, or be clear which one is
-    # being set.
     def get_linear(self) -> npt.NDArray:
         """Gets a linear temperature profile
 
         Returns:
             Linear temperature profile for the staggered nodes
+            Only works for uniform spatial mesh.
         """
-        temperature: npt.NDArray = np.linspace(
+        temperature_basic: npt.NDArray = np.linspace(
             self._settings.basal_temperature,
             self._settings.surface_temperature,
-            self._mesh.staggered.number_of_nodes,
+            self._mesh.basic.number_of_nodes,
         )
-        return temperature
+        return self._mesh.quantity_at_staggered_nodes(temperature_basic)
 
-    def get_adiabat(self, pressure) -> npt.NDArray:
+    def get_adiabat(self, pressure_basic) -> npt.NDArray:
         """Gets an adiabatic temperature profile by integrating
            the adiatiabatic temperature gradient dTdPs from the surface.
            Uses the set surface temperature.
 
         Args:
-            Pressure field on the staggered nodes
+            Pressure field on the basic nodes
 
         Returns:
             Adiabatic temperature profile for the staggered nodes
@@ -258,11 +257,15 @@ class InitialCondition:
             return self._phases.active.dTdPs()
 
         # flip the pressure field top to bottom
-        pressure = np.flip(pressure)
+        pressure_basic = np.flip(pressure_basic)
 
         sol = solve_ivp(
-             adiabat_ode, (pressure[0], pressure[-1]), [self._settings.surface_temperature],
-             t_eval=pressure, method='RK45', rtol=1e-6, atol=1e-9)
+             adiabat_ode, (pressure_basic[0], pressure_basic[-1]),
+             [self._settings.surface_temperature], t_eval=pressure_basic,
+             method='RK45', rtol=1e-6, atol=1e-9)
 
         # flip back the temperature field from bottom to top
-        return np.flip(sol.y[0])
+        temperature_basic = np.flip(sol.y[0])
+
+        # Return temperature field at staggered nodes
+        return self._mesh.quantity_at_staggered_nodes(temperature_basic)
