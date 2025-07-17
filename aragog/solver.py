@@ -367,7 +367,7 @@ class State:
         )
         logger.debug("dphidr = %s", self.dphidr())
         self._evaluator.boundary_conditions.apply_temperature_boundary_conditions_melt(
-            self.phase_staggered.melt_fraction(), self.phase_basic.melt_fraction(), self._dphidr()
+            self.phase_staggered.melt_fraction(), self.phase_basic.melt_fraction(), self._dphidr
         )
 
         self._super_adiabatic_temperature_gradient = self.dTdr() - self.phase_basic.dTdrs()
