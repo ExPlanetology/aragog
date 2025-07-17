@@ -353,7 +353,7 @@ class State:
         logger.debug("temperature_basic = %s", self.temperature_basic)
         self._dTdr = self._evaluator.mesh.d_dr_at_basic_nodes(temperature)
         logger.debug("dTdr = %s", self.dTdr())
-        self._evaluator.boundary_conditions.conform_temperature_boundary_conditions(
+        self._evaluator.boundary_conditions.apply_temperature_boundary_conditions(
             temperature, self._temperature_basic, self.dTdr()
         )
 
@@ -366,7 +366,7 @@ class State:
             self.phase_staggered.melt_fraction()
         )
         logger.debug("dphidr = %s", self.dphidr())
-        self._evaluator.boundary_conditions.conform_temperature_boundary_conditions(
+        self._evaluator.boundary_conditions.apply_temperature_boundary_conditions_melt(
             self.phase_staggered.melt_fraction(), self.phase_basic.melt_fraction(), self._dphidr()
         )
 
@@ -559,7 +559,7 @@ class Solver:
         self.state.update(temperature, time)
         heat_flux: npt.NDArray = self.state.heat_flux
         # logger.debug("heat_flux = %s", heat_flux)
-        self.evaluator.boundary_conditions.apply(self.state)
+        self.evaluator.boundary_conditions.apply_flux_boundary_conditions(self.state)
         # logger.debug("heat_flux = %s", heat_flux)
         # logger.debug("mesh.basic.area.shape = %s", self.data.mesh.basic.area.shape)
 
