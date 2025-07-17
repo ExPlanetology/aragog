@@ -277,6 +277,23 @@ class Mesh:
 
         return quantity_at_basic_nodes
 
+    def quantity_at_staggered_nodes(self, basic_quantity: npt.NDArray) -> npt.NDArray:
+        """Determines a quantity at the staggered nodes that is defined at the basic nodes.
+
+        Staggered nodes are always located at cell centers, whatever the mesh.
+
+        Args:
+            basic_quantity: A quantity defined at the basic nodes
+
+        Returns:
+            The quantity at the staggered nodes
+        """
+        quantity_at_staggered_nodes: npt.NDArray = 0.5 * (
+            basic_quantity[:-1, ...] + basic_quantity[1:, ...])
+        logger.debug("quantity_at_staggered_nodes = %s", quantity_at_staggered_nodes)
+
+        return quantity_at_staggered_nodes
+
     def volume_average(self, staggered_quantity: npt.NDArray) -> float:
         return float(np.dot(staggered_quantity.T, self.basic.volume)) / self.basic.total_volume
 
