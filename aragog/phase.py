@@ -260,6 +260,10 @@ class SinglePhaseEvaluator(PhaseEvaluatorABC):
     def relative_velocity(self) -> float:
         return 0.
 
+    @override
+    def delta_specific_volume(self) -> FloatOrArray:
+        return 0.0
+
 class MixedPhaseEvaluator(PhaseEvaluatorABC):
     """Evaluates the EOS and transport properties of a mixed phase.
 
@@ -302,6 +306,7 @@ class MixedPhaseEvaluator(PhaseEvaluatorABC):
         self._liquid.set_temperature(self.liquidus())
         self._liquid.set_pressure(pressure)
         self._delta_density = self._solid.density() - self._liquid.density()
+        self._delta_specific_volume = 1.0/self._liquid.density() - 1.0/self._solid.density()
         self._delta_fusion = self.liquidus() - self.solidus()
         # Heat capacity of the mixed phase :cite:p:`{Equation 4,}SOLO07`
         self._heat_capacity = self.latent_heat() / self.delta_fusion()
@@ -439,6 +444,11 @@ class MixedPhaseEvaluator(PhaseEvaluatorABC):
         )
         return dv
 
+    @override
+    def delta_specific_volume(self) -> npt.NDArray:
+        """Difference of specific volume between melt and solid"""
+        return self._delta_specific_volume
+
     def _permeability(self) -> npt.NDArray:
 
         # RumpfGupte regime (default)
@@ -542,6 +552,9 @@ class CompositePhaseEvaluator(PhaseEvaluatorABC):
         self._thermal_conductivity = self._get_composite("thermal_conductivity")
         self._thermal_expansivity = self._get_composite("thermal_expansivity")
         self._dTdPs = self._get_composite("dTdPs")
+        self._dTdrs = self._get_composite("dTdrs")
+        self._relative_velocity = self._get_composite("relative_velocity")
+        self._delta_specific_volume = self._get_composite("delta_specific_volume")
 
         name: str = "viscosity"
         log10_mixed_phase: npt.NDArray = np.log10(getattr(self._mixed, name)())
@@ -567,6 +580,10 @@ class CompositePhaseEvaluator(PhaseEvaluatorABC):
     @override
     def dTdPs(self) -> npt.NDArray:
         return self._dTdPs
+
+    @override
+    def dTdrs(self) -> npt.NDArray:
+        return self._dTdrs
 
     @override
     def gravitational_acceleration(self) -> FloatOrArray:
@@ -616,7 +633,12 @@ class CompositePhaseEvaluator(PhaseEvaluatorABC):
     @override
     def relative_velocity(self) -> npt.NDArray:
         """Relative velocity between melt and solid"""
-        return self._mixed.relative_velocity()
+        return self._relative_velocity
+
+    @override
+    def delta_specific_volume(self) -> npt.NDArray:
+        """Difference of specific volume between melt and solid"""
+        return self._delta_specific_volume
 
     def _set_blending_and_masks(self) -> None:
         """Sets blending and masks."""
