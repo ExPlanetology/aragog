@@ -285,12 +285,6 @@ class State:
         """The total heat flux according to the fluxes specified in the configuration."""
         return self._heat_flux
 
-    # TODO: Check this again
-    @heat_flux.setter
-    def heat_flux(self, value):
-        """Setter for applying boundary conditions"""
-        self._heat_flux = value
-
     @property
     def inviscid_regime(self) -> npt.NDArray:
         return self._reynolds_number > self.critical_reynolds_number
@@ -422,6 +416,7 @@ class State:
         # Heating (power per unit mass)
         self._heating = np.zeros_like(self.temperature_staggered)
         self._heating_radio = np.zeros_like(self.temperature_staggered)
+        self._heating_dilatation = np.zeros_like(self.temperature_staggered)
         self._heating_tidal = np.zeros_like(self.temperature_staggered)
 
         if self._settings.radionuclides:
