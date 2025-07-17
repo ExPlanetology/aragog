@@ -217,17 +217,17 @@ class Mesh:
         # temperature boundary conditions.
 
         # Extrapolation of gradient at inner radius
-        inner_delta_ratio = self.basic.delta_radii[1] / self.basic.delta_radii[0]
-        transform[0, 0] = - (inner_delta_ratio + 1) / self.staggered.delta_radii[0]
-        transform[0, 1] = (inner_delta_ratio + 1) / self.staggered.delta_radii[0]
-        transform[0, 1] += inner_delta_ratio / self.staggered.delta_radii[1]
-        transform[0, 2] = - inner_delta_ratio / self.staggered.delta_radii[1]
+        inner_delta_ratio = self.basic.delta_radii[1].item() / self.basic.delta_radii[0].item()
+        transform[0, 0] = - (inner_delta_ratio + 1) / self.staggered.delta_radii[0].item()
+        transform[0, 1] = (inner_delta_ratio + 1) / self.staggered.delta_radii[0].item()
+        transform[0, 1] += inner_delta_ratio / self.staggered.delta_radii[1].item()
+        transform[0, 2] = - inner_delta_ratio / self.staggered.delta_radii[1].item()
         # Extrapolation of gradient at outer radius
-        outer_delta_ratio: float = self.basic.delta_radii[-2] / self.basic.delta_radii[-1]
-        transform[-1, -1] = - (outer_delta_ratio + 1) / self.staggered.delta_radii[-1]
-        transform[-1, -2] = (outer_delta_ratio + 1) / self.staggered.delta_radii[-1]
-        transform[-1, -2] += outer_delta_ratio / self.staggered.delta_radii[-2]
-        transform[-1, -3] = - outer_delta_ratio / self.staggered.delta_radii[-2]
+        outer_delta_ratio: float = self.basic.delta_radii[-2].item() / self.basic.delta_radii[-1].item()
+        transform[-1, -1] = - (outer_delta_ratio + 1) / self.staggered.delta_radii[-1].item()
+        transform[-1, -2] = (outer_delta_ratio + 1) / self.staggered.delta_radii[-1].item()
+        transform[-1, -2] += outer_delta_ratio / self.staggered.delta_radii[-2].item()
+        transform[-1, -3] = - outer_delta_ratio / self.staggered.delta_radii[-2].item()
 
         logger.debug("_d_dr_transform_matrix = %s", transform)
 

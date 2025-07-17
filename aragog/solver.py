@@ -362,13 +362,17 @@ class State:
         self.phase_staggered.update()
         self.phase_basic.set_temperature(self._temperature_basic)
         self.phase_basic.update()
-        self._dphidr = self._evaluator.mesh.d_dr_at_basic_nodes(
-            self.phase_staggered.melt_fraction()
-        )
-        logger.debug("dphidr = %s", self.dphidr())
-        self._evaluator.boundary_conditions.apply_temperature_boundary_conditions_melt(
-            self.phase_staggered.melt_fraction(), self.phase_basic.melt_fraction(), self._dphidr
-        )
+        phase_to_use = self._evaluator._parameters.phase_mixed.phase
+        if phase_to_use == "mixed" or phase_to_use == "composite":
+            self._dphidr = self._evaluator.mesh.d_dr_at_basic_nodes(
+                self.phase_staggered.melt_fraction()
+            )
+            logger.debug("dphidr = %s", self.dphidr())
+            self._evaluator.boundary_conditions.apply_temperature_boundary_conditions_melt(
+                self.phase_staggered.melt_fraction(), self.phase_basic.melt_fraction(), self._dphidr
+            )
+        else:
+            self._dphidr = np.zeros_like(self._dTdr)
 
         self._super_adiabatic_temperature_gradient = self.dTdr() - self.phase_basic.dTdrs()
         self._is_convective = self._super_adiabatic_temperature_gradient < 0
