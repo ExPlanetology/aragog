@@ -55,7 +55,7 @@ class BoundaryConditions:
     def __post_init__(self):
         self._settings: _BoundaryConditionsParameters = self._parameters.boundary_conditions
 
-    def conform_temperature_boundary_conditions(
+    def apply_temperature_boundary_conditions(
         self, temperature: npt.NDArray, temperature_basic: npt.NDArray, dTdr: npt.NDArray
     ) -> None:
         """Conforms the temperature and dTdr at the basic nodes to temperature boundary conditions.
@@ -80,20 +80,44 @@ class BoundaryConditions:
                 / self._mesh.basic.delta_radii[-1]
             )
 
-    def apply(self, state: State) -> None:
+    def apply_temperature_boundary_conditions_melt(
+        self, melt_fraction: npt.NDArray, melt_fraction_basic: npt.NDArray, dphidr: npt.NDArray
+    ) -> None:
+        """Conforms the melt fraction gradient dphidr at the basic nodes
+           to temperature boundary conditions.
+
+        Args:
+            melt_fraction: Melt fraction at the staggered nodes
+            melt_fraction_basic: Melt fraction at the basic nodes
+            dphidr: Melt fraction gradient at the basic nodes
+        """
+        # Core-mantle boundary
+        if self._settings.inner_boundary_condition == 3:
+            dphidr[0, :] = (
+                2 * (melt_fraction[0, :] - melt_fraction_basic[0, :])
+                / self._mesh.basic.delta_radii[0]
+            )
+        # Surface
+        if self._settings.outer_boundary_condition == 5:
+            dphidr[-1, :] = (
+                2
+                * (melt_fraction_basic[-1, :] - melt_fraction[-1, :])
+                / self._mesh.basic.delta_radii[-1]
+            )
+
+    def apply_flux_boundary_conditions(self, state: State) -> None:
         """Applies the boundary conditions to the state.
 
         Args:
             state: The state to apply the boundary conditions to
         """
-        self.apply_inner_boundary_condition(state)
-        self.apply_outer_boundary_condition(state)
+        self.apply_flux_inner_boundary_condition(state)
+        self.apply_flux_outer_boundary_condition(state)
         logger.debug("temperature = %s", state.temperature_basic)
         logger.debug("heat_flux = %s", state.heat_flux)
 
-    # TODO: Rename to only be associated with flux boundary conditions
-    def apply_outer_boundary_condition(self, state: State) -> None:
-        """Applies the outer boundary condition to the state.
+    def apply_flux_outer_boundary_condition(self, state: State) -> None:
+        """Applies the flux boundary condition to the state at the outer boundary.
 
         Args:
             state: The state to apply the boundary conditions to
@@ -135,9 +159,8 @@ class BoundaryConditions:
             * (np.power(state.top_temperature, 4) - self._settings.equilibrium_temperature**4)
         )
 
-    # TODO: Rename to only be associated with flux boundary conditions
-    def apply_inner_boundary_condition(self, state: State) -> None:
-        """Applies the inner boundary condition to the state.
+    def apply_flux_inner_boundary_condition(self, state: State) -> None:
+        """Applies the flux boundary condition to the state at the inner boundary.
 
         Args:
             state: The state to apply the boundary conditions to

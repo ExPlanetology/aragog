@@ -285,12 +285,6 @@ class State:
         """The total heat flux according to the fluxes specified in the configuration."""
         return self._heat_flux
 
-    # TODO: Check this again
-    @heat_flux.setter
-    def heat_flux(self, value):
-        """Setter for applying boundary conditions"""
-        self._heat_flux = value
-
     @property
     def inviscid_regime(self) -> npt.NDArray:
         return self._reynolds_number > self.critical_reynolds_number
@@ -353,19 +347,26 @@ class State:
         logger.debug("temperature_basic = %s", self.temperature_basic)
         self._dTdr = self._evaluator.mesh.d_dr_at_basic_nodes(temperature)
         logger.debug("dTdr = %s", self.dTdr())
-        self._evaluator.boundary_conditions.conform_temperature_boundary_conditions(
+        self._evaluator.boundary_conditions.apply_temperature_boundary_conditions(
             temperature, self._temperature_basic, self.dTdr()
         )
 
+        logger.debug("Setting the melt fraction profile")
         self.phase_staggered.set_temperature(temperature)
         self.phase_staggered.update()
         self.phase_basic.set_temperature(self._temperature_basic)
         self.phase_basic.update()
-
-        self._dphidr = self._evaluator.mesh.d_dr_at_basic_nodes(
-            self.phase_staggered.melt_fraction()
-        )
-        logger.debug("dphidr = %s", self.dphidr())
+        phase_to_use = self._evaluator._parameters.phase_mixed.phase
+        if phase_to_use == "mixed" or phase_to_use == "composite":
+            self._dphidr = self._evaluator.mesh.d_dr_at_basic_nodes(
+                self.phase_staggered.melt_fraction()
+            )
+            logger.debug("dphidr = %s", self.dphidr())
+            self._evaluator.boundary_conditions.apply_temperature_boundary_conditions_melt(
+                self.phase_staggered.melt_fraction(), self.phase_basic.melt_fraction(), self._dphidr
+            )
+        else:
+            self._dphidr = np.zeros_like(self._dTdr)
 
         self._super_adiabatic_temperature_gradient = self.dTdr() - self.phase_basic.dTdrs()
         self._is_convective = self._super_adiabatic_temperature_gradient < 0
@@ -415,6 +416,7 @@ class State:
         # Heating (power per unit mass)
         self._heating = np.zeros_like(self.temperature_staggered)
         self._heating_radio = np.zeros_like(self.temperature_staggered)
+        self._heating_dilatation = np.zeros_like(self.temperature_staggered)
         self._heating_tidal = np.zeros_like(self.temperature_staggered)
 
         if self._settings.radionuclides:
@@ -556,7 +558,7 @@ class Solver:
         self.state.update(temperature, time)
         heat_flux: npt.NDArray = self.state.heat_flux
         # logger.debug("heat_flux = %s", heat_flux)
-        self.evaluator.boundary_conditions.apply(self.state)
+        self.evaluator.boundary_conditions.apply_flux_boundary_conditions(self.state)
         # logger.debug("heat_flux = %s", heat_flux)
         # logger.debug("mesh.basic.area.shape = %s", self.data.mesh.basic.area.shape)
 
