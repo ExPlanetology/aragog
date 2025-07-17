@@ -212,6 +212,7 @@ class _EnergyParameters:
     gravitational_separation: bool
     mixing: bool
     radionuclides: bool
+    dilatation: bool
     tidal: bool
 
     tidal_array: npt.NDArray = field(default_factory=lambda:np.array([0.0], dtype=float))
