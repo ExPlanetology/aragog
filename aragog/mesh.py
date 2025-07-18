@@ -40,12 +40,14 @@ class FixedMesh:
     Args:
         settings: Mesh parameters
         radii: Radii of the mesh
+        mass_radii: Mass coordinates of the mesh
         outer_boundary: Outer boundary for computing depth below the surface
         inner_boundary: Inner boundary for computing height above the base
 
     Attributes:
         settings: Mesh parameters
         radii: Radii of the mesh
+        mass_radii: Mass coordinates of the mesh
         outer_boundary: Outer boundary for computing depth below the surface
         inner_boundary: Inner boundary for computing height above the base
         area: Surface area
@@ -62,6 +64,7 @@ class FixedMesh:
 
     settings: _MeshParameters
     radii: npt.NDArray
+    mass_radii: npt.NDArray
     outer_boundary: float
     inner_boundary: float
 
@@ -78,7 +81,7 @@ class FixedMesh:
 
     @cached_property
     def delta_mesh(self) -> npt.NDArray:
-        return np.diff(self.radii, axis=0)
+        return np.diff(self.mass_radii, axis=0)
 
     @cached_property
     def depth(self) -> npt.NDArray:
@@ -155,11 +158,12 @@ class Mesh:
         self.settings: _MeshParameters = parameters.mesh
         basic_coordinates: npt.NDArray = self.get_constant_spacing()
         self.basic: FixedMesh = FixedMesh(
-            self.settings, basic_coordinates, np.max(basic_coordinates), np.min(basic_coordinates)
+            self.settings, basic_coordinates, basic_coordinates, np.max(basic_coordinates), np.min(basic_coordinates)
         )
         staggered_coordinates: npt.NDArray = self.basic.radii[:-1] + 0.5 * self.basic.delta_mesh
         self.staggered: FixedMesh = FixedMesh(
             self.settings,
+            staggered_coordinates,
             staggered_coordinates,
             self.basic.outer_boundary,
             self.basic.inner_boundary,
