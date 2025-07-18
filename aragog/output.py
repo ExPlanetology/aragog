@@ -232,7 +232,7 @@ class Output:
         volume = 4 * np.pi * (R_core**3) / 3
 
         # core density
-        rho = self.parameters.scalings.density * self.parameters.boundary_conditions.core_density
+        rho = self.parameters.scalings.density * self.parameters.mesh.core_density
 
         # core mass
         return rho * volume

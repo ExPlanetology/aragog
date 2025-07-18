@@ -171,7 +171,7 @@ class BoundaryConditions:
             / 3
             * np.pi
             * np.power(self._mesh.basic.radii[0], 3)
-            * self._settings.core_density
+            * self._mesh.settings.core_density
             * self._settings.core_heat_capacity
         )
         cell_capacity = self._mesh.basic.volume[0] * state.capacitance_staggered()[0, :]
