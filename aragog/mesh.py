@@ -49,7 +49,7 @@ class FixedMesh:
         outer_boundary: Outer boundary for computing depth below the surface
         inner_boundary: Inner boundary for computing height above the base
         area: Surface area
-        delta_radii: Delta radii
+        delta_mesh: Delta radii in mass coordinates
         depth: Depth below the outer boundary
         height: Height above the inner boundary
         mixing_length: Mixing length
@@ -77,7 +77,7 @@ class FixedMesh:
         return 4 * np.pi * np.square(self.radii)
 
     @cached_property
-    def delta_radii(self) -> npt.NDArray:
+    def delta_mesh(self) -> npt.NDArray:
         return np.diff(self.radii, axis=0)
 
     @cached_property
@@ -157,7 +157,7 @@ class Mesh:
         self.basic: FixedMesh = FixedMesh(
             self.settings, basic_coordinates, np.max(basic_coordinates), np.min(basic_coordinates)
         )
-        staggered_coordinates: npt.NDArray = self.basic.radii[:-1] + 0.5 * self.basic.delta_radii
+        staggered_coordinates: npt.NDArray = self.basic.radii[:-1] + 0.5 * self.basic.delta_mesh
         self.staggered: FixedMesh = FixedMesh(
             self.settings,
             staggered_coordinates,
@@ -212,8 +212,8 @@ class Mesh:
         transform: npt.NDArray = np.zeros(
             (self.basic.number_of_nodes, self.staggered.number_of_nodes)
         )
-        transform[1:-1, :-1] += np.diagflat(-1 / self.staggered.delta_radii)  # k=0 diagonal
-        transform[1:-1:, 1:] += np.diagflat(1 / self.staggered.delta_radii)  # k=1 diagonal
+        transform[1:-1, :-1] += np.diagflat(-1 / self.staggered.delta_mesh)  # k=0 diagonal
+        transform[1:-1:, 1:] += np.diagflat(1 / self.staggered.delta_mesh)  # k=1 diagonal
 
         # Gradient at boundaries can be extrapolated from the first two closests basic nodes
         # This only affects the estimation of indivual components of heat fluxes when working
@@ -221,17 +221,17 @@ class Mesh:
         # temperature boundary conditions.
 
         # Extrapolation of gradient at inner radius
-        inner_delta_ratio = self.basic.delta_radii[1].item() / self.basic.delta_radii[0].item()
-        transform[0, 0] = - (inner_delta_ratio + 1) / self.staggered.delta_radii[0].item()
-        transform[0, 1] = (inner_delta_ratio + 1) / self.staggered.delta_radii[0].item()
-        transform[0, 1] += inner_delta_ratio / self.staggered.delta_radii[1].item()
-        transform[0, 2] = - inner_delta_ratio / self.staggered.delta_radii[1].item()
+        inner_delta_ratio = self.basic.delta_mesh[1].item() / self.basic.delta_mesh[0].item()
+        transform[0, 0] = - (inner_delta_ratio + 1) / self.staggered.delta_mesh[0].item()
+        transform[0, 1] = (inner_delta_ratio + 1) / self.staggered.delta_mesh[0].item()
+        transform[0, 1] += inner_delta_ratio / self.staggered.delta_mesh[1].item()
+        transform[0, 2] = - inner_delta_ratio / self.staggered.delta_mesh[1].item()
         # Extrapolation of gradient at outer radius
-        outer_delta_ratio: float = self.basic.delta_radii[-2].item() / self.basic.delta_radii[-1].item()
-        transform[-1, -1] = - (outer_delta_ratio + 1) / self.staggered.delta_radii[-1].item()
-        transform[-1, -2] = (outer_delta_ratio + 1) / self.staggered.delta_radii[-1].item()
-        transform[-1, -2] += outer_delta_ratio / self.staggered.delta_radii[-2].item()
-        transform[-1, -3] = - outer_delta_ratio / self.staggered.delta_radii[-2].item()
+        outer_delta_ratio: float = self.basic.delta_mesh[-2].item() / self.basic.delta_mesh[-1].item()
+        transform[-1, -1] = - (outer_delta_ratio + 1) / self.staggered.delta_mesh[-1].item()
+        transform[-1, -2] = (outer_delta_ratio + 1) / self.staggered.delta_mesh[-1].item()
+        transform[-1, -2] += outer_delta_ratio / self.staggered.delta_mesh[-2].item()
+        transform[-1, -3] = - outer_delta_ratio / self.staggered.delta_mesh[-2].item()
 
         logger.debug("_d_dr_transform_matrix = %s", transform)
 
@@ -266,13 +266,13 @@ class Mesh:
         transform: npt.NDArray = np.zeros(
             (self.basic.number_of_nodes, self.staggered.number_of_nodes)
         )
-        mesh_ratio: npt.NDArray = self.basic.delta_radii[:-1] / self.staggered.delta_radii
+        mesh_ratio: npt.NDArray = self.basic.delta_mesh[:-1] / self.staggered.delta_mesh
         transform[1:-1, :-1] += np.diagflat(1 - 0.5 * mesh_ratio)  # k=0 diagonal
         transform[1:-1:, 1:] += np.diagflat(0.5 * mesh_ratio)  # k=1 diagonal
         # Backward difference at inner radius
         transform[0, :2] = np.array([1 + 0.5 * mesh_ratio[0], -0.5 * mesh_ratio[0]]).flatten()
         # Forward difference at outer radius
-        mesh_ratio_outer: npt.NDArray = self.basic.delta_radii[-1] / self.staggered.delta_radii[-1]
+        mesh_ratio_outer: npt.NDArray = self.basic.delta_mesh[-1] / self.staggered.delta_mesh[-1]
         transform[-1, -2:] = np.array(
             [-0.5 * mesh_ratio_outer, 1 + 0.5 * mesh_ratio_outer]
         ).flatten()
