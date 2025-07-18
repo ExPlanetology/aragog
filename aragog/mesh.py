@@ -148,6 +148,10 @@ class Mesh:
     eos: EOS = field(init=False)
 
     def __init__(self, parameters: Parameters):
+        if parameters.mesh.mass_coordinates:
+            msg: str = "Mass coordinates not imlpemented yet."
+            raise NotImplementedError(msg)
+
         self.settings: _MeshParameters = parameters.mesh
         basic_coordinates: npt.NDArray = self.get_constant_spacing()
         self.basic: FixedMesh = FixedMesh(
