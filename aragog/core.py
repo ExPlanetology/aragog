@@ -96,6 +96,7 @@ class BoundaryConditions:
             dphidr[0, :] = (
                 2 * (melt_fraction[0, :] - melt_fraction_basic[0, :])
                 / self._mesh.basic.delta_mesh[0]
+                * self._mesh.dxidr[0]
             )
         # Surface
         if self._settings.outer_boundary_condition == 5:
@@ -103,6 +104,7 @@ class BoundaryConditions:
                 2
                 * (melt_fraction_basic[-1, :] - melt_fraction[-1, :])
                 / self._mesh.basic.delta_mesh[-1]
+                * self._mesh.dxidr[-1]
             )
 
     def apply_flux_boundary_conditions(self, state: State) -> None:
