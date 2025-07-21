@@ -151,37 +151,58 @@ class Mesh:
     eos: EOS = field(init=False)
 
     def __init__(self, parameters: Parameters):
-        if parameters.mesh.mass_coordinates:
-            msg: str = "Mass coordinates not imlpemented yet."
-            raise NotImplementedError(msg)
 
+        # STEP 1: Set up the basic mesh
         self.settings: _MeshParameters = parameters.mesh
         basic_coordinates: npt.NDArray = self.get_constant_spacing()
-        self.basic: FixedMesh = FixedMesh(
-            self.settings, basic_coordinates, basic_coordinates, np.max(basic_coordinates), np.min(basic_coordinates)
-        )
-        staggered_coordinates: npt.NDArray = self.basic.radii[:-1] + 0.5 * self.basic.delta_mesh
-        self.staggered: FixedMesh = FixedMesh(
-            self.settings,
-            staggered_coordinates,
-            staggered_coordinates,
-            self.basic.outer_boundary,
-            self.basic.inner_boundary,
-        )
-        self._dxidr: npt.NDArray = np.ones(self.settings.number_of_nodes)
-        self._d_dr_transform: npt.NDArray = self._get_d_dr_transform_matrix()
-        self._quantity_transform: npt.NDArray = self._get_quantity_transform_matrix()
         if self.settings.eos_method == 1:
             self.eos = AdamsWilliamsonEOS(
-                self.settings, self.basic.radii, self.staggered.radii
+                self.settings, basic_coordinates
             )
         elif self.settings.eos_method == 2:
             self.eos = UserDefinedEOS(
-                self.settings, self.basic.radii, self.staggered.radii
+                self.settings, basic_coordinates
             )
         else:
             msg: str = (f"Unknown method to initialize Equation of State")
             raise ValueError(msg)
+        if parameters.mesh.mass_coordinates:
+            basic_mass_coordinates: npt.NDArray = (
+                self.get_basic_mass_coordinates_from_spatial_coordinates(basic_coordinates))
+        else:
+            basic_mass_coordinates = basic_coordinates
+        self.basic: FixedMesh = FixedMesh(
+            self.settings,
+            basic_coordinates,
+            basic_mass_coordinates,
+            np.max(basic_coordinates),
+            np.min(basic_coordinates)
+        )
+
+        # STEP 2: Set up the staggered mesh
+        staggered_mass_coordinates: npt.NDArray = (
+            self.basic.mass_radii[:-1] + 0.5 * self.basic.delta_mesh)
+        if parameters.mesh.mass_coordinates:
+            staggered_coordinates: npt.NDArray = (
+                self.get_staggered_coordinates_from_mass_coordinates(staggered_mass_coordinates))
+        else:
+            staggered_coordinates = staggered_mass_coordinates
+        self.staggered: FixedMesh = FixedMesh(
+            self.settings,
+            staggered_coordinates,
+            staggered_mass_coordinates,
+            self.basic.outer_boundary,
+            self.basic.inner_boundary,
+        )
+        self.eos.set_staggered_pressure(self.staggered.radii)
+
+        # STEP 3: Set up the transform matrices
+        if parameters.mesh.mass_coordinates:
+            self._dxidr: npt.NDArray = self.get_dxidr_basic()
+        else:
+            self._dxidr: npt.NDArray = np.ones(self.settings.number_of_nodes)
+        self._d_dr_transform: npt.NDArray = self._get_d_dr_transform_matrix()
+        self._quantity_transform: npt.NDArray = self._get_quantity_transform_matrix()
 
     @property
     def dxidr(self) -> npt.NDArray:
@@ -199,6 +220,18 @@ class Mesh:
     @cached_property
     def staggered_pressure(self) -> npt.NDArray:
         return self.eos.staggered_pressure
+
+    def get_basic_mass_coordinates_from_spatial_coordinates(self, basic_coordinates: npt.NDArray) -> npt.NDArray:
+        msg: str = "Mass coordinates not imlpemented yet."
+        raise NotImplementedError(msg)
+
+    def get_staggered_coordinates_from_mass_coordinates(self, staggered_mass_coordinates: npt.NDArray) -> npt.NDArray:
+        msg: str = "Mass coordinates not imlpemented yet."
+        raise NotImplementedError(msg)
+
+    def get_dxidr_basic(self) -> npt.NDArray:
+        msg: str = "Mass coordinates not imlpemented yet."
+        raise NotImplementedError(msg)
 
     def get_constant_spacing(self) -> npt.NDArray:
         """Constant radius spacing across the mantle
@@ -345,6 +378,9 @@ class EOS(ABC):
     @abstractmethod
     def staggered_pressure(self) -> npt.NDArray: ...
 
+    @abstractmethod
+    def set_staggered_pressure(self, staggered_radii: npt.NDArray,) -> None: ...
+
 class AdamsWilliamsonEOS(EOS):
     r"""Adams-Williamson equation of state (EOS).
 
@@ -362,18 +398,15 @@ class AdamsWilliamsonEOS(EOS):
         self,
         settings: _MeshParameters,
         basic_radii: npt.NDArray,
-        staggered_radii: npt.NDArray,
     ):
         self._settings: _MeshParameters = settings
         self._basic_radii: npt.NDArray = basic_radii
-        self._staggered_radii: npt.NDArray = staggered_radii
         self._outer_boundary = np.max(basic_radii)
         self._inner_boundary = np.min(basic_radii)
         self._surface_density: float = self._settings.surface_density
         self._gravitational_acceleration: float = self._settings.gravitational_acceleration
         self._adiabatic_bulk_modulus: float = self._settings.adiabatic_bulk_modulus
         self._basic_pressure = self.get_pressure_from_radii(basic_radii)
-        self._staggered_pressure = self.get_pressure_from_radii(staggered_radii)
         self._effective_density = self.get_effective_density(basic_radii)
 
     @property
@@ -390,6 +423,10 @@ class AdamsWilliamsonEOS(EOS):
     def effective_density(self) -> npt.NDArray:
         """Effective density"""
         return self._effective_density
+
+    def set_staggered_pressure(self, staggered_radii: npt.NDArray,) -> None:
+        """Set staggered pressure based on staggered radii."""
+        self._staggered_pressure = self.get_pressure_from_radii(staggered_radii)
 
     def get_effective_density(self, radii) -> npt.NDArray:
         r"""
@@ -637,13 +674,12 @@ class UserDefinedEOS(EOS):
         self,
         settings: _MeshParameters,
         basic_radii: npt.NDArray,
-        staggered_radii: npt.NDArray,
     ):
-        interp_pressure = PchipInterpolator(settings.eos_radius, settings.eos_pressure)
-        interp_density = PchipInterpolator(settings.eos_radius, settings.eos_density)
-        self._staggered_pressure = interp_pressure(staggered_radii).reshape(-1,1)
-        self._basic_pressure = interp_pressure(basic_radii).reshape(-1,1)
-        self._effective_density = interp_density(staggered_radii).reshape(-1,1)
+        self._interp_pressure = PchipInterpolator(settings.eos_radius, settings.eos_pressure)
+        self._interp_density = PchipInterpolator(settings.eos_radius, settings.eos_density)
+        self._basic_pressure = self._interp_pressure(basic_radii).reshape(-1,1)
+        basic_effective_density = self._interp_density(basic_radii).reshape(-1,1)
+        self._effective_density = 0.5*(basic_effective_density[:-1, :] + basic_effective_density[1:, :])
 
     @property
     def basic_pressure(self) -> npt.NDArray:
@@ -659,3 +695,7 @@ class UserDefinedEOS(EOS):
     def effective_density(self) -> npt.NDArray:
         """Effective density"""
         return self._effective_density
+
+    def set_staggered_pressure(self, staggered_radii: npt.NDArray,) -> None:
+        """Set staggered pressure based on staggered radii."""
+        self._staggered_pressure = self._interp_pressure(staggered_radii).reshape(-1,1)
