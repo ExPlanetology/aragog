@@ -168,6 +168,7 @@ class Mesh:
             self.basic.outer_boundary,
             self.basic.inner_boundary,
         )
+        self._dxidr: npt.NDArray = np.ones(self.settings.number_of_nodes)
         self._d_dr_transform: npt.NDArray = self._get_d_dr_transform_matrix()
         self._quantity_transform: npt.NDArray = self._get_quantity_transform_matrix()
         if self.settings.eos_method == 1:
@@ -181,6 +182,11 @@ class Mesh:
         else:
             msg: str = (f"Unknown method to initialize Equation of State")
             raise ValueError(msg)
+
+    @property
+    def dxidr(self) -> npt.NDArray:
+        """dxi/dr at basic nodes"""
+        return self._dxidr
 
     @cached_property
     def effective_density(self) -> npt.NDArray:
@@ -237,6 +243,8 @@ class Mesh:
         transform[-1, -2] += outer_delta_ratio / self.staggered.delta_mesh[-2].item()
         transform[-1, -3] = - outer_delta_ratio / self.staggered.delta_mesh[-2].item()
 
+        # Scale the transform matrix by dxi/dr at basic nodes
+        transform[:,:] *= self._dxidr[:, None]
         logger.debug("_d_dr_transform_matrix = %s", transform)
 
         return transform
