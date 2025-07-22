@@ -186,7 +186,12 @@ class Output:
     @property
     def melt_fraction_global(self) -> float:
         """Volume-averaged melt fraction"""
-        return self.evaluator.mesh.volume_average(self.melt_fraction_staggered[:, -1])
+        phase_to_use = self.evaluator._parameters.phase_mixed.phase
+        if phase_to_use == "mixed" or phase_to_use == "composite":
+            out = self.evaluator.mesh.volume_average(self.melt_fraction_staggered[:, -1])
+        else:
+            out = self.melt_fraction_staggered
+        return out
 
     @property
     def radii_km_basic(self) -> npt.NDArray:
