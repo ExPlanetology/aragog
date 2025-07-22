@@ -220,7 +220,7 @@ class Output:
         """Mass of each layer on staggered mesh"""
         return (
             # shells centred on staggered nodes
-            self.evaluator.mesh.effective_density
+            self.evaluator.mesh.staggered_effective_density
             * self.evaluator.mesh.basic.volume
             * self.parameters.scalings.density
             * np.power(self.parameters.scalings.radius, 3)
