@@ -167,8 +167,10 @@ class Mesh:
             msg: str = (f"Unknown method to initialize Equation of State")
             raise ValueError(msg)
         if parameters.mesh.mass_coordinates:
+            self._planet_density: float = self.get_planet_density(basic_coordinates)
             basic_mass_coordinates: npt.NDArray = (
                 self.get_basic_mass_coordinates_from_spatial_coordinates(basic_coordinates))
+            logger.debug("Basic mass coordinates = %s", basic_mass_coordinates)
         else:
             basic_mass_coordinates = basic_coordinates
         self.basic: FixedMesh = FixedMesh(
@@ -221,9 +223,51 @@ class Mesh:
     def staggered_pressure(self) -> npt.NDArray:
         return self.eos.staggered_pressure
 
+    def get_planet_density(self, basic_coordinates: npt.NDArray) -> float:
+        """Computes the planet density.
+
+        Args:
+            Basic spatial coordinates
+
+        Returns:
+            Planet effective density
+        """
+        core_mass = self.settings.core_density *  np.power(basic_coordinates[0,0], 3.0)
+        basic_volumes = (np.power(basic_coordinates[1:,0],3.0)
+            - np.power(basic_coordinates[:-1,0],3.0))
+        mantle_mass = np.sum(
+            self.effective_density[:,0] * basic_volumes
+        )
+        planet_density = (
+            (core_mass + mantle_mass) / (np.power(basic_coordinates[-1,0],3.0)))
+        return planet_density
+
     def get_basic_mass_coordinates_from_spatial_coordinates(self, basic_coordinates: npt.NDArray) -> npt.NDArray:
-        msg: str = "Mass coordinates not imlpemented yet."
-        raise NotImplementedError(msg)
+        """Computes the basic mass coordinates from basic spatial coordinates.
+
+        Args:
+            Basic spatial coordinates
+
+        Returns:
+            Basic mass coordinates
+        """
+
+        # Set the mass coordinates at the inner boundary from the core mass
+        basic_mass_coordinates = np.zeros_like(basic_coordinates)
+        basic_mass_coordinates[:,:] = (
+            self.settings.core_density / self._planet_density
+            * np.power(basic_coordinates[0,:], 3.0)
+        )
+
+        # Get mass coordinates by adding individual cell contributions to the mantle mass
+        basic_volumes = (np.power(basic_coordinates[1:,:],3.0)
+            - np.power(basic_coordinates[:-1,:],3.0))
+        for i in range(1, self.settings.number_of_nodes):
+            basic_mass_coordinates[i:,:] += (
+                self.effective_density[i-1,:] * basic_volumes[i-1,:] / self._planet_density
+            )
+
+        return np.power(basic_mass_coordinates, 1.0/3.0)
 
     def get_staggered_coordinates_from_mass_coordinates(self, staggered_mass_coordinates: npt.NDArray) -> npt.NDArray:
         msg: str = "Mass coordinates not imlpemented yet."
