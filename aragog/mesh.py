@@ -40,16 +40,18 @@ class FixedMesh:
     Args:
         settings: Mesh parameters
         radii: Radii of the mesh
+        mass_radii: Mass coordinates of the mesh
         outer_boundary: Outer boundary for computing depth below the surface
         inner_boundary: Inner boundary for computing height above the base
 
     Attributes:
         settings: Mesh parameters
         radii: Radii of the mesh
+        mass_radii: Mass coordinates of the mesh
         outer_boundary: Outer boundary for computing depth below the surface
         inner_boundary: Inner boundary for computing height above the base
         area: Surface area
-        delta_radii: Delta radii
+        delta_mesh: Delta radii in mass coordinates
         depth: Depth below the outer boundary
         height: Height above the inner boundary
         mixing_length: Mixing length
@@ -62,6 +64,7 @@ class FixedMesh:
 
     settings: _MeshParameters
     radii: npt.NDArray
+    mass_radii: npt.NDArray
     outer_boundary: float
     inner_boundary: float
 
@@ -77,8 +80,8 @@ class FixedMesh:
         return 4 * np.pi * np.square(self.radii)
 
     @cached_property
-    def delta_radii(self) -> npt.NDArray:
-        return np.diff(self.radii, axis=0)
+    def delta_mesh(self) -> npt.NDArray:
+        return np.diff(self.mass_radii, axis=0)
 
     @cached_property
     def depth(self) -> npt.NDArray:
@@ -148,35 +151,69 @@ class Mesh:
     eos: EOS = field(init=False)
 
     def __init__(self, parameters: Parameters):
+
+        # STEP 1: Set up the basic mesh
         self.settings: _MeshParameters = parameters.mesh
         basic_coordinates: npt.NDArray = self.get_constant_spacing()
-        self.basic: FixedMesh = FixedMesh(
-            self.settings, basic_coordinates, np.max(basic_coordinates), np.min(basic_coordinates)
-        )
-        staggered_coordinates: npt.NDArray = self.basic.radii[:-1] + 0.5 * self.basic.delta_radii
-        self.staggered: FixedMesh = FixedMesh(
-            self.settings,
-            staggered_coordinates,
-            self.basic.outer_boundary,
-            self.basic.inner_boundary,
-        )
-        self._d_dr_transform: npt.NDArray = self._get_d_dr_transform_matrix()
-        self._quantity_transform: npt.NDArray = self._get_quantity_transform_matrix()
         if self.settings.eos_method == 1:
             self.eos = AdamsWilliamsonEOS(
-                self.settings, self.basic.radii, self.staggered.radii
+                self.settings, basic_coordinates
             )
         elif self.settings.eos_method == 2:
             self.eos = UserDefinedEOS(
-                self.settings, self.basic.radii, self.staggered.radii
+                self.settings, basic_coordinates
             )
         else:
             msg: str = (f"Unknown method to initialize Equation of State")
             raise ValueError(msg)
+        if parameters.mesh.mass_coordinates:
+            self._planet_density: float = self.get_planet_density(basic_coordinates)
+            basic_mass_coordinates: npt.NDArray = (
+                self.get_basic_mass_coordinates_from_spatial_coordinates(basic_coordinates))
+            logger.debug("Basic mass coordinates = %s", basic_mass_coordinates)
+        else:
+            basic_mass_coordinates = basic_coordinates
+        self.basic: FixedMesh = FixedMesh(
+            self.settings,
+            basic_coordinates,
+            basic_mass_coordinates,
+            np.max(basic_coordinates),
+            np.min(basic_coordinates)
+        )
+
+        # STEP 2: Set up the staggered mesh
+        staggered_mass_coordinates: npt.NDArray = (
+            self.basic.mass_radii[:-1] + 0.5 * self.basic.delta_mesh)
+        if parameters.mesh.mass_coordinates:
+            staggered_coordinates: npt.NDArray = (
+                self.get_staggered_spatial_coordinates_from_mass_coordinates(staggered_mass_coordinates))
+        else:
+            staggered_coordinates = staggered_mass_coordinates
+        self.staggered: FixedMesh = FixedMesh(
+            self.settings,
+            staggered_coordinates,
+            staggered_mass_coordinates,
+            self.basic.outer_boundary,
+            self.basic.inner_boundary,
+        )
+        self.eos.set_staggered_pressure(self.staggered.radii)
+
+        # STEP 3: Set up the transform matrices
+        if parameters.mesh.mass_coordinates:
+            self._dxidr: npt.NDArray = self.get_dxidr_basic()
+        else:
+            self._dxidr: npt.NDArray = np.ones_like(self.basic.radii)
+        self._d_dr_transform: npt.NDArray = self._get_d_dr_transform_matrix()
+        self._quantity_transform: npt.NDArray = self._get_quantity_transform_matrix()
+
+    @property
+    def dxidr(self) -> npt.NDArray:
+        """dxi/dr at basic nodes"""
+        return self._dxidr
 
     @cached_property
-    def effective_density(self) -> npt.NDArray:
-        return self.eos.effective_density
+    def staggered_effective_density(self) -> npt.NDArray:
+        return self.eos.staggered_effective_density
 
     @cached_property
     def basic_pressure(self) -> npt.NDArray:
@@ -185,6 +222,100 @@ class Mesh:
     @cached_property
     def staggered_pressure(self) -> npt.NDArray:
         return self.eos.staggered_pressure
+
+    def get_planet_density(self, basic_coordinates: npt.NDArray) -> float:
+        """Computes the planet density.
+
+        Args:
+            Basic spatial coordinates
+
+        Returns:
+            Planet effective density
+        """
+        core_mass = self.settings.core_density *  np.power(basic_coordinates[0,0], 3.0)
+        basic_volumes = (np.power(basic_coordinates[1:,0],3.0)
+            - np.power(basic_coordinates[:-1,0],3.0))
+        mantle_mass = np.sum(
+            self.staggered_effective_density[:,0] * basic_volumes
+        )
+        planet_density = (
+            (core_mass + mantle_mass) / (np.power(basic_coordinates[-1,0],3.0)))
+        return planet_density
+
+    def get_basic_mass_coordinates_from_spatial_coordinates(self, basic_coordinates: npt.NDArray) -> npt.NDArray:
+        """Computes the basic mass coordinates from basic spatial coordinates.
+
+        Args:
+            Basic spatial coordinates
+
+        Returns:
+            Basic mass coordinates
+        """
+
+        # Set the mass coordinates at the inner boundary from the core mass
+        basic_mass_coordinates = np.zeros_like(basic_coordinates)
+        basic_mass_coordinates[:,:] = (
+            self.settings.core_density / self._planet_density
+            * np.power(basic_coordinates[0,:], 3.0)
+        )
+
+        # Get mass coordinates by adding individual cell contributions to the mantle mass
+        basic_volumes = (np.power(basic_coordinates[1:,:],3.0)
+            - np.power(basic_coordinates[:-1,:],3.0))
+        for i in range(1, self.settings.number_of_nodes):
+            basic_mass_coordinates[i:,:] += (
+                self.staggered_effective_density[i-1,:] * basic_volumes[i-1,:] / self._planet_density
+            )
+
+        return np.power(basic_mass_coordinates, 1.0/3.0)
+
+    def get_staggered_spatial_coordinates_from_mass_coordinates(self, staggered_mass_coordinates: npt.NDArray) -> npt.NDArray:
+        """Computes the staggered spatial coordinates from staggered mass coordinates.
+
+        Args:
+            Staggered mass coordinates
+
+        Returns:
+            Staggered spatial coordinates
+        """
+
+        # Initialise the staggered spatial coordinate to the inner boundary
+        staggered_coordinates = (np.ones_like(staggered_mass_coordinates)
+            * np.power(self.settings.inner_radius,3.0))
+
+        # Add first half cell contribution
+        staggered_coordinates += (
+            self._planet_density
+             * (np.power(staggered_mass_coordinates[0,:],3.0)
+            - np.power(self.basic.mass_radii[0,:], 3.0))
+            / self.staggered_effective_density[0,:]
+        )
+
+        # Get spatial coordinates by adding individual cell contributions to the mantle mass
+        shell_effective_density = 0.5*(
+            self.staggered_effective_density[1:,:] + self.staggered_effective_density[:-1,:])
+        shell_mass_volumes = (np.power(staggered_mass_coordinates[1:,:],3.0)
+            - np.power(staggered_mass_coordinates[:-1,:],3.0))
+        for i in range(1,self.settings.number_of_nodes-1):
+            staggered_coordinates[i:,:] += (
+                self._planet_density
+                * shell_mass_volumes[i-1,:]
+                / shell_effective_density[i-1,:]
+            )
+
+        return np.power(staggered_coordinates, 1.0/3.0)
+
+    def get_dxidr_basic(self) -> npt.NDArray:
+        """Computes dxidr at basic nodes."""
+
+        dxidr = (
+            self.eos.basic_density
+            / self._planet_density
+            * np.power(self.basic.radii,2.0)
+            / np.power(self.basic.mass_radii,2.0)
+        )
+
+        return dxidr
 
     def get_constant_spacing(self) -> npt.NDArray:
         """Constant radius spacing across the mantle
@@ -208,8 +339,8 @@ class Mesh:
         transform: npt.NDArray = np.zeros(
             (self.basic.number_of_nodes, self.staggered.number_of_nodes)
         )
-        transform[1:-1, :-1] += np.diagflat(-1 / self.staggered.delta_radii)  # k=0 diagonal
-        transform[1:-1:, 1:] += np.diagflat(1 / self.staggered.delta_radii)  # k=1 diagonal
+        transform[1:-1, :-1] += np.diagflat(-1 / self.staggered.delta_mesh)  # k=0 diagonal
+        transform[1:-1:, 1:] += np.diagflat(1 / self.staggered.delta_mesh)  # k=1 diagonal
 
         # Gradient at boundaries can be extrapolated from the first two closests basic nodes
         # This only affects the estimation of indivual components of heat fluxes when working
@@ -217,18 +348,21 @@ class Mesh:
         # temperature boundary conditions.
 
         # Extrapolation of gradient at inner radius
-        inner_delta_ratio = self.basic.delta_radii[1].item() / self.basic.delta_radii[0].item()
-        transform[0, 0] = - (inner_delta_ratio + 1) / self.staggered.delta_radii[0].item()
-        transform[0, 1] = (inner_delta_ratio + 1) / self.staggered.delta_radii[0].item()
-        transform[0, 1] += inner_delta_ratio / self.staggered.delta_radii[1].item()
-        transform[0, 2] = - inner_delta_ratio / self.staggered.delta_radii[1].item()
+        inner_delta_ratio = self.basic.delta_mesh[1].item() / self.basic.delta_mesh[0].item()
+        transform[0, 0] = - (inner_delta_ratio + 1) / self.staggered.delta_mesh[0].item()
+        transform[0, 1] = (inner_delta_ratio + 1) / self.staggered.delta_mesh[0].item()
+        transform[0, 1] += inner_delta_ratio / self.staggered.delta_mesh[1].item()
+        transform[0, 2] = - inner_delta_ratio / self.staggered.delta_mesh[1].item()
         # Extrapolation of gradient at outer radius
-        outer_delta_ratio: float = self.basic.delta_radii[-2].item() / self.basic.delta_radii[-1].item()
-        transform[-1, -1] = - (outer_delta_ratio + 1) / self.staggered.delta_radii[-1].item()
-        transform[-1, -2] = (outer_delta_ratio + 1) / self.staggered.delta_radii[-1].item()
-        transform[-1, -2] += outer_delta_ratio / self.staggered.delta_radii[-2].item()
-        transform[-1, -3] = - outer_delta_ratio / self.staggered.delta_radii[-2].item()
+        outer_delta_ratio: float = self.basic.delta_mesh[-2].item() / self.basic.delta_mesh[-1].item()
+        transform[-1, -1] = - (outer_delta_ratio + 1) / self.staggered.delta_mesh[-1].item()
+        transform[-1, -2] = (outer_delta_ratio + 1) / self.staggered.delta_mesh[-1].item()
+        transform[-1, -2] += outer_delta_ratio / self.staggered.delta_mesh[-2].item()
+        transform[-1, -3] = - outer_delta_ratio / self.staggered.delta_mesh[-2].item()
 
+        # Scale the transform matrix by dxi/dr at basic nodes
+        for i in range(self.settings.number_of_nodes-1):
+            transform[:,i] *= self._dxidr[:, 0]
         logger.debug("_d_dr_transform_matrix = %s", transform)
 
         return transform
@@ -262,13 +396,13 @@ class Mesh:
         transform: npt.NDArray = np.zeros(
             (self.basic.number_of_nodes, self.staggered.number_of_nodes)
         )
-        mesh_ratio: npt.NDArray = self.basic.delta_radii[:-1] / self.staggered.delta_radii
+        mesh_ratio: npt.NDArray = self.basic.delta_mesh[:-1] / self.staggered.delta_mesh
         transform[1:-1, :-1] += np.diagflat(1 - 0.5 * mesh_ratio)  # k=0 diagonal
         transform[1:-1:, 1:] += np.diagflat(0.5 * mesh_ratio)  # k=1 diagonal
         # Backward difference at inner radius
         transform[0, :2] = np.array([1 + 0.5 * mesh_ratio[0], -0.5 * mesh_ratio[0]]).flatten()
         # Forward difference at outer radius
-        mesh_ratio_outer: npt.NDArray = self.basic.delta_radii[-1] / self.staggered.delta_radii[-1]
+        mesh_ratio_outer: npt.NDArray = self.basic.delta_mesh[-1] / self.staggered.delta_mesh[-1]
         transform[-1, -2:] = np.array(
             [-0.5 * mesh_ratio_outer, 1 + 0.5 * mesh_ratio_outer]
         ).flatten()
@@ -321,13 +455,19 @@ class EOS(ABC):
     """Generic EOS class"""
 
     @abstractmethod
-    def effective_density(self) -> npt.NDArray: ...
+    def staggered_effective_density(self) -> npt.NDArray: ...
+
+    @abstractmethod
+    def basic_density(self) -> npt.NDArray: ...
 
     @abstractmethod
     def basic_pressure(self) -> npt.NDArray: ...
 
     @abstractmethod
     def staggered_pressure(self) -> npt.NDArray: ...
+
+    @abstractmethod
+    def set_staggered_pressure(self, staggered_radii: npt.NDArray,) -> None: ...
 
 class AdamsWilliamsonEOS(EOS):
     r"""Adams-Williamson equation of state (EOS).
@@ -346,19 +486,17 @@ class AdamsWilliamsonEOS(EOS):
         self,
         settings: _MeshParameters,
         basic_radii: npt.NDArray,
-        staggered_radii: npt.NDArray,
     ):
         self._settings: _MeshParameters = settings
         self._basic_radii: npt.NDArray = basic_radii
-        self._staggered_radii: npt.NDArray = staggered_radii
         self._outer_boundary = np.max(basic_radii)
         self._inner_boundary = np.min(basic_radii)
         self._surface_density: float = self._settings.surface_density
         self._gravitational_acceleration: float = self._settings.gravitational_acceleration
         self._adiabatic_bulk_modulus: float = self._settings.adiabatic_bulk_modulus
         self._basic_pressure = self.get_pressure_from_radii(basic_radii)
-        self._staggered_pressure = self.get_pressure_from_radii(staggered_radii)
-        self._effective_density = self.get_effective_density(basic_radii)
+        self._basic_density = self.get_density_from_radii(basic_radii)
+        self._staggered_effective_density = self.get_effective_density(basic_radii)
 
     @property
     def basic_pressure(self) -> npt.NDArray:
@@ -371,20 +509,29 @@ class AdamsWilliamsonEOS(EOS):
         return self._staggered_pressure
 
     @property
-    def effective_density(self) -> npt.NDArray:
-        """Effective density"""
-        return self._effective_density
+    def basic_density(self) -> npt.NDArray:
+        """Density at basic nodes"""
+        return self._basic_density
+
+    @property
+    def staggered_effective_density(self) -> npt.NDArray:
+        """Effective density at staggered nodes"""
+        return self._staggered_effective_density
+
+    def set_staggered_pressure(self, staggered_radii: npt.NDArray,) -> None:
+        """Set staggered pressure based on staggered radii."""
+        self._staggered_pressure = self.get_pressure_from_radii(staggered_radii)
 
     def get_effective_density(self, radii) -> npt.NDArray:
         r"""
-        Computes effective density on staggered nodes using
-        density rho(r) integration over a spherical shell.
+        Computes effective density using density rho(r) integration
+        over a spherical shell bounded by radii
 
         Args:
-            radii: Radii array on basic nodes
+            radii: Radii array
 
         Returns:
-            Effective Density array on staggered nodes
+            Effective Density array
         """
 
         mass_shell = self.get_mass_within_shell(radii)
@@ -621,13 +768,15 @@ class UserDefinedEOS(EOS):
         self,
         settings: _MeshParameters,
         basic_radii: npt.NDArray,
-        staggered_radii: npt.NDArray,
     ):
-        interp_pressure = PchipInterpolator(settings.eos_radius, settings.eos_pressure)
-        interp_density = PchipInterpolator(settings.eos_radius, settings.eos_density)
-        self._staggered_pressure = interp_pressure(staggered_radii).reshape(-1,1)
-        self._basic_pressure = interp_pressure(basic_radii).reshape(-1,1)
-        self._effective_density = interp_density(staggered_radii).reshape(-1,1)
+        self._interp_pressure = PchipInterpolator(settings.eos_radius, settings.eos_pressure)
+        self._interp_density = PchipInterpolator(settings.eos_radius, settings.eos_density)
+        self._basic_pressure = self._interp_pressure(basic_radii).reshape(-1,1)
+        basic_effective_density = self._interp_density(basic_radii).reshape(-1,1)
+        self._staggered_effective_density = 0.5*(
+            basic_effective_density[:-1, :] + basic_effective_density[1:, :])
+        # Assumes density and effective density are the same at basic nodes
+        self._basic_density = basic_effective_density
 
     @property
     def basic_pressure(self) -> npt.NDArray:
@@ -640,6 +789,15 @@ class UserDefinedEOS(EOS):
         return self._staggered_pressure
 
     @property
-    def effective_density(self) -> npt.NDArray:
-        """Effective density"""
-        return self._effective_density
+    def basic_density(self) -> npt.NDArray:
+        """Effective density at basic nodes"""
+        return self._basic_density
+
+    @property
+    def staggered_effective_density(self) -> npt.NDArray:
+        """Effective density at staggered nodes"""
+        return self._staggered_effective_density
+
+    def set_staggered_pressure(self, staggered_radii: npt.NDArray,) -> None:
+        """Set staggered pressure based on staggered radii."""
+        self._staggered_pressure = self._interp_pressure(staggered_radii).reshape(-1,1)

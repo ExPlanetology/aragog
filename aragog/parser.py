@@ -143,7 +143,6 @@ class _BoundaryConditionsParameters:
     inner_boundary_value: float
     emissivity: float
     equilibrium_temperature: float
-    core_density: float
     core_heat_capacity: float
     scalings_: _ScalingsParameters = field(init=False)
 
@@ -155,7 +154,6 @@ class _BoundaryConditionsParameters:
         """
         self.scalings_ = scalings
         self.equilibrium_temperature /= self.scalings_.temperature
-        self.core_density /= self.scalings_.density
         self.core_heat_capacity /= self.scalings_.heat_capacity
         self._scale_inner_boundary_condition()
         self._scale_outer_boundary_condition()
@@ -268,11 +266,13 @@ class _MeshParameters:
     inner_radius: float
     number_of_nodes: int
     mixing_length_profile: str
+    core_density: float
     # Static pressure profile is derived from the Adams-Williamson equation of state.
     eos_method: int = 1 # 1: Adams-Williamson / 2: User defined
     surface_density: float = 4000
     gravitational_acceleration: float = 9.81
     adiabatic_bulk_modulus: float = 260e9
+    mass_coordinates: bool = False
     eos_file: str = ""
     scalings_: _ScalingsParameters = field(init=False)
 
@@ -285,6 +285,7 @@ class _MeshParameters:
         self.scalings_ = scalings
         self.outer_radius /= self.scalings_.radius
         self.inner_radius /= self.scalings_.radius
+        self.core_density /= self.scalings_.density
         self.surface_density /= self.scalings_.density
         self.gravitational_acceleration /= self.scalings_.gravitational_acceleration
         self.adiabatic_bulk_modulus /= self.scalings_.pressure

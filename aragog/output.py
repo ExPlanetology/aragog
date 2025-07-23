@@ -199,6 +199,21 @@ class Output:
         return self.evaluator.mesh.basic.radii * self.parameters.scalings.radius * 1.0e-3
 
     @property
+    def radii_km_staggered(self) -> npt.NDArray:
+        """Radii of the staggered mesh in km"""
+        return self.evaluator.mesh.staggered.radii * self.parameters.scalings.radius * 1.0e-3
+
+    @property
+    def mass_radii_km_basic(self) -> npt.NDArray:
+        """Mass radii of the basic mesh in km"""
+        return self.evaluator.mesh.basic.mass_radii * self.parameters.scalings.radius * 1.0e-3
+
+    @property
+    def mass_radii_km_staggered(self) -> npt.NDArray:
+        """Mass radii of the staggered mesh in km"""
+        return self.evaluator.mesh.staggered.mass_radii * self.parameters.scalings.radius * 1.0e-3
+
+    @property
     def pressure_GPa_basic(self) -> npt.NDArray:
         """Pressure of the basic mesh in GPa"""
         return self.evaluator.mesh.basic_pressure * self.parameters.scalings.pressure * 1.0e-9
@@ -220,7 +235,7 @@ class Output:
         """Mass of each layer on staggered mesh"""
         return (
             # shells centred on staggered nodes
-            self.evaluator.mesh.effective_density
+            self.evaluator.mesh.staggered_effective_density
             * self.evaluator.mesh.basic.volume
             * self.parameters.scalings.density
             * np.power(self.parameters.scalings.radius, 3)
@@ -237,7 +252,7 @@ class Output:
         volume = 4 * np.pi * (R_core**3) / 3
 
         # core density
-        rho = self.parameters.scalings.density * self.parameters.boundary_conditions.core_density
+        rho = self.parameters.scalings.density * self.parameters.mesh.core_density
 
         # core mass
         return rho * volume
