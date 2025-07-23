@@ -199,6 +199,21 @@ class Output:
         return self.evaluator.mesh.basic.radii * self.parameters.scalings.radius * 1.0e-3
 
     @property
+    def radii_km_staggered(self) -> npt.NDArray:
+        """Radii of the staggered mesh in km"""
+        return self.evaluator.mesh.staggered.radii * self.parameters.scalings.radius * 1.0e-3
+
+    @property
+    def mass_radii_km_basic(self) -> npt.NDArray:
+        """Mass radii of the basic mesh in km"""
+        return self.evaluator.mesh.basic.mass_radii * self.parameters.scalings.radius * 1.0e-3
+
+    @property
+    def mass_radii_km_staggered(self) -> npt.NDArray:
+        """Mass radii of the staggered mesh in km"""
+        return self.evaluator.mesh.staggered.mass_radii * self.parameters.scalings.radius * 1.0e-3
+
+    @property
     def pressure_GPa_basic(self) -> npt.NDArray:
         """Pressure of the basic mesh in GPa"""
         return self.evaluator.mesh.basic_pressure * self.parameters.scalings.pressure * 1.0e-9
