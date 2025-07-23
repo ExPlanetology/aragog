@@ -186,7 +186,7 @@ class Mesh:
             self.basic.mass_radii[:-1] + 0.5 * self.basic.delta_mesh)
         if parameters.mesh.mass_coordinates:
             staggered_coordinates: npt.NDArray = (
-                self.get_staggered_coordinates_from_mass_coordinates(staggered_mass_coordinates))
+                self.get_staggered_spatial_coordinates_from_mass_coordinates(staggered_mass_coordinates))
         else:
             staggered_coordinates = staggered_mass_coordinates
         self.staggered: FixedMesh = FixedMesh(
@@ -269,7 +269,7 @@ class Mesh:
 
         return np.power(basic_mass_coordinates, 1.0/3.0)
 
-    def get_staggered_coordinates_from_mass_coordinates(self, staggered_mass_coordinates: npt.NDArray) -> npt.NDArray:
+    def get_staggered_spatial_coordinates_from_mass_coordinates(self, staggered_mass_coordinates: npt.NDArray) -> npt.NDArray:
         """Computes the staggered spatial coordinates from staggered mass coordinates.
 
         Args:
