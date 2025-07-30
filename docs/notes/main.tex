@@ -1,0 +1,434 @@
+\documentclass{article}
+\usepackage{graphicx} % Required for inserting images
+\usepackage{nomencl}
+\usepackage{amsmath}
+\makenomenclature
+
+\renewcommand{\vec}[1]{\boldsymbol{#1}}
+
+\title{Aragog formulation}
+\date{June 2025}
+\author{Laurent Soucasse}
+
+\begin{document}
+
+\maketitle
+
+\tableofcontents
+
+\section{Enthalpy balance}
+
+We start with the enthalpy balance in integral form
+\begin{equation}
+\int_V \rho c_p \left.\frac{\partial T}{\partial t}\right|_{\vec{\xi}} dV =  -\int_S \vec{q}\cdot\vec{n} dS + \int_V \Phi dV,
+\label{eq.enthalpybalance}
+\end{equation}
+where $T$ is the effective temperature of the melting medium, assuming thermal equilibrium between solid and melt phases. Note here that mass coordinates $\vec{\xi}$ are used (see Sec.~\ref{sec:mass_coord}) but integration is made over a physical domain of volume $V$ and surface boundary $S$. We actually assume that any control volume $V$ coincides with a material volume that does not evolve in time. That is, we assume that the mass of each volume is constant and that there is no mass flux at the interfaces.
+
+We also assume spherical symmetry and only accounts for spatial variations along the radial direction. In the following, only the radial component of vector quantities will be considered.
+The enthalpy balance together with heat fluxes and sources are implemeted in Aragog in \texttt{solver.py}.
+
+\subsection{Heat fluxes}
+The total heat flux is defined as the sum of the conductive ($q_{cd}$), convective ($q_{cv}$), convective mixing ($q_{cm}$) and gravitational contributions ($q_{gm}$)
+\begin{equation}
+q_{tot}= q_{cd} + q_{cv} + q_{cm} + q_{gm}.
+\end{equation}
+The conductive flux writes
+\begin{equation}
+    q_{cd} = -\lambda \frac{\partial T}{\partial r},
+    \label{eq.qcd}
+\end{equation}
+and the convective flux is modelled such that
+\begin{equation}
+    q_{cv} = -\rho c_p \kappa_h \left( \frac{\partial T}{\partial r} - \left.\frac{\partial T}{\partial r}\right|_S\right),
+    \label{eq.qcv}
+\end{equation}
+where the adiabatic temperature gradient is given by
+\begin{equation}
+    \left.\frac{\partial T}{\partial r}\right|_S = -\frac{g\alpha T}{c_p}.
+    \label{eq.adiabat}
+\end{equation}
+
+The convective mixing flux and the gravity separation flux are enthalpy fluxes associated with corresponding mass fluxes
+\begin{equation}
+    q_{cm} + q_{gm} = \Delta h \left( j_{cm} + j_{gm} \right),
+\end{equation}
+where mass fluxes $j_{cm}$ and $j_{gm}$ are associated with the melt (corresponding fluxes associated with the solid are $-j_{cm}$ and $-j_{gm}$ such that the sum of the species mass fluxes sum up to zero).
+
+The mass diffusion flux of melt is given by
+\begin{equation}
+    j_{cm} = - \rho \kappa_h \frac{\partial \phi}{\partial r}.
+    \label{eq.jcm}
+\end{equation}
+It is assumed here that the mass diffusivity is equal to the convective diffusivity. The melt mass flux associated with gravity separation is given by
+\begin{equation}
+    j_{gm} = \rho \phi (1-\phi) v_{rel}
+\end{equation}
+where $v_{rel}$ is the relative velocity between melt and solid
+\begin{equation}
+    v_{rel} = \frac{(\rho_m-\rho_s)g K}{\eta_m}.
+    \label{eq.vrel}
+\end{equation}
+It can be checked that both mass fluxes $j_{cm}$ and $j_{gm}$ are zero outside the mixed phase region.
+
+\subsection{Heat sources}
+We can consider the following volumetric sources
+\begin{equation}
+    \Phi = \Phi_\mathrm{tidal} + \Phi_\mathrm{radio} + \Phi_\mathrm{vol}
+\end{equation}
+associated with tidal heating, radiogenic heating and volumetric dilatation or compression. The latter is expressed as a function of the mass fluxes
+\begin{equation}
+    \Phi_\mathrm{vol} = \rho g\left( \frac{1}{\rho_m}- \frac{1}{\rho_s}\right) \left( j_{cm} + j_{gm}\right).
+\end{equation}
+
+The radiogenic heating is defined as
+\begin{equation}
+    \Phi_\mathrm{radio} = \sum_i \rho
+    \varphi_i \chi_i \exp\left(-\frac{t-t_0}{\tau^{1/2}_i} \right),
+\end{equation}
+where $\varphi_i$, $\chi_i$ and $\tau^{1/2}_i$ are the power generation per unit mass, the mass fraction and the half-life associated with the radioisotope $i$. The radiogenic heating is time dependent but is assumed to space independent.
+
+The tidal heating volume source must be provided by the user. It can be space dependent but constant in time.
+
+\subsection{Mass coordinates}
+\label{sec:mass_coord}
+
+Mass coordinates $\xi$ (in unit length) correspond to a change of variable from the spatial coordinates $r$ such that the mass contained in an element $\Delta \xi$ is constant whatever its depth.
+
+Working with mass coordinates means that all quantities are evaluated at the mass coordinate mesh, that can be determined from the spatial coordinates using the relationship
+\begin{equation}
+\xi(r) = \left( \frac{3}{\rho^*_\mathrm{planet}}\int^r_{r_\mathrm{cmb}} \rho^*(r') r'^2dr' +\xi_\mathrm{cmb}^3 \right)^{1/3},
+\end{equation}
+where $\rho^*_\mathrm{planet}$ is the volume averaged density of the planet and $\rho^*$ is the local mantle density. The mass coordinate at the core-mantle boundary is defined such that
+\begin{equation}
+\xi_\mathrm{cmb} = \left(\frac{\rho^*_\mathrm{core}}{\rho^*_\mathrm{planet}}\right)^{1/3} r_\mathrm{cmb},
+\end{equation}
+where $\rho^*_\mathrm{core}$ is the volume averaged density of the core. It can be checked that taking the volume averaged density of the planet as a scaling quantity leads to an equality of the spatial coordinate and the mass coordinate at the surface
+\begin{equation}
+\xi_\mathrm{top} = r_\mathrm{top},
+\end{equation}
+which is actually the planetary radius. The reverse transformation allows to get spatial coordinates from mass coordinates
+\begin{equation}
+   r(\xi) = \left( 3\int^\xi_{\xi_\mathrm{cmb}} \frac{\rho^*_\mathrm{planet}}{\rho^*(\xi')} \xi'^2d\xi' +r_\mathrm{cmb}^3 \right)^{1/3}.
+\end{equation}
+
+Finally, spatial gradient of any quantity $\psi$ should be computed according to the following
+\begin{equation}
+    \frac{\partial \psi}{\partial r} = \frac{\rho^*(r)}{\rho^*_\mathrm{planet}} \left(\frac{r}{\xi}\right)^2 \frac{\partial \psi}{\partial \xi}.
+\end{equation}
+Note that if the spatial mesh is uniform the mass coordinate mesh is most likely not uniform. Also the notation $\rho^*$ for the density will be clarified in Sec.~\ref{sec:thermoP}.
+
+If this transformation is ignored  and spatial coordinates are used as is, it means we ignore the convective derivative term in the enthalpy balance, that is assuming
+\begin{equation}
+    \left.\frac{\partial T}{\partial t}\right|_{\vec{\xi}} \simeq
+    \left.\frac{\partial T}{\partial t}\right|_{\vec{r}},
+\end{equation}
+in Eq.~(\ref{eq.enthalpybalance}). Mass coordinates are implemented in Aragog in \texttt{mesh.py}.
+
+\section{Thermodynamics}
+
+The temperature is the only prognostic variable. The pressure is computed following a given equation of state in Aragog in \texttt{mesh.py}. The melt fraction is calculated as a function of pressure and temperature in Aragog in \texttt{phase.py}.
+
+\subsection{Melt fraction}
+The mass fraction of the melt $\phi$ is defined as follows
+\begin{equation}
+\begin{cases}
+    \phi = 0, & T < T_\mathrm{sol} \\
+    \phi= \frac{T-T_\mathrm{sol}}{T_\mathrm{liq}-T_\mathrm{sol}}, & T_\mathrm{liq} \geq T \geq T_\mathrm{sol}\\
+    \phi = 1, & T > T_\mathrm{liq}
+\end{cases}
+\end{equation}
+Vice versa, the mass fraction of the solid is $1-\phi$. We assume here that solidus and liquidus temperatures $T_\mathrm{sol}$ and $T_\mathrm{liq}$ depend solely on pressure and are such that $T_\mathrm{liq}>T_\mathrm{sol}$.
+
+\subsection{Pressure}
+\label{sec:thermoP}
+
+The Adams-Williamson model is the default model used to derive the relationship between pressure and radius, assuming the gravitational acceleration is constant. However, it is possible to specify in Aragog arbitrary relationships between pressure, radius and pseudo-density, that comes from a planetary structure calculation, in a discretized manner. This also allows for spatial dependent gravitational acceleration.
+
+The Adams-Williamson model assumes an exponential relationship between density and pressure
+\begin{equation}
+    \rho^*(P) = \rho^*_\mathrm{top} \exp\left( \frac{P}{B}\right),
+\end{equation}
+where $B$ is the adiabatic bulk modulus and $\rho_\mathrm{top}^*$ the density at the surface. We use the notation $\rho^*$ to emphasize that it is a pseudo-density that we use to estimate the pressure field and the  mass of a control volume (that we assume to be constant in time) and that it can differ (to a limited extent) to the actual density $\rho$ we use for solving thermal transport. The pressure field is then assumed to not vary in time.
+
+A balance between pressure forces and weight gives
+\begin{equation}
+    \frac{dP}{dr} = -\rho^*(P) g
+\end{equation}
+and allows to retrieve the pressure field after integration
+\begin{equation}
+    P(r) = -B \log\left(1+\frac{\rho^*_\mathrm{top} g(r-r_\mathrm{top})}{B} \right).
+    \label{eq.AWpressure}
+\end{equation}
+Equation~(\ref{eq.AWpressure}) assumes that the surface pressure is zero but the integration can be performed for any surface pressure.
+
+The pseudo-density field as a function of radius is given by
+\begin{equation}
+    \rho^*(r) = \frac{\rho_\mathrm{top}^* B}{B+ \rho_\mathrm{top}^*g(r-r_\mathrm{top})}.
+\end{equation}
+And the total mass of the mantle $M$ can be retrieved by integrating the pseudo-density field from the core-mantle boundary $r_\mathrm{cmb}$ to the surface $r_\mathrm{top}$
+\begin{align}
+    M &= \int^{r_\mathrm{top}}_{r_\mathrm{cmb}} \rho^*(r) 4\pi r^2 dr\\
+      &= \int^{r_\mathrm{top}}_{r_\mathrm{cmb}} \frac{4\pi B}{g}\frac{r^2}{\beta+r}, & \beta=\frac{B}{\rho^*_\mathrm{top}g}-r_\mathrm{top}\\
+      &= \frac{4\pi B}{g} \left[ \frac{-3\beta^2 - 2\beta r +r^2}{2}+\beta^2\log(\left| \beta+r\right|) \right]^{r_\mathrm{top}}_{r_\mathrm{cmb}}
+\end{align}
+
+
+
+\section{Transport properties}
+
+Transport properties in Aragog are implemented in \texttt{phase.py}, except the eddy diffusivity that can be found in \texttt{solver.py}.
+
+\subsection{Thermophyics properties}
+
+All thermophysics quantities (density $\rho$, conductivity $\lambda$, heat capacity $c_p$, thermal expansion coefficient $\alpha$ and dynamic viscosity $\eta$) are assumed to be function of both temperature and pressure. We refer to properties in the melt phase and in the solid phase with subscripts $m$ and $s$ respectively.
+
+In the mixed phase region, the density is estimated as follows
+\begin{equation}
+    \frac{1}{\rho}=\frac{\phi}{\rho_m}+\frac{1-\phi}{\rho_s}.
+\end{equation}
+As stated in Sec.~\ref{sec:thermoP}, the density may differ from the pseudo-density $\rho^*$ we use to estimate the pressure field.
+
+The thermal conductivity in the mixed phase is expressed as follows
+\begin{equation}
+    \lambda = \phi \lambda_m + (1-\phi)\lambda_s.
+\end{equation}
+
+The formulation for the dynamic viscosity in the mixed phase is designed to capture the rheological transition where the aggregate viscosity changes fairly abruptly between the melt and solid viscosity at a critical melt fraction~\cite{BSW18}
+\begin{equation}
+    \log_{10} \eta = z\log_{10}(\eta_m) + (1-z)\log_{10}(\eta_s),
+\end{equation}
+\begin{equation}
+    z(\phi)=\frac{1}{2}\left(1+\tanh\left( \frac{\phi-\phi_c^\eta}{\Delta\phi_w^\eta}\right) \right),
+\end{equation}
+where $\phi_c^\eta$ is the rheological transition melt fraction and $\Delta \phi_w^\eta$ is the rheological transition width. These are input parameters that are motivated by geochemical experiments.
+
+The heat capacity and the thermal expansivity in the mixed phase region are expressed following Ref.~\cite{SOLO07} as
+\begin{equation}
+    c_p = c_p^0 + \Delta h \left.\frac{\partial \phi}{\partial T}\right|_P \simeq \frac{\Delta h}{T_\mathrm{liq}- T_\mathrm{sol}},
+\end{equation}
+\begin{equation}
+    \alpha = \alpha^0 + \frac{\Delta \rho }{\rho} \left.\frac{\partial \phi}{\partial T}\right|_P \simeq \frac{\rho_s-\rho_m}{\rho (T_\mathrm{liq}- T_\mathrm{sol}) },
+\end{equation}
+where the second term associated with phase change dominates such that $c_p>>c_p^0$ and $ \alpha>> \alpha^0$. The definition of the adiabatic temperature gradient in Eq.~(\ref{eq.adiabat}) still holds in the mixed phase region with the corresponding thermophysics properties.
+
+Finally, we define the porosity in the mixed phase as
+\begin{equation}
+    \zeta = \frac{\rho_s-\rho}{\rho_s-\rho_m},
+\end{equation}
+which can be related to the melt fraction as follows
+\begin{equation}
+    \frac{\rho_m}{\rho}\zeta = \phi, \quad \mathrm{or} \quad \frac{\rho_s}{\rho}(1-\zeta) = (1-\phi).
+\end{equation}
+
+Because the melt fraction is not a continuous quantity and because some properties experience a jump when entering the mixed phase region, we apply an additional smoothing for all thermophysical quantities $\beta$. This gives the following near the interface between mixed phase and melt
+\begin{equation}
+    \widetilde{\beta} = z_m(\phi^*)\beta_m + (1-z_m(\phi^*))\beta,
+\end{equation}
+\begin{equation}
+z_m(\phi^*)=\frac{1}{2}\left(1+\tanh\left( \frac{\phi^*-1}{\Delta\phi_w^*}\right) \right),
+\end{equation}
+and near the interface between mixed phase and solid
+\begin{equation}
+    \widetilde{\beta} = z_s(\phi^*)\beta + (1-z_s(\phi^*))\beta_s,
+\end{equation}
+\begin{equation}
+z_s(\phi^*)=\frac{1}{2}\left(1+\tanh\left( \frac{\phi^*}{\Delta\phi_w^*}\right) \right),
+\end{equation}
+where $\phi^*= \frac{T-T_\mathrm{sol}}{T_\mathrm{liq}-T_\mathrm{sol}}$ is the extended melt fraction profile (such that $\phi^*<0$ in the solid phase and $\phi^*>1$ in the melt phase) and $\Delta\phi_w^*$ is the phase transition width. For the kinematic viscosity, this additional smoothing is applied in the logarithmic space.
+
+\subsection{Eddy-diffusivity}
+The eddy diffusivity affecting the convective flux and the convective mixing flux in Eqs.~(\ref{eq.qcv}) and (\ref{eq.jcm}) is derived following the mixing length theory. It is equal to the product of a velocity scale times the mixing length and depends on the flow regime
+\begin{equation}
+\kappa_h =
+\begin{cases}
+    0 &\mathrm{for}\quad Re=0 \\
+    u_\mathrm{visc}l &\mathrm{for}\quad 0\leq Re \leq 9/8\\
+    u_\mathrm{invis}l &\mathrm{for}\quad Re > 9/8
+\end{cases}
+\end{equation}
+where $l$ is the mixing length and $Re$ is the Reynolds number  based on the viscous velocity $Re = u_\mathrm{visc}l/\nu$. The velocity scales in viscous regime and inviscid regime are defined as
+\begin{equation}
+    u_\mathrm{visc} = -\frac{\alpha g l^3}{18\nu} \left( \frac{\partial T}{\partial r}-
+    \left.\frac{\partial T}{\partial r}\right|_S\right),
+\end{equation}
+\begin{equation}
+    u_\mathrm{invis} = \sqrt{-\frac{\alpha g l^2}{16}
+\left( \frac{\partial T}{\partial r}-
+    \left.\frac{\partial T}{\partial r}\right|_S\right)}.
+\end{equation}
+Note that the necessary condition for convection to occur is that
+\begin{equation}
+    \left( \frac{\partial T}{\partial r}-
+    \left.\frac{\partial T}{\partial r}\right|_S\right) <0
+\end{equation}
+and that velocity is equal to zero if this condition is not satisfied.
+
+The mixing length $l$ is either set constant according to the size of the domain
+\begin{equation}
+    l=0.25(r_\mathrm{top}-r_\mathrm{cmb}),
+\end{equation}
+or set equal to the distance to the nearest boundary
+\begin{equation}
+    l(r)=\min(r_\mathrm{top}-r, r-r_\mathrm{cmb}).
+\end{equation}
+
+\subsection{Permeability}
+Permeability factor $K$ in Eq.~(\ref{eq.vrel}) affecting the gravity separation flux depends on the porosity $\zeta$ and varies with the flow regime
+\begin{equation}
+K=\begin{cases}
+    \frac{2}{9}a^2, & \zeta > 0.771462~\mathrm{(Stokes)} \\
+    0.001 a^2\frac{\zeta^2}{(1-\zeta)^2}, & 0.0769452 \leq \zeta \leq 0.771462~\mathrm{(Blake-Kozeny-Carman)}\\
+    \frac{5}{7}a^2 \zeta^{4.5}, & \zeta < 0.0769452~\mathrm{(Rumpf-Gupte)}
+\end{cases}
+\end{equation}
+This expression comes from Ref.~\cite{ABE93}, though the derivation in this reference uses a factor $F(\phi)$ function of the melt fraction that relates to the permeability factor as follows 
+\begin{equation}
+    K = a^2\frac{(\rho_s-\rho_m)\phi + \rho_m}{\rho\phi(1-\phi)}F(\phi).
+\end{equation}
+It is also worth noticing that the condition $\zeta > \beta$ is equivalent to the condition $\phi > \rho_m/(\gamma \rho_s + \rho_m)$ using $\gamma = (1-\beta)/\beta$.
+
+\section{Numerical methods}
+
+Though the solve of the enthalpy balance is implemented in \texttt{solver.py}, spatial approximations routines (gradients, interpolations) can be found in \texttt{mesh.py}. Boundary conditions and initial condition are implemented in \texttt{core.py}.
+
+\subsection{Finite-volume method}
+Spatial integration of Eq.~(\ref{eq.enthalpybalance}) in a finite-volume fashion, that is over a spherical layer $i$ bounded by radii $r_{i-\frac{1}{2}}$ and $r_{i+\frac{1}{2}}$, gives
+\begin{equation}
+    (\rho c_p V)_i \left.\frac{\partial T}{\partial t}\right|_{i} = -q_{i+\frac{1}{2}} S_{i+\frac{1}{2}} + q_{i-\frac{1}{2}} S_{i-\frac{1}{2}} + \Phi_i V_i,
+    \label{eq.fvm-balance}
+\end{equation}
+with $S_{i+\frac{1}{2}}=4\pi r^2_{i+\frac{1}{2}}$ and $V_i=\frac{4}{3}\pi (r_{i+\frac{1}{2}}^3-r_{i-\frac{1}{2}}^3)$. Note that volume terms are evaluated at cell centers of the mass coordinate mesh while surface terms are evaluated at cell boundaries.  A dual mesh approach is needed to map any quantity between the staggered nodes (cell centers) and the basic nodes (boundaries). We consider here a uniform spatial mesh of constant spacing $\Delta r$ between the top of the planet $r_\mathrm{top}$ and the core-mantle boundary $r_\mathrm{cmb}$. This mesh is then mapped into mass coordinates, as explained in Sec.~\ref{sec:mass_coord}. The mesh is defined in terms of basic nodes such that spatial coordinate mesh and mass coordinate mess overlap at cell boundaries ($\xi_{i+\frac{1}{2}}=\xi(r_{i+\frac{1}{2}})$) but not at cell centers ($\xi_i \neq \xi(r_i)$).
+
+Physical quantities at basic nodes (cell boundaries) are approximated from physical quantities at staggered nodes (cell centers) following simple linear interpolation
+\begin{equation}
+    \psi(\xi_{i+\frac{1}{2}}) =  \frac{\Delta \xi_i\psi(\xi_{i+1})+\Delta\xi_{1+1}\psi(\xi_i)}{\Delta \xi_i+\Delta\xi_{i+1}},
+    \label{eq.fv-interp}
+\end{equation}
+where $\Delta \xi_i=\xi_{1+\frac{1}{2}}-\xi_{1-\frac{1}{2}}$ is the cell width. Spatial gradients at basic nodes are approximated from physical quantities at staggered nodes as follows
+\begin{equation}
+    \left.\frac{\partial \psi}{\partial \xi}\right|_{\xi_{i+\frac{1}{2}}} = \frac{\psi(\xi_{i+1})-\psi(\xi_i)}{\xi_{i+1}-\xi_i}.
+    \label{eq.fv-grad}
+\end{equation}
+Note at this stage that the state of the system at the outer and inner boundaries is not defined by Eqs.~(\ref{eq.fv-interp}) and (\ref{eq.fv-grad}) and that any quantity $\psi$ or $\partial\psi/\partial \xi$ is unknown at $\xi_\mathrm{cmb}$ and $\xi_\mathrm{top}$.
+
+The energy balance is implemented in a non-dimensional manner, using a reference temperature, a reference time, a reference radius and a reference density, such that the order magnitude of each physical quantity is closer to one.
+
+\subsection{Boundary conditions}
+
+\subsubsection{Neumann boundary condition}
+
+A Neumann boundary condition, where the total heat flux value $q$ is imposed either at the inner or outer boundary (or both), naturally applies in a finite-volume formulation. However, the individual components of the heat flux (and more generally the thermal state) remain unknown. To estimate this, we apply a linear extrapolation from the two closest inner points to estimate quantities and gradient of quantities at the boundaries. This gives for the core-mantle boundary, with $i=1$ being the lowermost cell
+\begin{equation}
+    \psi_\mathrm{cmb} = \frac{2\Delta\xi_1+\Delta\xi_2}{\Delta\xi_1+\Delta\xi_2}\psi(r_1) - \frac{\Delta\xi_1}{\Delta\xi_1+\Delta\xi_2}\psi(r_2),
+    \label{eq.extrap_BC}
+\end{equation}
+\begin{equation}
+        \left.\frac{\partial \psi}{\partial \xi}\right|_\mathrm{cmb}=\left(\frac{\Delta\xi_2}{\Delta\xi_1}+1\right)\frac{\psi(\xi_2)-\psi(\xi_1)}{\xi_2-\xi_1} - \frac{\Delta\xi_2}{\Delta\xi_1}\frac{\psi(\xi_3)-\psi(\xi_2)}{\xi_3-\xi_2}.
+        \label{eq.extrap_grad_BC}
+\end{equation}
+Similar relationships can be derived at the top boundary. Again, this will provide estimates of the individual components of the fluxes, that will likely not be consistent with the imposed total heat flux value, though that will not impact the time evolution.
+
+At the top of the planet, it is sometimes useful to express the heat flux as a radiative exchange between the ground and a blackbody atmosphere. In this case the flux is
+\begin{equation}
+    q_\mathrm{top} = \varepsilon \sigma (T_\mathrm{top}^4 - T_\mathrm{atm}^4),
+\label{eq.grayBC}
+\end{equation}
+$\varepsilon$ being the emissivity of the ground. Equation~(\ref{eq.grayBC}) is actually a mixed boundary condition as it involves the unknown surface temperature. However, it is implemented as a flux boundary condition using a surface temperature extrapolated from the inner node using an expression similar to Eq.~(\ref{eq.extrap_BC}).
+
+\subsubsection{Dirichlet boundary condition}
+When using a Dirichlet boundary condition, that is imposing the temperature at a boundary, the thermal state is perfectly defined at the boundary but one must compute the temperature gradient (and the melt fraction gradient) accordingly to get the correct heat fluxes.
+
+This gives for the top, with $i=N$ being the uppermost cell and $\xi_\mathrm{top} = \xi_{N+\frac{1}{2}}$
+\begin{equation}
+    \left.\frac{\partial \psi}{\partial \xi}\right|_\mathrm{top} =
+    %\frac{2}{\Delta r} (\psi_\mathrm{top}-\psi(r_N)).
+    \frac{\psi_\mathrm{top}-\psi(\xi_N)}{\xi_\mathrm{top}-\xi_N}.
+\end{equation}
+Vice versa for the core-mantle boundary, with $i=1$ being the lowermost cell and $\xi_\mathrm{cmb} = \xi_{\frac{1}{2}}$, it gives
+\begin{equation}
+    \left.\frac{\partial \psi}{\partial \xi}\right|_\mathrm{cmb} =
+    %\frac{2}{\Delta r}(\psi(r_1) - \psi_\mathrm{cmb}).
+    \frac{\psi(\xi_1) - \psi_\mathrm{cmb}}{\xi_1 - \xi_\mathrm{cmb}}.
+\end{equation}
+
+\subsubsection{Core-cooling model}
+When using a flux boundary condition at the core-mantle boundary, we may use the following core cooling model to estimate $q_\mathrm{cmb}$.
+
+We start with the enthalpy balance of the core which writes
+\begin{equation}
+(\rho c_p V)_\mathrm{core}\frac{d T_\mathrm{core}}{dt} = - S_\mathrm{cmb} q_\mathrm{cmb}.
+\label{eq.core-balance}
+\end{equation}
+The assumption is that the temperature of the core $T_\mathrm{core}$ is linearly related with that of the lowermost cell $T_1$, and so are their time derivative
+\begin{equation}
+    T_\mathrm{core} \simeq \hat{T}_\mathrm{core}T_1, \quad \mathrm{and}\quad \frac{\partial T_\mathrm{core}}{\partial t} \simeq \hat{T}_\mathrm{core}\frac{\partial T_1}{\partial t},
+    \label{eq.core-scaling}
+\end{equation}
+using the proportionality constant $\hat{T}_\mathrm{core}=1.147$ (see Ref.~\cite{BSW18}).
+
+The thermal balance at the lowermost cell $i=1$ gives
+\begin{equation}
+    (\rho c_p V)_1 \left.\frac{\partial T}{\partial t}\right|_1 = -q_{1+\frac{1}{2}} S_{1+\frac{1}{2}} + q_\mathrm{cmb} S_\mathrm{cmb}.
+    \label{eq.lower-balance}
+\end{equation}
+Combining Eqs.~(\ref{eq.core-balance}) and (\ref{eq.lower-balance}), together with the scaling of Eq.~(\ref{eq.core-scaling}) gives the following estimate for the heat flux
+\begin{equation}
+q_\mathrm{cmb}=\frac{S_{1+\frac{1}{2}}}{S_\mathrm{core}}\left(1+\frac{(\rho c_p V)_1}{(\rho c_p V)_\mathrm{core}\hat{T}_\mathrm{core}}\right)^{-1} q_{1+\frac{1}{2}}.
+\end{equation}
+Note that volumetric heating rates have been neglecting in Eqs.~(\ref{eq.core-balance}) and (\ref{eq.lower-balance}) to derive this expression.
+
+\subsection{Time integration}
+
+Equation~(\ref{eq.fvm-balance}) is integrated in time using an implicit multi-step variable-order backward differentiation method.
+
+Although any temperature field can be provided as an initial condition, the default is to start the time integration on an adiabat, such that
+\begin{equation}
+    \frac{\partial T}{\partial r} =
+    \left.\frac{\partial T}{\partial r}\right|_S = -\frac{g\alpha T}{c_p}.
+\end{equation}
+In the general case this equation is solved numerically as $g$, $\alpha$ and $c_p$ are space dependent. In case these latter properties are constant, the following temperature profile is obtained
+\begin{equation}
+    T(r) = T_\mathrm{top} \exp\left(\frac{g\alpha}{c_p}(r_\mathrm{top}-r)\right),
+\end{equation}
+with $T_\mathrm{top}$ being the surface temperature. This profile can the be mapped into mass coordinates.
+
+\nomenclature{$a$}{Grain size [m]}
+\nomenclature{$u$}{Velocity [m/s]}
+\nomenclature{$l$}{Mixing length [m]}
+\nomenclature{$P$}{Pressure [Pa]}
+\nomenclature{$T$}{Temperature [K]}
+\nomenclature{$B$}{Adiabatic bulk modulus [Pa]}
+\nomenclature{$Re$}{Reynolds number ($Re=ul/\nu)$}
+\nomenclature{$\eta$}{Dynamic viscosity [Pa s]}
+\nomenclature{$\sigma$}{Stefan-Boltzmann constant [W/m$^2$/K$^4$]}
+\nomenclature{$\varepsilon$}{Emissivity}
+\nomenclature{$\nu$}{Kinematic viscosity ($\nu=\eta/\rho$) [m$^2$/s]}
+\nomenclature{$\vec{r}$}{Spatial coordinate vector [m]}
+\nomenclature{$\vec{\xi}$}{Mass coordinate vector [m]}
+\nomenclature{$\vec{q}$}{Heat flux vector [W/m$^2$]}
+\nomenclature{$\vec{j}$}{Mass flux vector [kg/m$^2$/s]}
+\nomenclature{$\Phi$}{Volumetric heat source [W/m$^3$]}
+\nomenclature{$\Delta h$}{Latent heat [J/kg]}
+\nomenclature{$\alpha$}{Thermal expansion coefficient [K$^{-1}$]}
+\nomenclature{$\phi$}{Melt mass fraction}
+\nomenclature{$\zeta$}{Porosity}
+\nomenclature{$\chi$}{Radioisotope mass fraction}
+\nomenclature{$\tau^{1/2}$}{Radioisotope half life}
+\nomenclature{$c_p$}{Heat capacity [J/kg/K]}
+\nomenclature{$\rho$}{Density [kg/m$^3$]}
+\nomenclature{$\lambda$}{Thermal conductivity [W/m/K]}
+\nomenclature{$g$}{Gravitational acceleration [m/s^2]}
+\nomenclature{$K$}{Permeability [m^2]}
+
+\printnomenclature
+
+\addcontentsline{toc}{section}{Nomenclature}
+\addcontentsline{toc}{section}{References}
+
+\nocite{ABE93, ABE95, ABE97, BSW18, SOLO07, CBO24}
+
+\bibliographystyle{elsarticle-num}
+\bibliography{refs}
+
+\end{document}
