@@ -69,15 +69,17 @@ class BoundaryConditions:
         if self._settings.inner_boundary_condition == 3:
             temperature_basic[0, :] = self._settings.inner_boundary_value
             dTdr[0, :] = (
-                2 * (temperature[0, :] - temperature_basic[0, :]) / self._mesh.basic.delta_radii[0]
+                2 * (temperature[0, :] - temperature_basic[0, :])
+                / self._mesh.basic.delta_mesh[0]
+                * self._mesh.dxidr[0]
             )
         # Surface
         if self._settings.outer_boundary_condition == 5:
             temperature_basic[-1, :] = self._settings.outer_boundary_value
             dTdr[-1, :] = (
-                2
-                * (temperature_basic[-1, :] - temperature[-1, :])
-                / self._mesh.basic.delta_radii[-1]
+                2 * (temperature_basic[-1, :] - temperature[-1, :])
+                / self._mesh.basic.delta_mesh[-1]
+                * self._mesh.dxidr[-1]
             )
 
     def apply_temperature_boundary_conditions_melt(
@@ -95,14 +97,15 @@ class BoundaryConditions:
         if self._settings.inner_boundary_condition == 3:
             dphidr[0, :] = (
                 2 * (melt_fraction[0, :] - melt_fraction_basic[0, :])
-                / self._mesh.basic.delta_radii[0]
+                / self._mesh.basic.delta_mesh[0]
+                * self._mesh.dxidr[0]
             )
         # Surface
         if self._settings.outer_boundary_condition == 5:
             dphidr[-1, :] = (
-                2
-                * (melt_fraction_basic[-1, :] - melt_fraction[-1, :])
-                / self._mesh.basic.delta_radii[-1]
+                2 * (melt_fraction_basic[-1, :] - melt_fraction[-1, :])
+                / self._mesh.basic.delta_mesh[-1]
+                * self._mesh.dxidr[-1]
             )
 
     def apply_flux_boundary_conditions(self, state: State) -> None:
@@ -194,7 +197,7 @@ class BoundaryConditions:
             / 3
             * np.pi
             * np.power(self._mesh.basic.radii[0], 3)
-            * self._settings.core_density
+            * self._mesh.settings.core_density
             * self._settings.core_heat_capacity
         )
         cell_capacity = self._mesh.basic.volume[0] * state.capacitance_staggered()[0, :]
