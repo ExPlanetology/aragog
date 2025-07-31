@@ -89,7 +89,7 @@ class Output:
     @property
     def total_heat_flux_basic(self) -> npt.NDArray:
         """Conductive heat flux"""
-        return self.state.heat_flux() * self.parameters.scalings.heat_flux
+        return self.state.heat_flux * self.parameters.scalings.heat_flux
 
     @property
     def density_basic(self) -> npt.NDArray:
