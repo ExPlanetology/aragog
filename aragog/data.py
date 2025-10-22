@@ -43,11 +43,12 @@ def get_zenodo_record(folder: str) -> str | None:
     zenodo_map = {
         '1TPa-dK09-elec-free/MgSiO3_Wolf_Bower_2018': '15877374',
         '1TPa-dK09-elec-free/MgSiO3_Wolf_Bower_2018_400GPa': '15877424',
-        '1TPa-dK09-elec-free/MgSiO3_Wolf_Bower_2018_1TPa': '17413837',
+        '1TPa-dK09-elec-free/MgSiO3_Wolf_Bower_2018_1TPa': '17417017',
         'Melting_curves/Monteux+600': '15728091',
         'Melting_curves/Monteux-600': '15728138',
         'Melting_curves/Wolf_Bower+2018': '15728072',
-    }    return zenodo_map.get(folder, None)
+    }
+    return zenodo_map.get(folder, None)
 
 def download_zenodo_folder(folder: str, data_dir: Path):
     """
