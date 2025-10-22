@@ -47,8 +47,7 @@ def get_zenodo_record(folder: str) -> str | None:
         'Melting_curves/Monteux+600': '15728091',
         'Melting_curves/Monteux-600': '15728138',
         'Melting_curves/Wolf_Bower+2018': '15728072',
-    }
-    return zenodo_map.get(folder, None)
+    }    return zenodo_map.get(folder, None)
 
 def download_zenodo_folder(folder: str, data_dir: Path):
     """
