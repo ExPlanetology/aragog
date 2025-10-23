@@ -22,7 +22,7 @@ basic_list = (
     )
 
 full_list = (
-    "1TPa-dK09-elec-free/MgSiO3_Wolf_Bower_2018_1TPa",
+    "1TPa-dK09-elec-free/MgSiO3_Wolf_Bower_2018",
     "1TPa-dK09-elec-free/MgSiO3_Wolf_Bower_2018_400GPa",
     "1TPa-dK09-elec-free/MgSiO3_Wolf_Bower_2018_1TPa",
     "Melting_curves/Monteux+600",
